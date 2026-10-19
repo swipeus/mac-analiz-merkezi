@@ -14,9 +14,9 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from app import players
+from app import karne, players
 from app.config import DB_PATH, LEAGUES, STATIC_DIR, TR_TZ
-from app.crypto_box import derive_key, seal
+from app.crypto_box import derive_key, seal, unseal
 from app.sources import Sources
 from app.store import Store
 from app.updater import Updater, day_key, enrich_day
@@ -35,6 +35,18 @@ async def main(out):
     store = Store(DB_PATH)
     src = Sources(store)
     up = Updater(store, src)
+    # önbellek kaybolduysa model karnesi geçmişini yayındaki siteden geri yükle
+    pages = os.environ.get("PAGES_URL")
+    if not pages and "/" in os.environ.get("GITHUB_REPOSITORY", ""):
+        owner, repo = os.environ["GITHUB_REPOSITORY"].split("/", 1)
+        pages = f"https://{owner.lower()}.github.io/{repo}/"
+    if pages and not store.pred_all():
+        try:
+            r = await src.client.get(pages.rstrip("/") + f"/data/karne.json?t={int(time.time())}")
+            if r.status_code == 200:
+                log.info("karne geri yüklendi: %s kayıt", karne.seed(store, unseal(key, r.json())))
+        except Exception as e:  # noqa: BLE001
+            log.warning("karne geri yüklenemedi: %s", e)
     await up.cycle()
     store.prune()
 
@@ -76,6 +88,7 @@ async def main(out):
             n_players += 1
     log.info("oyuncular: %s yenilendi, %s yayınlandı (%s kadroda)", n_fetched, n_players, len(set(player_ids)))
     write("events.json", store.recent_events(60))
+    write("karne.json", sorted(store.pred_all(), key=lambda r: r.get("utc") or "", reverse=True))
     write("meta.json", {
         "updated": time.time(),
         "days": days,

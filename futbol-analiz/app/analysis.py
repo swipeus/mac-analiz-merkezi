@@ -301,7 +301,28 @@ def predict(b, prof_h, prof_a):
         "yellow": {"home": y_h, "away": y_a, "total": round(y_h + y_a, 1) if y_h is not None and y_a is not None else None},
         "confidence": conf,
         "pick": best[1],
+        "best_pick": best_pick(ph, pd, pa, btts, _over(tot, 2.5)),
     }
+
+
+# "En garanti tercih": maç sonucu, karşılıklı gol ve 2.5 gol pazarlarında modelin en yüksek olasılık verdiği seçenek
+PICK_LABELS = {"1": "MS 1", "X": "MS X", "2": "MS 2", "btts_yes": "KG Var", "btts_no": "KG Yok",
+               "o25": "2.5 Üst", "u25": "2.5 Alt"}
+
+
+def best_pick(ph, pd, pa, btts, o25):
+    cands = [("1", ph), ("X", pd), ("2", pa), ("btts_yes", btts), ("btts_no", 1 - btts), ("o25", o25), ("u25", 1 - o25)]
+    code, p = max(cands, key=lambda c: c[1])
+    return {"code": code, "label": PICK_LABELS[code], "p": round(p, 3)}
+
+
+def pick_hit(code, hs, as_):
+    """Tercih tuttu mu? hs/as_ maç sonu skoru."""
+    return {
+        "1": hs > as_, "X": hs == as_, "2": hs < as_,
+        "btts_yes": hs > 0 and as_ > 0, "btts_no": hs == 0 or as_ == 0,
+        "o25": hs + as_ > 2.5, "u25": hs + as_ < 2.5,
+    }[code]
 
 
 def scenarios(b, pr, prof_h, prof_a):

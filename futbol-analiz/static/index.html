@@ -21,7 +21,16 @@
     <button id="today">Bugün</button>
   </div>
   <div class="right">
-    <span id="liveDot" class="dot" title="Canlı bağlantı"></span>
+    <a id="karneBtn" class="karne-btn" href="#/karne" aria-label="Model karnesi" title="Model karnesi">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+        <rect x="5" y="2.5" width="14.5" height="19" rx="2" fill="#58a6ff"/>
+        <rect x="5" y="2.5" width="3.2" height="19" rx="1.2" fill="#1f6feb"/>
+        <rect x="10.3" y="6.5" width="7" height="1.6" rx=".8" fill="#e6f0ff"/>
+        <rect x="10.3" y="10" width="7" height="1.6" rx=".8" fill="#e6f0ff"/>
+        <rect x="10.3" y="13.5" width="4.6" height="1.6" rx=".8" fill="#e6f0ff"/>
+        <circle cx="3.9" cy="7" r="1" fill="#8b98a8"/><circle cx="3.9" cy="12" r="1" fill="#8b98a8"/><circle cx="3.9" cy="17" r="1" fill="#8b98a8"/>
+      </svg>
+    </a>
     <button id="bell" class="bell" aria-label="Bildirimler" title="Bildirimler">
       <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="#f5c518" d="M12 2a1.5 1.5 0 0 0-1.5 1.5v.7A6.5 6.5 0 0 0 5.5 10.5v4.2l-1.6 2.4A1 1 0 0 0 4.7 18.6h14.6a1 1 0 0 0 .8-1.5l-1.6-2.4v-4.2a6.5 6.5 0 0 0-5-6.3v-.7A1.5 1.5 0 0 0 12 2zm-2.6 17.6a2.7 2.7 0 0 0 5.2 0z"/></svg>
       <b id="bellCount"></b>

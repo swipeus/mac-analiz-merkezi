@@ -21,6 +21,7 @@ class Store:
                 CREATE TABLE IF NOT EXISTS events (
                     id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL, match_id INTEGER,
                     kind TEXT, text TEXT);
+                CREATE TABLE IF NOT EXISTS predictions (match_id INTEGER PRIMARY KEY, ts REAL, body TEXT);
                 """
             )
 
@@ -78,6 +79,23 @@ class Store:
             )
             self.conn.commit()
             return cur.lastrowid
+
+    # --- model karnesi (tahmin geçmişi; temizlikte silinmez) ---
+    def pred_get(self, match_id):
+        with self.lock:
+            row = self.conn.execute("SELECT body FROM predictions WHERE match_id=?", (match_id,)).fetchone()
+        return json.loads(row[0]) if row else None
+
+    def pred_put(self, match_id, obj):
+        with self.lock:
+            self.conn.execute("INSERT OR REPLACE INTO predictions(match_id, ts, body) VALUES (?,?,?)",
+                              (match_id, time.time(), json.dumps(obj, ensure_ascii=False)))
+            self.conn.commit()
+
+    def pred_all(self):
+        with self.lock:
+            rows = self.conn.execute("SELECT body FROM predictions").fetchall()
+        return [json.loads(r[0]) for r in rows]
 
     def recent_events(self, limit=50, since_id=0):
         with self.lock:

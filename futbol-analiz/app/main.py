@@ -128,6 +128,11 @@ async def player(player_id: int):
     return p
 
 
+@app.get("/api/karne")
+def karne_rows():
+    return sorted(store.pred_all(), key=lambda r: r.get("utc") or "", reverse=True)
+
+
 @app.get("/api/events/recent")
 def recent_events(limit: int = 30):
     return store.recent_events(limit)

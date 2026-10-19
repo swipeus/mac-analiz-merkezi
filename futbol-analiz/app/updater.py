@@ -4,7 +4,7 @@ import logging
 import time
 from datetime import datetime, timedelta, timezone
 
-from . import collect
+from . import collect, karne
 from .config import (CYCLE_SECONDS, DAY_LIST_TTL, FAR_INTERVAL, LEAGUES, LIVE_INTERVAL,
                      NEAR_INTERVAL, TODAY_INTERVAL, TR_TZ)
 
@@ -91,6 +91,7 @@ class Updater:
         b = await collect.build_bundle(self.src, match_id)
         sig = collect.signature(b)
         self.store.bundle_put(match_id, day, sig, b)
+        karne.record(self.store, b)
         if old and old["sig"] != sig:
             self.diff_events(old["body"], b)
         elif not old:
@@ -142,7 +143,8 @@ class Updater:
 
     async def cycle(self):
         today = datetime.now(TR_TZ)
-        for d in (today, today + timedelta(days=1)):
+        yesterday = today - timedelta(days=1)
+        for d in (yesterday, today, today + timedelta(days=1)):
             try:
                 matches = await self.day(d)
             except Exception as e:  # noqa: BLE001
@@ -152,6 +154,11 @@ class Updater:
             for m in matches:
                 old = self.store.bundle_get(m["id"])
                 iv = self.interval(m)
+                if d is yesterday:
+                    # dün: sadece gece yarısını geçen maçların bitişini yakala (karne sonucu için)
+                    if old and not old["body"]["status"].get("finished") and (m.get("finished") or m.get("started")):
+                        due.append(m)
+                    continue
                 if old is None or old["body"].get("v") != collect.BUNDLE_VERSION:
                     due.append(m)
                 elif iv is not None and time.time() - old["ts"] >= iv:

@@ -250,7 +250,7 @@ def score_matrix(lh, la):
     return [[x / tot for x in r] for r in m]
 
 
-def market_probs(mat, lh, la, corners=None):
+def market_probs(mat, lh, la, corners=None, red_rate=None):
     """Skor matrisinden modelin her bahis seçeneği için olasılığı (kod -> olasılık)."""
     n = len(mat)
     cells = [(i, j, mat[i][j]) for i in range(n) for j in range(n)]
@@ -274,11 +274,19 @@ def market_probs(mat, lh, la, corners=None):
             pr[f"cs:{i}-{j}"] = p
     if corners:
         ch, ca = corners["home"], corners["away"]
+        mid = (ch + ca) / 2
+        ch, ca = mid + 0.5 * (ch - mid), mid + 0.5 * (ca - mid)
         h = [_pois(k, ch) for k in range(30)]
         a = [_pois(k, ca) for k in range(30)]
         c1 = sum(h[i] * a[j] for i in range(30) for j in range(30) if i > j)
         cx = sum(h[i] * a[i] for i in range(30))
         pr.update({"cm1": c1, "cmX": cx, "cm2": max(0.0, 1 - c1 - cx)})
+        # ilk korner 8. dakikadan önce mi: korner sayısı maç boyunca Poisson süreci varsayılır
+        f8 = 1 - math.exp(-(ch + ca) * 8 / 90)
+        pr.update({"fc8_yes": f8, "fc8_no": 1 - f8})
+    if red_rate is not None:
+        r = 1 - math.exp(-red_rate)
+        pr.update({"rc_yes": r, "rc_no": 1 - r})
     return pr
 
 
@@ -348,8 +356,9 @@ def coherent_score(mat, pr, lh, la):
     return {"score": f"{i}-{j}", "p": round(p, 3)}
 
 
+# garanti tercih adayları: maç sonucu, çifte şans, iade, KG, alt/üst, korner ve kart pazarları
 SAFE_CODES = {"1", "X", "2", "1X", "12", "X2", "btts_yes", "btts_no", "o1.5", "u1.5", "o2.5", "u2.5",
-              "o3.5", "u3.5", "dnb1", "dnb2"}
+              "o3.5", "u3.5", "dnb1", "dnb2", "cm1", "cm2", "cmX", "rc_yes", "rc_no"}
 
 
 def code_label(code, home, away):
@@ -358,6 +367,8 @@ def code_label(code, home, away):
              "dnb1": f"Beraberlikte iade: {home}", "dnb2": f"Beraberlikte iade: {away}", "fts0": "Maçta gol olmaz",
              "fts1": f"İlk golü {home} atar", "fts2": f"İlk golü {away} atar", "cm1": f"Daha çok korneri {home} kullanır",
              "cmX": "Korner sayıları eşit", "cm2": f"Daha çok korneri {away} kullanır",
+             "rc_yes": "Maçta kırmızı kart çıkar", "rc_no": "Maçta kırmızı kart çıkmaz",
+             "fc8_yes": "İlk korner 8. dakikadan önce", "fc8_no": "İlk 8 dakikada korner yok",
              "o25": "2.5 Üst", "u25": "2.5 Alt"}
     if code in fixed:
         return fixed[code]
@@ -447,8 +458,22 @@ def predict(b, prof_h, prof_a):
         corners = {"home": round(c_h, 1), "away": round(c_a, 1), "total": round(ct, 1),
                    "over": {str(l): round(_over(ct, l), 3) for l in (7.5, 8.5, 9.5, 10.5, 11.5)}}
 
+    # kırmızı kart beklentisi: iki takımın sezon (yoksa son maç) maç başı kırmızı kart ortalaması
+    def red(season):
+        v = (season or {}).get("total_red_card_team")
+        if not v or not v.get("matches"):
+            return 0.1
+        return ((v.get("value") or 0) + 0.1 * 10) / (v["matches"] + 10)
+    red_rate = red(sh) + red(sa)
     mat = score_matrix(lam_h, lam_a)
-    pr = market_probs(mat, lam_h, lam_a, corners)
+    pr = market_probs(mat, lam_h, lam_a, corners, max(0.05, red_rate))
+    if odds:  # gol pazarları zaten λ üzerinden piyasaya kalibre; korner ve kart için doğrudan %50 harmanla
+        from .odds import implied
+        for m in odds.get("markets") or []:
+            if m["key"] in ("odds_most_corners", "odds_red_card", "odds_time_of_first_corner") and len(m["selections"]) >= 2:
+                for s_, ip in zip(m["selections"], implied(m)):
+                    if s_.get("code") in pr:
+                        pr[s_["code"]] = 0.5 * pr[s_["code"]] + 0.5 * ip
     n = len(mat)
     scores = sorted(((mat[i][j], f"{i}-{j}") for i in range(n) for j in range(n)), reverse=True)[:6]
     s_h, s_a = exp_pair("shots")
@@ -482,9 +507,19 @@ def predict(b, prof_h, prof_a):
     }
 
 
-def pick_hit(code, hs, as_):
-    """Tercih tuttu mu? hs/as_ maç sonu skoru. None: iade (karnede sayılmaz)."""
+def pick_hit(code, hs, as_, final=None):
+    """Tercih tuttu mu? hs/as_ maç sonu skoru, final: korner/kart istatistikleri. None: iade/bilinmiyor (karnede sayılmaz)."""
     t = hs + as_
+    if code in ("cm1", "cm2", "cmX"):
+        c = (final or {}).get("corners") or [None, None]
+        if c[0] is None or c[1] is None:
+            return None
+        return {"cm1": c[0] > c[1], "cm2": c[0] < c[1], "cmX": c[0] == c[1]}[code]
+    if code in ("rc_yes", "rc_no"):
+        r = (final or {}).get("red")
+        if not r:
+            return None
+        return (sum(r) > 0) == (code == "rc_yes")
     fixed = {
         "1": hs > as_, "X": hs == as_, "2": hs < as_, "1X": hs >= as_, "12": hs != as_, "X2": hs <= as_,
         "btts_yes": hs > 0 and as_ > 0, "btts_no": hs == 0 or as_ == 0,
@@ -562,6 +597,148 @@ def scenarios(b, pr, prof_h, prof_a):
     return out
 
 
+EURO_CUPS = {42: "Şampiyonlar Ligi", 73: "Avrupa Ligi", 10216: "Konferans Ligi"}
+ZONE_TR = {"championsleague": "Şampiyonlar Ligi", "clqual": "Şampiyonlar Ligi eleme", "euroqual": "Avrupa Ligi",
+           "europaleague": "Avrupa Ligi", "europa_conference_league": "Konferans Ligi", "conferenceleague": "Konferans Ligi",
+           "promotion": "üst lig", "playoff": "play-off", "relegation": "küme düşme"}
+
+
+def _streak_lines(team, st):
+    """Takımın tüm kulvarlardaki serilerinden yorum cümleleri (en önemlisi önce) ve kısa etiketler."""
+    if not st or not st.get("last"):
+        return [], []
+    out, tags = [], []
+    if st["wins"] >= 3:
+        out.append(f"{team} tüm kulvarlarda üst üste {st['wins']} maçtır kazanıyor; özgüveni yüksek ve bu seriyi sürdürmek isteyecek.")
+        tags.append(f"🔥 {team}: {st['wins']} maçlık galibiyet serisi")
+    elif st["unbeaten"] >= 5:
+        out.append(f"{team} tüm kulvarlarda {st['unbeaten']} maçtır kaybetmiyor; bu yenilmezlik serisini bozmak istemeyecektir.")
+        tags.append(f"🛡️ {team}: {st['unbeaten']} maçtır yenilmiyor")
+    if st["losses"] >= 3:
+        out.append(f"{team} üst üste {st['losses']} maçtır kaybediyor; kötü gidişe dur demek zorunda, baskı altında.")
+        tags.append(f"📉 {team}: {st['losses']} maçtır kaybediyor")
+    elif st["winless"] >= 4:
+        out.append(f"{team} {st['winless']} maçtır kazanamıyor; galibiyet hasreti oyunculara ağır gelebilir.")
+        tags.append(f"⏳ {team}: {st['winless']} maçtır galibiyet yok")
+    if st["scoring"] >= 6:
+        out.append(f"{team} son {st['scoring']} maçın hepsinde gol buldu; hücum hattı üretken.")
+        tags.append(f"⚽ {team}: {st['scoring']} maçtır gol atıyor")
+    if st["clean_last5"] >= 3:
+        out.append(f"{team} son 5 maçın {st['clean_last5']} tanesinde kalesini gole kapattı.")
+        tags.append(f"🧱 {team}: son 5 maçta {st['clean_last5']} kez gol yemedi")
+    elif st["conceding"] >= 6:
+        out.append(f"{team} {st['conceding']} maçtır gol yiyor; savunmada istikrar sorunu var.")
+    return out, tags
+
+
+def _table_line(team, t, league_id):
+    if not t or not t.get("pos") or (t.get("league_id") and league_id and t["league_id"] != league_id):
+        return None
+    pos, pts, of = t["pos"], t["pts"], t["of"]
+    if league_id in EURO_CUPS:
+        return f"{team} {EURO_CUPS[league_id]} lig aşamasında {pos}. sırada ({pts} puan, {t.get('played') or 0} maç)."
+    if (t.get("played") or 0) < 5:
+        return f"{team} sezonun başında {pos}. sırada ({pts} puan, {t.get('played') or 0} maç)."
+    zone = ZONE_TR.get(t.get("zone") or "", None)
+    gap = (t.get("leader_pts") or pts) - pts
+    if pos == 1:
+        lead = pts - (t.get("second_pts") or pts)
+        return (f"{team} {pts} puanla lider; takipçisiyle arasında {lead} puan fark var. Liderliği korumak için kazanmak isteyecektir."
+                if lead > 0 else f"{team} {pts} puanla zirvede ama takipçisiyle puanları eşit; puan kaybı liderliği kaybettirebilir.")
+    if pos <= 3 and gap <= 6:
+        return f"{team} şampiyonluk yarışında kritik konumda: {pos}. sırada, liderin {gap} puan gerisinde. Puan kaybı istemeyecektir."
+    if zone == "küme düşme":
+        safe = t.get("safe_pts")
+        need = f" Kurtuluş hattıyla arası {safe - pts} puan." if safe is not None and safe >= pts else ""
+        return f"{team} {pos}. sırada, düşme hattında.{need} Her puan hayati önemde."
+    if t.get("first_rel_pts") is not None and pts - t["first_rel_pts"] <= 3 and pos > of / 2:
+        return f"{team} düşme hattının sadece {pts - t['first_rel_pts']} puan üzerinde ({pos}. sıra); alt sıralardan uzaklaşmak isteyecek."
+    if zone:
+        return f"{team} {pos}. sırada, {zone} hattında yer alıyor; bu konumu korumak isteyecek."
+    return f"{team} {of} takımlı ligde {pos}. sırada ({pts} puan)."
+
+
+def commentary(b, pr, prof_h, prof_a):
+    """Kaynaklara ve oranlara dayalı maç yorumu: paragraflar ve öne çıkan etiketler."""
+    H, A = b["home"]["name"], b["away"]["name"]
+    lid = b.get("league_id")
+    paras, tags = [], []
+    # 1) bağlam: lig/kupa durumu
+    ctx = []
+    if lid in EURO_CUPS:
+        ctx.append(f"Bu bir {EURO_CUPS[lid]} maçı; Avrupa'da alınacak her puan hem tur hem de ülke puanı için önemli.")
+    for team, key in ((H, "table_home"), (A, "table_away")):
+        line = _table_line(team, (b.get("season") or {}).get(key), lid)
+        if line:
+            ctx.append(line)
+    if ctx:
+        paras.append(" ".join(ctx))
+    # 2) seriler
+    st = b.get("streaks") or {}
+    sl = []
+    for team, k in ((H, "home"), (A, "away")):
+        lines, t = _streak_lines(team, st.get(k))
+        sl += lines[:2]
+        tags += t
+    if sl:
+        paras.append(" ".join(sl))
+    # 3) eksikler ve rekabet geçmişi
+    ab = []
+    lu = b.get("lineup") or {}
+    for team, side in ((H, "home"), (A, "away")):
+        imp = [p["name"] for p in (lu.get(side) or {}).get("unavailable", []) if (p.get("rating") or 0) >= 6.9 or (p.get("value") or 0) >= 15_000_000]
+        if imp:
+            ab.append(f"{team} cephesinde {', '.join(imp[:3])} {'gibi önemli isimler' if len(imp) > 1 else 'önemli bir eksik olarak'} forma giyemeyecek; bu durum plan ve kadro derinliğini etkileyecek.")
+    h2h = (b.get("h2h") or {}).get("summary")
+    if h2h and sum(h2h) >= 3:
+        if h2h[0] - h2h[2] >= 3:
+            ab.append(f"Rekabet geçmişinde {H} üstün ({h2h[0]} galibiyet, {h2h[1]} beraberlik, {h2h[2]} mağlubiyet); psikolojik avantaj ev sahibinde.")
+        elif h2h[2] - h2h[0] >= 3:
+            ab.append(f"Rekabet geçmişinde {A} üstün ({h2h[2]} galibiyet, {h2h[1]} beraberlik, {h2h[0]} mağlubiyet); deplasman ekibi bu maça moralli çıkacak.")
+    if ab:
+        paras.append(" ".join(ab))
+    # 4) bahis piyasası ve modelin görüşü
+    odds = b.get("odds")
+    mw = _odds_market(odds, "who_will_win")
+    mk = []
+    if mw and len(mw["selections"]) == 3:
+        from .odds import implied
+        imp = dict(zip([s["code"] for s in mw["selections"]], implied(mw)))
+        od = {s["code"]: s["odds"] for s in mw["selections"]}
+        if all(k in imp for k in ("1", "X", "2")):
+            fav = "1" if imp["1"] >= imp["2"] else "2"
+            ft, other = (H, A) if fav == "1" else (A, H)
+            if abs(imp["1"] - imp["2"]) < 0.08:
+                mk.append(f"Bahis piyasası dengeli bir maç bekliyor (1: {f(od['1'], 2)}, X: {f(od['X'], 2)}, 2: {f(od['2'], 2)}).")
+            else:
+                mk.append(f"Bahis piyasası favori olarak {ft} takımını görüyor (oran {f(od[fav], 2)}, kazanma ihtimali {pct(imp[fav])}).")
+                mp = pr["p_home"] if fav == "1" else pr["p_away"]
+                if imp[fav] - mp >= 0.07:
+                    mk.append(f"Model ise daha temkinli ({pct(mp)}); {other} için sürpriz ihtimali göz ardı edilmemeli.")
+                elif mp - imp[fav] >= 0.07:
+                    mk.append(f"Model favoriye piyasadan da fazla şans veriyor ({pct(mp)}).")
+    ou = _odds_market(odds, "odds_goals_over_under", 2.5)
+    if ou and len(ou["selections"]) == 2:
+        from .odds import implied
+        io = dict(zip([s["code"] for s in ou["selections"]], implied(ou)))
+        if io.get("o2.5", 0) >= 0.6:
+            mk.append(f"Oranlar gollü bir maça işaret ediyor (2.5 üst ihtimali {pct(io['o2.5'])}).")
+        elif io.get("u2.5", 0) >= 0.55:
+            mk.append(f"Oranlar kontrollü, az gollü bir maç bekliyor (2.5 alt ihtimali {pct(io['u2.5'])}).")
+    if mk:
+        paras.append(" ".join(mk))
+    # 5) sonuç
+    sp, bp, su = pr.get("score_pick") or {}, pr.get("best_pick"), pr.get("surprise")
+    out = {"1": f"{H} galibiyeti", "X": "beraberlik", "2": f"{A} galibiyeti"}[pr["pick"]]
+    concl = f"Genel beklenti: {out}. Skor tahmini {sp.get('score', '—')}."
+    if bp:
+        concl += f" Modelin en güvendiği tercih {bp['label']}" + (f" (oran {f(bp['odds'], 2)})." if bp.get("odds") else ".")
+    if su:
+        concl += f" Sürpriz arayanlar için: {su['label']}" + (f" (oran {f(su['odds'], 2)})." if su.get("odds") else ".")
+    paras.append(concl)
+    return {"paragraphs": paras, "tags": tags[:6]}
+
+
 def build(b):
     lu = b.get("lineup") or {}
     prof_h = team_profile(b["home"]["name"], b["recent"]["home"], b["season"]["home"], lu.get("home"),
@@ -592,4 +769,5 @@ def build(b):
         + (f"Olası sürpriz: {sp['label']} ({pct(sp['p'])}{odds_txt(sp)}). " if sp else "")
         + f"Güven: {pr['confidence']}."
     )
-    return {"home": prof_h, "away": prof_a, "prediction": pr, "scenarios": sc, "summary": summary}
+    return {"home": prof_h, "away": prof_a, "prediction": pr, "scenarios": sc, "summary": summary,
+            "commentary": commentary(b, pr, prof_h, prof_a)}

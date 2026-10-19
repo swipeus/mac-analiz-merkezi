@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from . import analysis
 from . import odds as odds_mod
 from .config import NEWS_TTL, SEASON_TTL
-from .sources import PLAYER_STATS, TEAM_STATS
+from .sources import FOTMOB, PLAYER_STATS, TEAM_STATS
 
 log = logging.getLogger("collect")
 
@@ -55,7 +55,7 @@ STAT_KEYS = {
 _season_memo = {}
 
 # Analiz/paket biçimi değişince artırılır; eski sürümle üretilmiş paketler yeniden oluşturulur
-BUNDLE_VERSION = 4
+BUNDLE_VERSION = 5
 
 
 def _num(v):
@@ -207,12 +207,29 @@ async def season_stats(src, league_id):
     table = {}
     try:
         for block in lg.get("table") or []:
-            tbl = block.get("data", {}).get("table", {}).get("all") or []
+            data = block.get("data", {})
+            tbl = data.get("table", {}).get("all") or []
+            if not tbl:
+                continue
+            # puan durumu bölgeleri (ŞL, Avrupa, küme düşme) ve yarış bağlamı
+            zones = {}
+            for z in data.get("legend") or []:
+                for i in z.get("indices") or []:
+                    zones[i] = z.get("tKey") or z.get("title")
+            by_pos = sorted(tbl, key=lambda r: r.get("idx") or 99)
+            leader_pts = by_pos[0].get("pts")
+            second_pts = by_pos[1].get("pts") if len(by_pos) > 1 else None
+            rel = sorted(i for i, z in zones.items() if z == "relegation")
+            safe_pts = by_pos[rel[0] - 1].get("pts") if rel and rel[0] >= 1 else None   # düşme hattının hemen üstü
+            first_rel_pts = by_pos[rel[0]].get("pts") if rel else None
             for row in tbl:
+                idx = (row.get("idx") or 0) - 1
                 table[row["id"]] = {
                     "pos": row.get("idx"), "played": row.get("played"), "pts": row.get("pts"),
                     "w": row.get("wins"), "d": row.get("draws"), "l": row.get("losses"),
                     "goals": row.get("scoresStr"), "of": len(tbl),
+                    "zone": zones.get(idx), "leader_pts": leader_pts, "second_pts": second_pts,
+                    "safe_pts": safe_pts, "first_rel_pts": first_rel_pts, "league_id": data.get("leagueId"),
                 }
     except (AttributeError, KeyError, TypeError):
         pass
@@ -285,6 +302,59 @@ def parse_h2h(h2h):
     return {"summary": h2h.get("summary"), "matches": out[:6]}
 
 
+async def team_streaks(src, team_id, before_utc):
+    """Takımın tüm kulvarlardaki son maçları (en yenisi önce) ve serileri. FotMob takım fikstürü kullanılır."""
+    key = f"teamfx:{team_id}"
+    hit = src.store.cache_get(key)
+    if hit and time.time() - hit[0] < SEASON_TTL:
+        allres = hit[1]
+    else:
+        try:  # ham takım verisi çok büyük: önbelleğe sadece bitmiş maçların özeti yazılır
+            data = await src.fetch_json(f"{FOTMOB}/teams?id={team_id}")
+        except Exception as e:  # noqa: BLE001
+            log.warning("takım fikstürü alınamadı %s: %s", team_id, e)
+            if not hit:
+                return None
+            data = None
+        if data is not None:
+            fx = ((data.get("fixtures") or {}).get("allFixtures") or {}).get("fixtures") or []
+            allres = []
+            for f in fx:
+                st = f.get("status") or {}
+                if not st.get("finished") or st.get("cancelled"):
+                    continue
+                home, away = f.get("home") or {}, f.get("away") or {}
+                mine, opp = (home, away) if home.get("id") == team_id else (away, home)
+                gf, ga = mine.get("score"), opp.get("score")
+                if gf is None or ga is None:
+                    continue
+                allres.append({"date": st.get("utcTime"), "opp": opp.get("name"), "gf": gf, "ga": ga,
+                               "r": "G" if gf > ga else ("B" if gf == ga else "M"),
+                               "comp": (f.get("tournament") or {}).get("name")})
+            src.store.cache_put(key, allres)
+        else:
+            allres = hit[1]
+    res = [r for r in allres if not before_utc or (r["date"] or "") < before_utc]
+    res.sort(key=lambda r: r["date"] or "", reverse=True)
+
+    def run(cond):
+        n = 0
+        for r in res:
+            if not cond(r):
+                break
+            n += 1
+        return n
+
+    return {
+        "last": res[:10],
+        "unbeaten": run(lambda r: r["r"] != "M"), "wins": run(lambda r: r["r"] == "G"),
+        "losses": run(lambda r: r["r"] == "M"), "winless": run(lambda r: r["r"] != "G"),
+        "scoring": run(lambda r: r["gf"] > 0), "conceding": run(lambda r: r["ga"] > 0),
+        "clean_last5": sum(1 for r in res[:5] if r["ga"] == 0),
+        "home_away": None,
+    }
+
+
 async def team_news(src, team_id, name):
     fm, tr = await asyncio.gather(
         src.fotmob_team_news(team_id, NEWS_TTL),
@@ -324,14 +394,25 @@ async def build_bundle(src, match_id, prev_odds=None):
             log.warning("oranlar alınamadı %s: %s", match_id, e)
             return prev_odds
 
-    rec_h, rec_a, season, news_h, news_a, odds = await asyncio.gather(
+    kickoff = gen.get("matchTimeUTCDate") or (header.get("status") or {}).get("utcTime")
+    rec_h, rec_a, season, news_h, news_a, odds, str_h, str_a = await asyncio.gather(
         team_recent(src, hid, form[0] if len(form) > 0 else []),
         team_recent(src, aid, form[1] if len(form) > 1 else []),
         safe_season(),
         team_news(src, hid, home.get("name")),
         team_news(src, aid, away.get("name")),
         safe_odds(),
+        team_streaks(src, hid, kickoff),
+        team_streaks(src, aid, kickoff),
     )
+    # maç bittiyse / sürüyorsa: karnedeki korner ve kart tercihlerini değerlendirmek için maç istatistikleri
+    fin_h, fin_a = match_team_stats(md)
+    hs_ = header.get("status") or {}
+    final = {
+        "corners": [fin_h.get("corners"), fin_a.get("corners")],
+        "yellow": [fin_h.get("yellow"), fin_a.get("yellow")],
+        "red": [hs_.get("numberOfHomeRedCards") or 0, hs_.get("numberOfAwayRedCards") or 0],
+    } if hs_.get("started") else None
     info = facts.get("infoBox") or {}
     status = header.get("status") or {}
     stadium = info.get("Stadium") or {}
@@ -378,6 +459,8 @@ async def build_bundle(src, match_id, prev_odds=None):
         ],
         "news": {"home": news_h, "away": news_a},
         "odds": odds,
+        "streaks": {"home": str_h, "away": str_a},
+        "final": final,
         "links": {
             "fotmob": f"https://www.fotmob.com/match/{match_id}",
             "mackolik": f"https://www.google.com/search?q=site%3Amackolik.com+{q}",

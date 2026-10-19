@@ -26,7 +26,7 @@ TEAM_STATS = [
     "poss_won_att_3rd_team", "total_tackle_team", "interception_team",
     "effective_clearance_team", "clean_sheet_team", "accurate_long_balls_team",
     "accurate_cross_team", "_set_piece_goals_team", "_set_piece_goals_conceded_team",
-    "saves_team", "fk_foul_lost_team", "total_yel_card_team", "rating_team",
+    "saves_team", "fk_foul_lost_team", "total_yel_card_team", "total_red_card_team", "rating_team",
 ]
 PLAYER_STATS = [
     "goals", "expected_goals", "total_scoring_att", "ontarget_scoring_att",

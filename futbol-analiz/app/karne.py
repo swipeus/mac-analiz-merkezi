@@ -36,11 +36,12 @@ def record(store, b):
             return
         ps = [int(x) for x in old["score"]["score"].split("-")]
         ms_real = "1" if hs > as_ else ("X" if hs == as_ else "2")
-        hit = pick_hit(old["pick"]["code"], hs, as_)
+        hit = pick_hit(old["pick"]["code"], hs, as_, b.get("final"))
         old.update({
             # beraberlikte iade gibi durumlarda tercih "iade" sayılır (None)
             "state": "done", "result": [hs, as_],
             "pick_hit": hit,
+            "final": b.get("final"),
             "score_hit": ps == [hs, as_],
             "ms_hit": old.get("ms") == ms_real,
         })

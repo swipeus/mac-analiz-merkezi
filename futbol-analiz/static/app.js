@@ -332,6 +332,7 @@ function matchHtml(b) {
   </div>
   ${matchTabsHtml(b)}
   ${matchTab === "odds" ? oddsHtml(b) : `
+  ${commentaryHtml(A)}
   <div class="card" style="--c:#a371f7">
     ${head("🎯", "Tahmin ve model özeti")}
     <div class="summary">${esc(A.summary)}</div>
@@ -376,6 +377,17 @@ function matchHtml(b) {
   ${extrasHtml(b)}
   `}`;
 }
+/* ---------- maç yorumu ---------- */
+function commentaryHtml(A) {
+  const c = A.commentary;
+  if (!c || !c.paragraphs || !c.paragraphs.length) return "";
+  const last = c.paragraphs.length - 1;
+  return `<div class="card comm" style="--c:#39c5cf">${head("🗣️", `Maç yorumu <span class="muted">· kaynaklar, seriler, puan durumu ve oranlara göre</span>`)}
+    ${c.tags && c.tags.length ? `<div class="ctags">${c.tags.map((t) => `<span class="ctag">${esc(t)}</span>`).join("")}</div>` : ""}
+    ${c.paragraphs.map((p, i) => `<p class="${i === last ? "cconcl" : ""}">${esc(p)}</p>`).join("")}
+  </div>`;
+}
+
 /* ---------- maç sayfası sekmeleri ve oranlar ---------- */
 let matchTab = "analysis", matchTabId = null;
 function matchTabsHtml(b) {
@@ -709,7 +721,23 @@ async function renderKarne(silent) {
   drawKarne();
 }
 // karnede tercih türü (örn. "MS 1 (Liverpool)" -> "MS 1")
-const pickType = (p) => (p.label || "").replace(/ \(.*\)$/, "").replace(/^Beraberlikte iade: .*/, "Beraberlikte iade");
+const pickType = (p) => {
+  const c = p.code || "";
+  if (/^cm/.test(c)) return "En çok korner";
+  if (/^rc/.test(c)) return "Kırmızı kart";
+  if (/^dnb/.test(c)) return "Beraberlikte iade";
+  return (p.label || "").replace(/ \(.*\)$/, "");
+};
+const STAKE = 100;
+const rowProfit = (r) => r.pick_hit ? STAKE * (r.pick.odds - 1) : -STAKE;
+const tl = (x, sign) => (sign && x > 0 ? "+" : "") + Math.round(x).toLocaleString("tr-TR") + " ₺";
+// korner/kart tercihlerinde maç sonu korner ve kırmızı kart bilgisi
+function cornerNote(r) {
+  const fz = r.final; if (!fz || r.state !== "done") return "";
+  if (/^cm/.test(r.pick.code) && fz.corners && fz.corners[0] != null) return ` · Korner ${fz.corners[0]}-${fz.corners[1]}`;
+  if (/^rc/.test(r.pick.code) && fz.red) return ` · Kırmızı kart ${fz.red[0] + fz.red[1]}`;
+  return "";
+}
 const rate = (h, n) => n ? `%${Math.round(h / n * 100)}` : "—";
 function drawKarne() {
   const rows = karneRows || [];
@@ -719,9 +747,12 @@ function drawKarne() {
   const pn = pdone.length;
   const ph = pdone.filter((r) => r.pick_hit).length, sh = done.filter((r) => r.score_hit).length, mh = done.filter((r) => r.ms_hit).length;
   // oranlı tercihlerde 1 birimlik sabit bahisle kâr/zarar
+  // her tercihe ayrı ayrı 100 TL oynanmış gibi: tutarsa 100 × (oran − 1) kazanç, tutmazsa −100
   const withOdds = pdone.filter((r) => r.pick.odds);
-  const profit = withOdds.reduce((a, r) => a + (r.pick_hit ? r.pick.odds - 1 : -1), 0);
+  const profit = withOdds.reduce((a, r) => a + rowProfit(r), 0);
+  const staked = withOdds.length * STAKE;
   const avgOdds = withOdds.length ? withOdds.reduce((a, r) => a + r.pick.odds, 0) / withOdds.length : null;
+  const roi = staked ? profit / staked * 100 : null;
   // tercih türüne göre isabet
   const byType = {};
   pdone.forEach((r) => { const t = (byType[pickType(r.pick)] ||= { n: 0, h: 0 }); t.n++; if (r.pick_hit) t.h++; });
@@ -729,7 +760,8 @@ function drawKarne() {
   const head1 = `<div class="card" style="--c:#58a6ff">${head("📒", `Model karnesi <span class="muted">· tüm zamanlar</span>`)}
     <div class="pred">
       ${kpi("✅", "#2ea043", "En garanti tercih", `${ph}/${pn}`, pn ? `${rate(ph, pn)} isabet` : "Henüz sonuç yok")}
-      ${kpi("💰", profit >= 0 ? "#2ea043" : "#f85149", "Kâr / zarar (1 birim)", withOdds.length ? (profit >= 0 ? "+" : "") + nf(profit, 2) : "—", withOdds.length ? `${withOdds.length} oranlı tercih · ort. oran ${nf(avgOdds, 2)}` : "Oranlı tercih sonuçlanınca")}
+      ${kpi("💰", profit >= 0 ? "#2ea043" : "#f85149", "Kâr / zarar", withOdds.length ? tl(profit, true) : "—", withOdds.length ? `Her tercihe 100 ₺ · ${withOdds.length} tercih` : "Oranlı tercih sonuçlanınca")}
+      ${kpi("🏦", "#58a6ff", "Yatırılan → dönen", withOdds.length ? `${tl(staked)} → ${tl(staked + profit)}` : "—", withOdds.length ? `Getiri (ROI) ${roi < 0 ? "−" : ""}%${nf(Math.abs(roi), 1)} · ort. oran ${nf(avgOdds, 2)}` : "Oranlı tercih sonuçlanınca")}
       ${kpi("🎯", "#a371f7", "Skor tahmini", `${sh}/${n}`, n ? `${rate(sh, n)} tam isabet` : "Henüz sonuç yok")}
       ${kpi("⚖️", "#d29922", "Maç sonucu (1X2)", `${mh}/${n}`, n ? `${rate(mh, n)} isabet` : "Henüz sonuç yok")}
       ${kpi("⏳", "#8b98a8", "Bekleyen tahmin", String(pending.length), "Maçlar bittikçe sonuçlanır")}
@@ -737,7 +769,7 @@ function drawKarne() {
     ${types.length ? `<h3>Tercih türüne göre</h3>${types.map(([lab, t]) => { const v = Math.round(t.h / t.n * 100); return `<div class="srow">
       <div class="sl">${esc(lab)} <span class="muted">· ${t.h}/${t.n}</span></div><div class="sv">%${v}</div>
       <div class="spct"><span style="width:${Math.max(3, v)}%;background:${pctColor(v)}"></span><b>${v}</b></div></div>`; }).join("")}` : ""}
-    <p class="muted">Model her maç için başlama düdüğünden önceki son tahminini kaydeder; maç bitince sonuçla karşılaştırılır. "En garanti tercih": maç sonucu, çifte şans, beraberlikte iade, karşılıklı gol ve 1.5–3.5 alt/üst seçenekleri içinde, oranı 1.30 ve üstü olanlardan modelin en yüksek olasılık verdiği tahmin. Kâr/zarar her tercihe 1 birim yatırıldığı varsayımıyla hesaplanır; beraberlikte iade gibi iade olan sonuçlar sayılmaz. "Olası sürpriz" tahminleri karneye dahil değildir.</p>
+    <p class="muted">Model her maç için başlama düdüğünden önceki son tahminini kaydeder; maç bitince sonuçla karşılaştırılır. "En garanti tercih": maç sonucu, çifte şans, beraberlikte iade, karşılıklı gol, 1.5–3.5 alt/üst, en çok korner ve kırmızı kart seçenekleri içinde, oranı 1.30 ve üstü olanlardan modelin en yüksek olasılık verdiği tahmin. Kâr/zarar her tercihe ayrı ayrı 100 ₺ oynandığı varsayımıyla, o anki orana göre hesaplanır (tutarsa 100 × (oran − 1) kazanç, tutmazsa 100 ₺ kayıp); beraberlikte iade gibi iade olan sonuçlar sayılmaz. "Olası sürpriz" tahminleri karneye dahil değildir.</p>
   </div>`;
   const tabs = `<div class="ptabs">
     <button class="ptab ${karneTab === "pick" ? "on" : ""}" data-kt="pick">✅ En garanti tercihler <small>${ph}/${pn}</small></button>
@@ -754,8 +786,9 @@ function drawKarne() {
     const g = groups.get(k).sort((a, b) => (a.utc || "").localeCompare(b.utc || ""));
     const d = g.filter((r) => r.state === "done" && (karneTab !== "pick" || r.pick_hit === true || r.pick_hit === false));
     const hits = d.filter((r) => karneTab === "pick" ? r.pick_hit : r.score_hit).length;
+    const dayPl = karneTab === "pick" ? d.filter((r) => r.pick.odds).reduce((a, r) => a + rowProfit(r), 0) : null;
     const title = new Date(k + "T12:00:00").toLocaleDateString("tr-TR", { weekday: "long", day: "numeric", month: "long" });
-    return `<div class="card kday" style="--c:#58a6ff">${head("🗓️", `${cap(title)} <span class="muted">· ${d.length ? `${hits}/${d.length} tuttu` : "sonuç bekleniyor"}</span>`)}
+    return `<div class="card kday" style="--c:#58a6ff">${head("🗓️", `${cap(title)} <span class="muted">· ${d.length ? `${hits}/${d.length} tuttu` : "sonuç bekleniyor"}</span>${dayPl != null && d.length ? `<span class="kpl ${dayPl >= 0 ? "pos" : "neg"}">${tl(dayPl, true)}</span>` : ""}`)}
       ${g.map(karneRow).join("")}</div>`;
   }).join("") : `<div class="card"><p class="muted">Henüz kayıtlı tahmin yok. Model, maçlar başlamadan önce tahminlerini kaydetmeye başladı; maçlar bittikçe karne dolacak.</p></div>`;
   $("#view").innerHTML = head1 + tabs + list;
@@ -778,7 +811,7 @@ function karneRow(r) {
       <div class="mid">${mid}</div>
       <span class="kt r">${esc(r.away.name)}<img src="${teamLogo(r.away.id)}" alt="" onerror="this.remove()"></span>
     </div>
-    <div class="kfoot"><span class="muted kl">${esc(r.league || "")}</span>${tip}${status}</div>
+    <div class="kfoot"><span class="muted kl">${esc(r.league || "")}${cornerNote(r)}</span>${tip}${karneTab === "pick" && r.pick.odds ? `<span class="kstake ${done && hit != null ? (hit ? "pos" : "neg") : ""}">100 ₺ → ${done && hit != null ? tl(rowProfit(r), true) : "@" + nf(r.pick.odds, 2)}</span>` : ""}${status}</div>
   </div>`;
 }
 
@@ -1158,6 +1191,15 @@ const RELEASES = [
       ["⚡", "Olası sürpriz", "Her maç için oranı yüksek ama modelin olası gördüğü bir sürpriz tahmin (karneye girmez)."],
       ["🎲", "Gelişmiş skor tahmini", "Skor tahmini beklenen sonuç ve gol sayısıyla tutarlı seçiliyor: 3-1, 0-2, 2-2 gibi tahminler de var."],
       ["📒", "Karnede kâr/zarar", "Garanti tercihlerin oranlarıyla 1 birimlik sabit bahiste kâr/zarar ve ortalama oran."],
+    ],
+  },
+  {
+    id: 4, date: "20 Ekim 2026", title: "Yeni: Maç yorumu", sub: "Bu güncellemede gelenler",
+    items: [
+      ["🗣️", "Maç yorumu", "Her maçta modelin yorumu: seriler (örn. 13 maçtır kazanıyor), puan durumu ve yarış, eksikler, rekabet geçmişi ve bahis piyasasının beklentisi."],
+      ["🔥", "Seri etiketleri", "Galibiyet, yenilmezlik, mağlubiyet ve gol serileri maç yorumunun üstünde etiket olarak."],
+      ["🚩", "Korner ve kart tercihleri", "En garanti tercih artık 'daha çok korner kullanan takım' ve 'kırmızı kart çıkar mı' pazarlarından da seçilebiliyor."],
+      ["💰", "100 ₺ ile kâr/zarar", "Karnede her tercihe ayrı ayrı 100 ₺ oynansaydı ne kazanılır/kaybedilirdi; yatırılan, dönen ve getiri oranı. Gün gün kâr/zarar."],
     ],
   },
 ];

@@ -514,3 +514,15 @@ body.modal-open { overflow: hidden; }
   .omkts { grid-template-columns: 1fr; }
   .orow { grid-template-columns: 1fr 46px 42px 42px 46px; font-size: 12px; }
 }
+
+/* ---------- maç yorumu ---------- */
+.comm p { margin: 8px 0; line-height: 1.6; }
+.comm .cm-src { font-size: 12px; font-weight: 500; }
+.comm .cconcl { padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, #39c5cf 10%, var(--panel2)); border-left: 3px solid #39c5cf; font-weight: 600; }
+.ctags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+.ctag { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: var(--panel2); border: 1px solid var(--line); }
+/* karne kâr/zarar */
+.kpl { margin-left: auto; font-size: 13px; font-weight: 800; padding: 2px 10px; border-radius: 999px; }
+.kpl.pos, .kstake.pos { background: rgba(46,160,67,.18); color: #56d364; }
+.kpl.neg, .kstake.neg { background: rgba(218,54,51,.18); color: #ff7b72; }
+.kstake { font-size: 12px; font-weight: 800; padding: 3px 10px; border-radius: 999px; background: rgba(255,255,255,.06); color: var(--muted); }

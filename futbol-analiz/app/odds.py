@@ -12,7 +12,8 @@ from .sources import FOTMOB
 
 log = logging.getLogger("odds")
 
-REGIONS = ["ESP", "MEX", "SWE"]
+# FotMob her bölgede farklı şirket gösterir ve bu zamanla değişir; hepsi denenir, en çok pazar verenden başlanır
+REGIONS = ["IND", "DNK", "AUS", "KEN", "ESP", "MEX", "SWE"]
 ODDS_TTL = 15 * 60
 
 MARKET_TR = {
@@ -103,6 +104,10 @@ def _code(key, low, line, name, home, away):
         return {"1": "fts1", "x": "fts0", "2": "fts2"}.get(low)
     if key == "odds_most_corners":
         return {"1": "cm1", "x": "cmX", "2": "cm2"}.get(low)
+    if key == "odds_red_card":
+        return {"yes": "rc_yes", "no": "rc_no"}.get(low)
+    if key == "odds_time_of_first_corner":
+        return {"corner before 8:00": "fc8_yes", "no corner before 8:00": "fc8_no"}.get(low)
     if key == "odds_correct_score" and re.fullmatch(r"\d+-\d+", name):
         return "cs:" + name
     return None
@@ -117,9 +122,9 @@ async def fetch(src, match_id, home, away):
             log.debug("oran alınamadı %s %s: %s", match_id, cc, e)
             return None
     raws = await asyncio.gather(*[one(cc) for cc in REGIONS])
+    parsed = sorted((parse(raw, home, away) for raw in raws), key=len, reverse=True)
     merged, seen, providers = [], set(), []
-    for raw in raws:
-        mk = parse(raw, home, away)
+    for mk in parsed:
         added = False
         for m in mk:
             k = (m["key"], m["line"])

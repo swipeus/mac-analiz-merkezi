@@ -12,6 +12,7 @@ from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse, Redirec
                                StreamingResponse)
 from fastapi.staticfiles import StaticFiles
 
+from . import players
 from .config import DB_PATH, LEAGUES, SITE_PASSWORD, STATIC_DIR, TR_TZ
 from .sources import Sources
 from .store import Store
@@ -117,6 +118,14 @@ async def match(match_id: int, refresh: bool = False):
             body = b["body"]
         return body
     return b["body"]
+
+
+@app.get("/api/player/{player_id}")
+async def player(player_id: int):
+    p = await players.get_player(src, store, player_id)
+    if not p:
+        raise HTTPException(404, "Oyuncu verisi bulunamadı")
+    return p
 
 
 @app.get("/api/events/recent")

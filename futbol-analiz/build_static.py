@@ -14,6 +14,7 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from app import players
 from app.config import DB_PATH, LEAGUES, STATIC_DIR, TR_TZ
 from app.crypto_box import derive_key, seal
 from app.sources import Sources
@@ -46,8 +47,9 @@ async def main(out):
         (data / name).write_text(json.dumps(seal(key, obj)), encoding="utf-8")
 
     now = datetime.now(TR_TZ)
-    days, n_match = [], 0
-    for d in (now - timedelta(days=1), now, now + timedelta(days=1)):
+    days, n_match, player_ids = [], 0, []
+    # bugün önce: oyuncu yenileme bütçesi önce bugünün maçlarına harcansın
+    for d in (now, now + timedelta(days=1), now - timedelta(days=1)):
         try:
             matches = enrich_day(store, await up.day(d))
         except Exception as e:  # noqa: BLE001
@@ -60,6 +62,19 @@ async def main(out):
             if b:
                 write(f"match-{m['id']}.json", b["body"])
                 n_match += 1
+                player_ids += players.lineup_player_ids(b["body"])
+    days.sort()
+
+    # oyuncu sayfaları: bayat olanları sınırlı sayıda yenile, önbellekte olanların hepsini yaz
+    budget = int(os.environ.get("PLAYER_BUDGET", "400"))
+    n_fetched = await players.refresh_players(src, store, player_ids, budget)
+    n_players = 0
+    for pid in dict.fromkeys(player_ids):
+        p = players.cached_player(store, pid)
+        if p:
+            write(f"player-{pid}.json", p)
+            n_players += 1
+    log.info("oyuncular: %s yenilendi, %s yayınlandı (%s kadroda)", n_fetched, n_players, len(set(player_ids)))
     write("events.json", store.recent_events(60))
     write("meta.json", {
         "updated": time.time(),

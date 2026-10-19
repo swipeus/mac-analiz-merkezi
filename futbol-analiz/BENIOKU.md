@@ -13,6 +13,13 @@ Pencere açık kaldığı sürece arka plan güncelleyici çalışır.
 - Değişiklikleri arka planda yakalar (resmi 11, yeni eksik, yeni haber, gol, maç başladı/bitti) ve
   açık sayfaya anlık bildirim gönderir
 
+## Oyuncu sayfaları
+Kadrodaki bir oyuncuya tıklayınca oyuncu sayfası açılır: sezonun tüm turnuvalarındaki (ve toplam)
+gol, asist, xG, xGOT, şut ve şut isabeti, kilit pas, pas/uzun top/orta isabeti, çalım, ikili mücadele,
+savunma ve disiplin istatistikleri; aynı pozisyondaki oyunculara göre yüzdelik dilimler; şut haritası;
+son maçlar. Kalecilerde kurtarış, kurtarış yüzdesi, yenilen gol, önlenen gol, kaleye gelen şut/xG/xGOT,
+penaltı istatistikleri ve kale ağzı haritası. Oyuncu verisi 12 saatte bir yenilenir (`app/players.py`).
+
 ## Güncelleme sıklığı
 Canlı maç 2 dk · başlamasına 3 saatten az kalan maç 5 dk · gün içindeki diğer maçlar 20 dk · yarının maçları 3 saat.
 Ayarlar: `app/config.py`.

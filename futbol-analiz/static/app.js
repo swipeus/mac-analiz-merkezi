@@ -29,6 +29,7 @@ const state = {
   off: new Set(JSON.parse(safeGet("offLeagues") || "[]")),
   unread: 0,
   current: null, // açık maç id
+  player: null, // açık oyuncu id
 };
 function safeGet(k) { try { return localStorage.getItem(k); } catch { return null; } }
 function safeSet(k, v) { try { localStorage.setItem(k, v); } catch { } }
@@ -62,6 +63,10 @@ async function staticApi(path) {
   if ((m = path.match(/^\/api\/day\?date=([\d-]+)/))) {
     try { return await getData(`day-${m[1]}.json`); }
     catch (e) { if (e.message === "NOTFOUND") throw new Error("Bu tarih için veri yok. Site dünün, bugünün ve yarının maçlarını gösterir."); throw e; }
+  }
+  if ((m = path.match(/^\/api\/player\/(\d+)/))) {
+    try { return await getData(`player-${m[1]}.json`); }
+    catch (e) { if (e.message === "NOTFOUND") throw new Error("Bu oyuncunun istatistikleri henüz hazırlanmadı, 15-20 dakika sonra tekrar bak."); throw e; }
   }
   if ((m = path.match(/^\/api\/match\/(\d+)/))) {
     try { return await getData(`match-${m[1]}.json`); }
@@ -136,7 +141,7 @@ async function renderDay(silent) {
   } catch (e) {
     v.innerHTML = `<div class="loading">Hata: ${esc(e.message)}</div>`; return;
   }
-  if (state.current) return;
+  if (state.current || state.player) return;
   const ms = dayCache.matches.filter((m) => !state.off.has(m.league_id));
   if (!ms.length) { v.innerHTML = `<div class="loading">Bu tarihte seçili liglerde maç yok.</div>`; return; }
   // Map: sunucunun lig sırasını korur (sayısal anahtarlı nesne sırayı bozar)
@@ -465,7 +470,7 @@ function lineupHtml(b) {
       left = side === "home" ? p.y * 50 : 100 - p.y * 50;
       top = side === "home" ? p.x * 100 : (1 - p.x) * 100;
     }
-    return `<div class="pl ${cls}" style="left:${left}%;top:${top}%">
+    return `<div class="pl ${cls}" data-pid="${Number(p.id) || 0}" title="${esc(p.name)} · istatistikler" style="left:${left}%;top:${top}%">
       <div class="ph">${playerImg(p.id, p.shirt)}${p.shirt ? `<span class="no">${esc(p.shirt)}</span>` : ""}</div>
       <div class="nm">${esc(p.last)}</div>${p.rating ? `<div class="rt">${nf(p.rating, 1)}</div>` : ""}</div>`;
   }).join("");
@@ -484,13 +489,13 @@ function lineupHtml(b) {
     return u.map((p) => {
       const t = (p.type || "").toLowerCase();
       const kind = t === "injury" ? "inj" : "sus";
-      return `<li class="prow">${playerImg(p.id)}<div class="pinfo"><b>${esc(p.name)}</b>
+      return `<li class="prow" data-pid="${Number(p.id) || 0}">${playerImg(p.id)}<div class="pinfo"><b>${esc(p.name)}</b>
         <small><span class="ptag ${kind}">${esc(ABSENT_TR[t] || cap(p.type) || "Kadroda yok")}</span>${p.return ? " Dönüş: " + esc(cap(p.return)) : ""}</small></div></li>`;
     }).join("");
   };
   const side = (s, cls, name) => `<div><h3 class="${cls}">${esc(name)} · ${esc(lu[s].formation || "")}</h3>
     <div class="muted">Teknik direktör: ${esc(lu[s].coach || "—")}${lu[s].avg_age ? " · İlk 11 yaş ort. " + nf(lu[s].avg_age, 1) : ""}</div>
-    <ul class="plist">${(lu[s].starters || []).map((p) => `<li class="prow">${playerImg(p.id, p.shirt)}
+    <ul class="plist">${(lu[s].starters || []).map((p) => `<li class="prow" data-pid="${Number(p.id) || 0}">${playerImg(p.id, p.shirt)}
       <div class="pinfo"><b>${p.shirt ? `<span class="shirt">${esc(p.shirt)}</span>` : ""}${esc(p.name)}</b>
         <small>${[countryTr(p.country), p.age ? p.age + " yaş" : ""].filter(Boolean).map(esc).join(" · ")}</small></div>
       ${p.rating ? `<span class="prt">${nf(p.rating, 2)}</span>` : ""}</li>`).join("")}</ul>
@@ -620,6 +625,222 @@ function extrasHtml(b) {
     </ul></div>`;
 }
 
+/* ---------- oyuncu sayfası ---------- */
+const STAT_TR = {
+  // şut
+  goals: "Gol", expected_goals: "xG (beklenen gol)", expected_goals_on_target: "xGOT (isabetli şut xG'si)",
+  goals_subtitle: "Penaltı golü", non_penalty_xg: "Penaltısız xG", shots: "Şut", ShotsOnTarget: "İsabetli şut",
+  headed_shots: "Kafa vuruşu", shot_accuracy: "Şut isabet oranı",
+  // pas
+  assists: "Asist", expected_assists: "xA (beklenen asist)", successful_passes: "İsabetli pas",
+  successful_passes_accuracy: "Pas isabet oranı", long_balls_accurate: "İsabetli uzun top",
+  long_ball_succeeeded_accuracy: "Uzun top isabet oranı", line_breaking_passes: "Hat kıran pas",
+  chances_created: "Kilit pas (yaratılan şans)", big_chance_created_team_title: "Net pozisyon yaratma",
+  crosses_succeeeded: "İsabetli orta", crosses_succeeeded_accuracy: "Orta isabet oranı",
+  // top hakimiyeti
+  dribbles_succeeded: "Başarılı çalım", won_contest_subtitle: "Çalım başarı oranı", duel_won: "Kazanılan ikili mücadele",
+  duel_won_percent: "İkili mücadele başarı oranı", aerials_won: "Kazanılan hava topu", aerials_won_percent: "Hava topu başarı oranı",
+  touches: "Topla buluşma", touches_opp_box: "Rakip ceza sahasında temas", dispossessed: "Top kaptırma", fouls_won: "Kazanılan faul",
+  // savunma
+  defensive_actions: "Savunma aksiyonu", "matchstats.headers.tackles": "Müdahale", interceptions: "Top kesme",
+  fouls: "Yapılan faul", recoveries: "Top kazanma", poss_won_att_3rd_team_title: "Rakip yarı sahada top kazanma",
+  clearances: "Uzaklaştırma", clean_sheet_team_title: "Gol yenmeyen maç", goals_conceded_while_on_pitch: "Sahadayken yenilen gol",
+  expected_goals_against_while_on_pitch: "Sahadayken rakip xG",
+  // disiplin
+  yellow_cards: "Sarı kart", red_cards: "Kırmızı kart",
+  // kaleci
+  saves: "Kurtarış", save_percentage: "Kurtarış yüzdesi", goals_conceded: "Yenilen gol", goals_prevented: "Önlenen gol",
+  penalty_saves: "Kurtarılan penaltı", penalty_goals_conceded: "Yenilen penaltı golü", penalty_save_percent: "Penaltı kurtarma oranı",
+  error_led_to_goal: "Gole yol açan hata", keeper_sweeper: "Kale dışına çıkış (libero)", keeper_high_claim: "Yüksek top hakimiyeti",
+  shots_faced: "Kaleye gelen şut", shots_on_target_faced: "Kaleye gelen isabetli şut", xg_faced: "Gelen şutların xG'si",
+  xgot_faced: "İsabetli şutların xGOT'u",
+  // üst kart
+  rating: "Reyting", matches_uppercase: "Maç", minutes_played: "Dakika", clean_sheet_title: "Gol yemeden", saved_penalties: "Kurtarılan penaltı",
+};
+const TITLE_TR = { Started: "İlk 11", Minutes: "Dakika", Conceded: "Yenilen gol", "Penalties saved": "Kurtarılan penaltı",
+  Matches: "Maç", Rating: "Reyting", Goals: "Gol", Assists: "Asist", "Clean sheets": "Gol yemeden" };
+const SECTION_TR = { shooting: ["⚽", "#f85149", "Şut"], passing: ["🎯", "#58a6ff", "Pas ve oyun kurma"],
+  possession: ["🏃", "#a371f7", "Top hakimiyeti ve ikili mücadele"], defending: ["🛡️", "#3fb950", "Savunma"],
+  discipline: ["🟨", "#e3b341", "Disiplin"], goalkeeping: ["🧤", "#39c5cf", "Kalecilik"], distribution: ["🎯", "#58a6ff", "Oyun kurma (dağıtım)"] };
+const TRAIT_TR = { chances_created: "Kilit pas", aerials_won: "Hava topu", defensive_actions: "Savunma aksiyonu", goals: "Gol",
+  shot_attempts: "Şut denemesi", touches: "Topla buluşma", keeper_sweeper_actions: "Kale dışına çıkış", goals_conceded: "Az gol yeme",
+  save_percentage: "Kurtarış yüzdesi", keeper_high_claim: "Yüksek top", clean_sheet: "Gol yemeden", long_ball_succeeeded_accuracy: "Uzun top isabeti" };
+const POS_TR = { Keeper: "Kaleci", "Centre-Back": "Stoper", "Center Back": "Stoper", "Right-Back": "Sağ bek", "Right Back": "Sağ bek",
+  "Left-Back": "Sol bek", "Left Back": "Sol bek", "Right Wing-Back": "Sağ kanat bek", "Left Wing-Back": "Sol kanat bek",
+  "Defensive Midfielder": "Ön libero", "Central Midfielder": "Merkez orta saha", "Attacking Midfielder": "Ofansif orta saha",
+  "Right Midfielder": "Sağ orta saha", "Left Midfielder": "Sol orta saha", "Right Winger": "Sağ kanat", "Left Winger": "Sol kanat",
+  Striker: "Santrfor", "Centre-Forward": "Santrfor" };
+const FOOT_TR = { Right: "Sağ", Left: "Sol", Both: "İki ayak" };
+const statName = (i) => STAT_TR[i.key] || TITLE_TR[i.title] || i.title;
+function statVal(i) {
+  if (i.value == null) return i.raw ?? "—";
+  if (i.fmt === "percent") return "%" + nf(i.value, 1);
+  if (i.key === "rating") return nf(i.value, 2);
+  return Number.isInteger(i.value) ? String(i.value) : nf(i.value, 2);
+}
+// FotMob yüzdelik dilimi (aynı pozisyondaki oyunculara göre): renk düşük/orta/yüksek
+const pctColor = (p) => p >= 67 ? "#3fb950" : p >= 34 ? "#d29922" : "#f85149";
+function ratingColor(r) {
+  r = parseFloat(r);
+  if (!r) return "#6e7781";
+  return r >= 8 ? "#2ea043" : r >= 7 ? "#57ab5a" : r >= 6.5 ? "#d29922" : r >= 6 ? "#db6d28" : "#da3633";
+}
+let playerData = null, playerComp = 0;
+
+async function renderPlayer(id, silent) {
+  const v = $("#view");
+  if (!silent) v.innerHTML = `<div class="loading">Oyuncu istatistikleri yükleniyor…</div>`;
+  let p;
+  try { p = await api(`/api/player/${id}`); }
+  catch (e) { v.innerHTML = `<div class="card"><p>${esc(e.message)}</p></div>`; return; }
+  if (state.player !== id) return;
+  if (!playerData || playerData.id !== p.id) playerComp = 0;
+  playerData = p;
+  drawPlayer();
+}
+function playerComps(p) {
+  return p.total ? [p.total, ...p.comps] : p.comps;
+}
+function drawPlayer() {
+  const p = playerData, comps = playerComps(p);
+  const c = comps[playerComp] || comps[0];
+  const y = window.scrollY;
+  $("#view").innerHTML = playerHero(p) + (c ? `
+    <div class="ptabs">${comps.map((x, i) => `<button class="ptab ${i === playerComp ? "on" : ""}" data-ci="${i}">
+      ${x.id ? `<img src="${leagueLogo(x.id)}" alt="" onerror="this.remove()">` : "🌍"}${esc(x.name === "Tüm kulvarlar" ? x.name : trComp(x.name))}
+      <small>${x.matches ? x.matches + " maç" : ""}</small></button>`).join("")}</div>
+    ${playerTop(p, c)}
+    ${p.keeper ? keeperCard(c) : shotCard(c)}
+    <div class="grid2">${c.sections.map((s) => sectionCard(s, c)).join("")}</div>
+    ${traitsCard(p)}` : `<div class="card"><p class="muted">Bu sezon için istatistik yok.</p></div>`) + recentCard(p);
+  $("#view").querySelectorAll(".ptab").forEach((b) => b.onclick = () => { playerComp = +b.dataset.ci; drawPlayer(); });
+  window.scrollTo(0, y);
+}
+const trComp = (n) => (n || "").replace("Super Lig", "Süper Lig").replace("Champions League", "Şampiyonlar Ligi")
+  .replace("Europa League", "Avrupa Ligi").replace("Conference League", "Konferans Ligi").replace("World Cup", "Dünya Kupası")
+  .replace(" Qualification qualification", " eleme").replace("qualification", "eleme").replace("Qualification", "Eleme");
+
+function playerHero(p) {
+  const i = p.info || {};
+  const color = p.team.color || "var(--accent)";
+  const pos = POS_TR[p.position] || p.position;
+  const chips = [
+    i.shirt && chip("👕", "#" + esc(i.shirt)),
+    i.age && chip("🎂", esc(i.age) + " yaş"),
+    i.height && chip("📏", esc(i.height)),
+    i.foot && chip("🦶", esc(FOOT_TR[i.foot] || i.foot) + " ayak"),
+    i.country && chip("🌍", esc(countryTr(i.country))),
+    i.value && chip("💶", esc(i.value)),
+    p.contract && chip("📝", "Sözleşme: " + esc(new Date(p.contract).toLocaleDateString("tr-TR", { month: "long", year: "numeric" }))),
+  ].filter(Boolean).join("");
+  const inj = p.injury ? `<div class="pinj">🚑 Sakat${p.injury.expectedReturn ? " · Dönüş: " + esc(p.injury.expectedReturn) : ""}</div>` : "";
+  return `<div class="phero" style="--tc:${esc(color)}">
+    <div class="pphoto">${playerImg(p.id, i.shirt)}</div>
+    <div class="pmain">
+      <h1>${esc(p.name)}</h1>
+      <div class="pteam"><img src="${teamLogo(p.team.id)}" alt="" onerror="this.remove()"><b>${esc(p.team.name || "")}</b>${p.team.loan ? `<span class="tag warn">Kiralık</span>` : ""}
+        <span class="ppos">${esc(pos || "")}</span>${p.keeper ? `<span class="ppos gk">🧤 Kaleci</span>` : ""}</div>
+      <div class="chips left">${chips}</div>${inj}
+    </div></div>`;
+}
+
+function playerTop(p, c) {
+  const get = (k) => [...c.top, ...c.sections.flatMap((s) => s.items), ...c.derived].find((i) => i.key === k);
+  const tiles = p.keeper
+    ? [["🧤", "#39c5cf", get("saves")], ["📊", "#3fb950", get("save_percentage")], ["🥅", "#f85149", get("goals_conceded")],
+       ["🛡️", "#a371f7", get("goals_prevented")], ["🎯", "#d29922", get("shots_on_target_faced")], ["📐", "#58a6ff", get("xgot_faced")],
+       ["🔒", "#2ea043", get("clean_sheet_title") || get("clean_sheet_team_title")], ["⭐", "#e3b341", get("rating")]]
+    : [["⚽", "#f85149", get("goals")], ["🅰️", "#58a6ff", get("assists")], ["📈", "#a371f7", get("expected_goals")],
+       ["🔑", "#d29922", get("chances_created")], ["🥅", "#f78166", get("shots")], ["🎯", "#3fb950", get("shot_accuracy")],
+       ["📨", "#39c5cf", get("successful_passes_accuracy")], ["⭐", "#e3b341", get("rating")]];
+  const mins = c.minutes ? `${nf(c.minutes, 0)} dk${c.minutes_est ? " (tahmini)" : ""}` : "";
+  return `<div class="card" style="--c:var(--tc, #2ea043)">${head("📋", `${esc(c.name === "Tüm kulvarlar" ? "Tüm kulvarlar" : trComp(c.name))} <span class="muted">· ${esc(p.season || "")} sezonu${c.matches ? " · " + c.matches + " maç" : ""}${mins ? " · " + mins : ""}</span>`)}
+    <div class="pred">${tiles.filter((t) => t[2]).map(([ic, col, i]) => kpi(ic, col, statName(i), statVal(i),
+      i.per90 != null && i.fmt !== "percent" && i.key !== "rating" ? `90 dk başına ${nf(i.per90, 2)}` : i.pct != null ? `Pozisyonunda %${Math.round(i.pct)} dilimde` : "")).join("")}</div>
+    ${c.name === "Tüm kulvarlar" ? `<p class="muted">Tüm kulvarlar: sayılar toplanır, yüzdeler ve reyting oynanan süreye göre ağırlıklı ortalamadır. Yüzdelik dilimler sadece tek turnuva sekmelerinde görünür.</p>` : ""}
+  </div>`;
+}
+
+function sectionCard(s, c) {
+  const [ic, col, title] = SECTION_TR[s.key] || ["📊", "#58a6ff", s.title];
+  const extra = s.key === "shooting" ? c.derived.filter((d) => d.key === "shot_accuracy")
+    : s.key === "goalkeeping" ? c.derived.filter((d) => d.key !== "shot_accuracy") : [];
+  const rows = [...s.items, ...extra].map((i) => `<div class="srow">
+      <div class="sl">${esc(statName(i))}</div>
+      <div class="sv">${statVal(i)}${i.per90 != null && i.fmt !== "percent" && i.key !== "rating" ? `<small>${nf(i.per90, 2)} / 90 dk</small>` : ""}</div>
+      ${i.pct != null ? `<div class="spct" title="Aynı pozisyondaki oyunculara göre yüzdelik dilim"><span style="width:${Math.max(3, i.pct)}%;background:${pctColor(i.pct)}"></span><b>${Math.round(i.pct)}</b></div>` : `<div class="spct empty"></div>`}
+    </div>`).join("");
+  return `<div class="card" style="--c:${col}">${head(ic, title)}${rows}</div>`;
+}
+
+// saha oyuncusu: yarı saha şut haritası (FotMob koordinatı: x kaleye doğru 0-105 m, y 0-68 m)
+function shotCard(c) {
+  const shots = c.shots || [];
+  if (!shots.length) return "";
+  const W = 68, H = 52.5;
+  const goals = shots.filter((s) => s.ev === "Goal").length, on = shots.filter((s) => s.on).length;
+  const xg = shots.reduce((a, s) => a + (s.xg || 0), 0);
+  const dots = shots.map((s) => {
+    const cx = (s.y ?? 34), cy = Math.max(0, 105 - (s.x ?? 90));
+    const r = 0.55 + Math.sqrt(s.xg || 0.02) * 2.1;
+    const kind = s.ev === "Goal" ? "g" : s.on ? "o" : "m";
+    const opp = esc(`${s.home || ""} - ${s.away || ""}`);
+    return `<circle class="sd ${kind}" cx="${cx.toFixed(2)}" cy="${cy.toFixed(2)}" r="${r.toFixed(2)}"><title>${s.min || ""}' · ${opp} · xG ${nf(s.xg || 0, 2)} · ${s.ev === "Goal" ? "Gol" : s.on ? "İsabetli" : "İsabetsiz/blok"}</title></circle>`;
+  }).join("");
+  const pitch = `<rect x="0" y="0" width="${W}" height="${H}" class="pf"/>
+    <rect x="13.84" y="0" width="40.32" height="16.5" class="pl2"/><rect x="24.84" y="0" width="18.32" height="5.5" class="pl2"/>
+    <rect x="30.34" y="-1.2" width="7.32" height="1.2" class="pg"/><circle cx="34" cy="11" r="0.4" class="pdot"/>
+    <path d="M26.7 16.5 A9.15 9.15 0 0 0 41.3 16.5" class="pl2"/><path d="M24.85 ${H} A9.15 9.15 0 0 1 43.15 ${H}" class="pl2"/>`;
+  return `<div class="card" style="--c:#f85149">${head("🎯", `Şut haritası <span class="muted">· ${shots.length} şut, ${on} isabetli, ${goals} gol, toplam xG ${nf(xg, 2)}</span>`)}
+    <div class="shotwrap"><svg viewBox="-1 -2 70 55.5" class="shotmap" role="img" aria-label="Şut haritası">${pitch}${dots}</svg></div>
+    <div class="legend center"><span><i class="lg g"></i>Gol</span><span><i class="lg o"></i>İsabetli (kurtarıldı)</span><span><i class="lg m"></i>İsabetsiz / blok</span><span>Daire büyüklüğü = xG</span></div></div>`;
+}
+
+// kaleci: kale ağzına gelen isabetli şutlar (FotMob onGoalShot: x 0-2 kale genişliği, y 0-0.67 yükseklik)
+function keeperCard(c) {
+  const f = (c.faced || []).filter((s) => s.on && s.gx != null);
+  if (!f.length) return "";
+  const goals = f.filter((s) => s.ev === "Goal").length;
+  const xgot = f.reduce((a, s) => a + (s.xgot || 0), 0);
+  const dots = f.map((s) => {
+    const cx = s.gx, cy = 0.667 - Math.min(0.66, s.gy || 0);
+    const r = 0.018 + Math.sqrt(s.xgot || 0.02) * 0.05;
+    const g = s.ev === "Goal";
+    return `<circle class="sd ${g ? "x" : "s"}" cx="${cx.toFixed(3)}" cy="${cy.toFixed(3)}" r="${r.toFixed(3)}"><title>${s.min || ""}' · ${esc(s.by || "")} (${esc(`${s.home || ""} - ${s.away || ""}`)}) · xGOT ${nf(s.xgot || 0, 2)} · ${g ? "Gol" : "Kurtarış"}</title></circle>`;
+  }).join("");
+  return `<div class="card" style="--c:#39c5cf">${head("🧤", `Kaleye gelen isabetli şutlar <span class="muted">· ${f.length} şut, ${f.length - goals} kurtarış, ${goals} gol, xGOT ${nf(xgot, 2)} (önlenen gol ${nf(xgot - goals, 2)})</span>`)}
+    <div class="shotwrap"><svg viewBox="-0.15 -0.12 2.3 0.84" class="goalmap" role="img" aria-label="Kale ağzı haritası">
+      <rect x="0" y="0" width="2" height="0.667" class="gnet"/><path d="M0 0.72 V0 H2 V0.72" class="gpost"/><line x1="-0.15" y1="0.667" x2="2.15" y2="0.667" class="gline"/>${dots}</svg></div>
+    <div class="legend center"><span><i class="lg s"></i>Kurtarış</span><span><i class="lg x"></i>Gol</span><span>Daire büyüklüğü = xGOT</span></div></div>`;
+}
+
+function traitsCard(p) {
+  if (!p.traits || !p.traits.length) return "";
+  return `<div class="card" style="--c:#a371f7">${head("🧬", `Pozisyonundaki oyunculara göre <span class="muted">· ana lig, 90 dk başına</span>`)}
+    ${p.traits.map((t) => { const v = Math.round((t.value || 0) * 100); return `<div class="srow">
+      <div class="sl">${esc(TRAIT_TR[t.key] || t.title)}</div><div class="sv">%${v}</div>
+      <div class="spct"><span style="width:${Math.max(3, v)}%;background:${pctColor(v)}"></span><b>${v}</b></div></div>`; }).join("")}</div>`;
+}
+
+function recentCard(p) {
+  if (!p.recent || !p.recent.length) return "";
+  const rows = p.recent.map((m) => {
+    const my = m.home ? m.hs : m.as, op = m.home ? m.as : m.hs;
+    const res = my == null || op == null ? "" : my > op ? "G" : my === op ? "B" : "M";
+    return `<tr>
+      <td class="l">${dateOf(m.date)}</td>
+      <td class="l"><span class="opp"><img src="${teamLogo(m.oppId)}" alt="" onerror="this.remove()">${m.home ? "" : "@ "}${esc(m.opp)}</span><small class="muted">${esc(m.comp || "")}</small></td>
+      <td><span class="rp ${res}">${m.hs ?? "-"}-${m.as ?? "-"}</span></td>
+      <td>${m.bench ? `<span class="muted">Yedek</span>` : (m.min ?? "—") + "'"}</td>
+      <td>${m.g ? `<b>${m.g}</b>` : "0"}</td><td>${m.a ? `<b>${m.a}</b>` : "0"}</td>
+      <td>${m.yc ? "🟨".repeat(m.yc) : ""}${m.rc ? "🟥" : ""}</td>
+      <td>${m.rating ? `<span class="rbadge" style="background:${ratingColor(m.rating)}">${esc(m.rating)}</span>` : "—"}${m.potm ? " ⭐" : ""}</td></tr>`;
+  }).join("");
+  return `<div class="card" style="--c:#58a6ff">${head("📅", "Son maçları <span class=\"muted\">· tüm kulvarlar</span>")}
+    <div class="tbl-wrap"><table><tr><th class="l">Tarih</th><th class="l">Rakip</th><th>Skor</th><th>Süre</th><th>Gol</th><th>Asist</th><th>Kart</th><th>Reyting</th></tr>${rows}</table></div>
+    <p class="muted">⭐ Maçın oyuncusu</p></div>`;
+}
+
 /* ---------- canlı güncelleme (SSE) ---------- */
 function connect() {
   const es = new EventSource("/api/events");
@@ -632,7 +853,7 @@ function connect() {
     clearTimeout(pending);
     pending = setTimeout(() => {
       if (state.current && ev.match_id === state.current) renderMatch(state.current, true);
-      else if (!state.current) renderDay(true);
+      else if (!state.current && !state.player) renderDay(true);
     }, 800);
   };
 }
@@ -657,18 +878,30 @@ async function loadFeed() {
 }
 
 /* ---------- yönlendirme ---------- */
-let cameFromList = false;
+// uygulama içi gezinme yığını: Geri butonu sitenin dışına çıkmadan bir önceki sayfaya döner
+const navStack = [];
 function route() {
-  const m = location.hash.match(/^#\/mac\/(\d+)/);
-  // maç sayfasında üst barda yalnızca Geri butonu görünür
-  document.body.classList.toggle("in-match", !!m);
-  if (m) { cameFromList = state.current === null && ready; state.current = +m[1]; window.scrollTo(0, 0); renderMatch(state.current); }
+  const mm = location.hash.match(/^#\/mac\/(\d+)/);
+  const pm = location.hash.match(/^#\/oyuncu\/(\d+)/);
+  const h = location.hash || "#/";
+  if (navStack.length > 1 && navStack[navStack.length - 2] === h) navStack.pop();
+  else if (navStack[navStack.length - 1] !== h) navStack.push(h);
+  // maç ve oyuncu sayfalarında üst barda yalnızca Geri butonu görünür
+  document.body.classList.toggle("in-match", !!(mm || pm));
+  state.player = pm ? +pm[1] : null;
+  if (mm) { state.current = +mm[1]; window.scrollTo(0, 0); renderMatch(state.current); }
+  else if (pm) { state.current = null; window.scrollTo(0, 0); renderPlayer(state.player); }
   else { state.current = null; renderDay(); }
 }
 $("#backBtn").onclick = () => {
-  if (cameFromList && history.length > 1) history.back();
-  else location.hash = "#/";
+  if (navStack.length > 1) history.back();
+  else { navStack.length = 0; location.hash = "#/"; }
 };
+// kadrodaki oyunculara tıklayınca oyuncu sayfası
+$("#view").addEventListener("click", (e) => {
+  const el = e.target.closest("[data-pid]");
+  if (el && el.dataset.pid !== "0") location.hash = "#/oyuncu/" + el.dataset.pid;
+});
 function shiftDay(n) {
   const d = new Date(state.date + "T12:00:00"); d.setDate(d.getDate() + n);
   setDate(d.toLocaleDateString("sv-SE"));
@@ -713,7 +946,7 @@ function startPolling() {
       const evs = await getData("events.json");
       evs.filter((e) => e.id > lastEv).reverse().forEach((ev) => { toast(ev); addFeed(ev, true); });
       if (evs.length) { lastEv = Math.max(lastEv, evs[0].id); safeSet("lastEventId", String(lastEv)); }
-      state.current ? renderMatch(state.current, true) : renderDay(true);
+      state.player ? renderPlayer(state.player, true) : state.current ? renderMatch(state.current, true) : renderDay(true);
     } catch { /* bir sonraki turda tekrar dener */ }
   };
   $("#liveDot").classList.add("on");

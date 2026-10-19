@@ -63,6 +63,15 @@ class Sources:
                 return hit[1]
             raise
 
+    async def fetch_json(self, url):
+        """Önbelleğe yazmadan tek istek (büyük ham oyuncu verisi için; özet ayrıca saklanır)."""
+        async with self.sem:
+            r = await self.client.get(url)
+            r.raise_for_status()
+            data = r.json()
+            await asyncio.sleep(0.2)
+        return data
+
     # --- FotMob ---
     async def day_matches(self, yyyymmdd, ttl):
         url = f"{FOTMOB}/matches?date={yyyymmdd}&timezone=Europe%2FIstanbul&ccode3=TUR"

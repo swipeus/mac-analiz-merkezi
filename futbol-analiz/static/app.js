@@ -953,6 +953,52 @@ function startPolling() {
   setInterval(tick, 60000);
 }
 
+/* ---------- yenilikler penceresi ----------
+   Her güncellemede RELEASES'e yeni bir kayıt eklenir (id bir artar). Kişi o cihazda daha önce görmediği
+   kayıtları bir kez görür; "Tamam" ile en son id kaydedilir ve pencere tekrar çıkmaz. */
+const RELEASES = [
+  {
+    id: 1, date: "19 Ekim 2026", title: "Maç Analiz Merkezi'ne hoş geldin!",
+    sub: "Şimdiye kadar eklenen bütün özellikler",
+    items: [
+      ["📅", "Günün maçları", "Süper Lig, top 5 lig, Avrupa kupaları dahil 14 ligin dün, bugün ve yarın oynanan maçları; logolu kartlar ve canlı skorlar."],
+      ["⭐", "Favori yıldızı", "Kazanma olasılığı daha yüksek olan takımın logosunun üstünde altın yıldız."],
+      ["🔥", "Öne çıkanlar", "Günün en net favorisi, en gollü maç beklentisi ve en dengeli maçı en üstte."],
+      ["🔎", "Lig filtresi", "Filtre butonuyla sadece görmek istediğin ligleri seç; seçimin hatırlanır."],
+      ["🎯", "Tahmin modeli", "1X2 olasılıkları, en olası skorlar, alt/üst, karşılıklı gol, korner, şut ve kart beklentisi."],
+      ["🧭", "Senaryolar", "Erken gol, duran top, eksikler, hava durumu gibi maçın gidişatını değiştirebilecek olasılıklar."],
+      ["🧠", "Takım analizleri", "Oyun planı ve taktik, hücum, duran top, savunma, form, eksikler ve kilit oyuncular."],
+      ["👥", "Kadrolar", "Olası ve resmi 11'ler, saha üzerinde diziliş, oyuncu fotoğrafları, sakat ve cezalılar."],
+      ["📊", "İstatistik karşılaştırması", "Son 5 maçın şut, xG, korner, savunma istatistikleri karşılıklı çubuklarla; sezon istatistikleri ve lig sıralamaları."],
+      ["🏃", "Oyuncu sayfaları", "Oyuncuya dokun: tüm kulvarlarda gol, asist, xG, kilit pas, şut ve pas isabeti, yüzdelik dilimler, şut haritası."],
+      ["🧤", "Kaleci istatistikleri", "Kurtarış, kurtarış yüzdesi, yenilen gol, önlenen gol, kaleye gelen xG/xGOT ve kale ağzı haritası."],
+      ["📰", "Haberler", "Türkçe basından ve FotMob'dan takımlarla ilgili son haberler."],
+      ["🔔", "Bildirimler", "Resmi 11 açıklandığında, yeni eksik ya da haber çıktığında ve gol olduğunda bildirim; veriler 15 dakikada bir güncellenir."],
+      ["🔒", "Şifreli ve gizli", "Site şifreyle korunur; telefonun şifreyi hatırlar."],
+      ["📱", "Mobil uyumlu", "Telefonda dikey saha, alttan açılan filtre ve rahat okunan kartlar."],
+      ["❤️", "Sayfanın en altında", "Küçük ama önemli bir not 🙂"],
+    ],
+  },
+];
+function showWhatsNew() {
+  const seen = +(safeGet("seenRelease") || 0);
+  const fresh = RELEASES.filter((r) => r.id > seen);
+  if (!fresh.length) return;
+  const latest = fresh[fresh.length - 1];
+  $("#wnTitle").textContent = fresh.length === 1 ? latest.title : "Yenilikler";
+  $("#wnSub").textContent = fresh.length === 1 ? `${latest.sub} · ${latest.date}` : `${fresh.length} güncelleme`;
+  $("#wnList").innerHTML = fresh.slice().reverse().flatMap((r) => r.items).map(([ic, t, d]) =>
+    `<div class="wn-item"><span class="wn-ii">${ic}</span><div><b>${esc(t)}</b><p>${esc(d)}</p></div></div>`).join("");
+  $("#newsModal").classList.remove("hidden");
+  document.body.classList.add("modal-open");
+  $("#wnOk").focus();
+  $("#wnOk").onclick = () => {
+    safeSet("seenRelease", String(RELEASES[RELEASES.length - 1].id));
+    $("#newsModal").classList.add("hidden");
+    document.body.classList.remove("modal-open");
+  };
+}
+
 let ready = false;
 async function boot() {
   if (STATIC) {
@@ -972,6 +1018,7 @@ async function boot() {
   $("#toolbar").classList.remove("hidden");
   await initLeagues();
   route();
+  showWhatsNew();
   loadFeed();
   STATIC ? startPolling() : connect();
 }

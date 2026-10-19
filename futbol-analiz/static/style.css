@@ -409,3 +409,36 @@ body.in-match .top { justify-content: flex-start; }
   .pmain h1 { font-size: 22px; }
   .srow { grid-template-columns: 1fr auto 70px; gap: 8px; }
 }
+
+/* ---------- çan simgesi ---------- */
+.bell { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 36px; padding: 0; border-radius: 10px; }
+.bell svg { filter: drop-shadow(0 0 4px rgba(245,197,24,.35)); }
+.bell b { position: absolute; top: -6px; right: -6px; min-width: 18px; line-height: 18px; text-align: center; }
+
+/* ---------- yenilikler penceresi ---------- */
+body.modal-open { overflow: hidden; }
+.wn-backdrop { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 16px;
+  background: rgba(0,0,0,.6); backdrop-filter: blur(3px); animation: sheetIn .2s; }
+.wn { width: min(760px, 100%); max-height: calc(100vh - 32px); display: flex; flex-direction: column; border-radius: 18px;
+  border: 1px solid var(--line); box-shadow: 0 24px 60px rgba(0,0,0,.6);
+  background: radial-gradient(600px 220px at 0% 0%, rgba(46,160,67,.18), transparent 70%),
+              radial-gradient(500px 220px at 100% 0%, rgba(163,113,247,.16), transparent 70%), var(--panel); }
+.wn-head { display: flex; align-items: center; gap: 14px; padding: 20px 22px 12px; }
+.wn-head h2 { margin: 0; font-size: 20px; }
+.wn-head small { color: var(--muted); }
+.wn-ic { width: 46px; height: 46px; flex: 0 0 auto; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 24px;
+  background: linear-gradient(135deg, rgba(245,197,24,.25), rgba(163,113,247,.25)); }
+.wn-list { overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 6px 22px 14px; }
+.wn-item { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border-radius: 12px; background: var(--panel2); border: 1px solid var(--line); }
+.wn-ii { flex: 0 0 auto; width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; background: rgba(255,255,255,.06); }
+.wn-item b { display: block; margin-bottom: 2px; }
+.wn-item p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.4; }
+.wn-foot { padding: 12px 22px 18px; border-top: 1px solid var(--line); }
+.wn-foot .primary { width: 100%; padding: 12px; font-weight: 800; font-size: 15px; background: var(--accent); border-color: var(--accent); color: #fff; border-radius: 12px; }
+@media (max-width: 700px) {
+  .wn-backdrop { padding: 0; align-items: flex-end; }
+  .wn { max-height: 92vh; border-radius: 18px 18px 0 0; }
+  .wn-list { grid-template-columns: 1fr; padding: 6px 14px 12px; }
+  .wn-head { padding: 16px 16px 10px; }
+  .wn-foot { padding: 10px 14px 16px; }
+}

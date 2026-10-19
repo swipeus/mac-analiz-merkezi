@@ -22,7 +22,10 @@
   </div>
   <div class="right">
     <span id="liveDot" class="dot" title="Canlı bağlantı"></span>
-    <button id="bell" class="bell" aria-label="Bildirimler">Bildirimler <b id="bellCount"></b></button>
+    <button id="bell" class="bell" aria-label="Bildirimler" title="Bildirimler">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="#f5c518" d="M12 2a1.5 1.5 0 0 0-1.5 1.5v.7A6.5 6.5 0 0 0 5.5 10.5v4.2l-1.6 2.4A1 1 0 0 0 4.7 18.6h14.6a1 1 0 0 0 .8-1.5l-1.6-2.4v-4.2a6.5 6.5 0 0 0-5-6.3v-.7A1.5 1.5 0 0 0 12 2zm-2.6 17.6a2.7 2.7 0 0 0 5.2 0z"/></svg>
+      <b id="bellCount"></b>
+    </button>
   </div>
 </header>
 <div id="feed" class="feed hidden"><div class="feed-head">Son gelişmeler</div><ul id="feedList"></ul></div>
@@ -42,6 +45,13 @@
 </div>
 <main id="view"></main>
 <div id="toasts" class="toasts"></div>
+<div id="newsModal" class="wn-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="wnTitle">
+  <div class="wn">
+    <div class="wn-head"><span class="wn-ic">✨</span><div><h2 id="wnTitle"></h2><small id="wnSub"></small></div></div>
+    <div id="wnList" class="wn-list"></div>
+    <div class="wn-foot"><button id="wnOk" class="primary">Tamam</button></div>
+  </div>
+</div>
 <footer class="foot"><span id="updatedAt"></span> Veriler: FotMob (sağlayıcı lige göre değişir) · Haberler: Google News, FotMob · Tahminler istatistiksel modeldir, kesinlik içermez. · <span class="love">Ece'yi çok seviyorum ❤️</span></footer>
 <script src="/static/app.js"></script>
 </body>

@@ -24,7 +24,7 @@ log = logging.getLogger("build")
 
 
 async def main(out):
-    password = os.environ.get("SITE_PASSWORD")
+    password = (os.environ.get("SITE_PASSWORD") or "").strip()
     if not password:
         sys.exit("SITE_PASSWORD ortam değişkeni gerekli")
     key = derive_key(password)

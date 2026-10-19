@@ -53,6 +53,9 @@ STAT_KEYS = {
 
 _season_memo = {}
 
+# Analiz/paket biçimi değişince artırılır; eski sürümle üretilmiş paketler yeniden oluşturulur
+BUNDLE_VERSION = 2
+
 
 def _num(v):
     if v is None:
@@ -320,6 +323,7 @@ async def build_bundle(src, match_id):
     stadium = info.get("Stadium") or {}
     q = urllib.parse.quote_plus(f"{home.get('name')} {away.get('name')}")
     b = {
+        "v": BUNDLE_VERSION,
         "id": match_id,
         "league_id": league_id,
         "league_name": gen.get("leagueName"),

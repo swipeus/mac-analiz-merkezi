@@ -152,7 +152,7 @@ class Updater:
             for m in matches:
                 old = self.store.bundle_get(m["id"])
                 iv = self.interval(m)
-                if old is None:
+                if old is None or old["body"].get("v") != collect.BUNDLE_VERSION:
                     due.append(m)
                 elif iv is not None and time.time() - old["ts"] >= iv:
                     due.append(m)

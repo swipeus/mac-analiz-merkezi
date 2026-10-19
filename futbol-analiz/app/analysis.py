@@ -39,9 +39,9 @@ def tr_return(s):
         return s
     low = s.lower()
     if low == "doubtful":
-        return "maça yetişmesi şüpheli"
+        return "Maça yetişmesi şüpheli"
     if low in ("unknown", "no return date"):
-        return "belirsiz"
+        return "Belirsiz"
     parts = s.split()
     if len(parts) == 3 and parts[0] in PHASE and parts[1] in MONTHS:
         return f"{MONTHS[parts[1]]} {parts[2]} {PHASE[parts[0]]}"
@@ -65,13 +65,21 @@ def key_absentees(lineup_side):
     return out
 
 
-TYPE_TR = {"injury": "sakat", "suspension": "cezalı", "red card": "cezalı", "yellow card": "kart cezalı",
-           "international duty": "milli takımda", "other": "kadroda yok"}
+TYPE_TR = {"injury": "Sakat", "suspension": "Cezalı", "red card": "Cezalı", "yellow card": "Kart cezalı",
+           "international duty": "Milli takımda", "other": "Kadroda yok"}
+
+
+def _cap(s):
+    # Türkçe büyük harf: "i" -> "İ"
+    if not s:
+        return s
+    first = "İ" if s[0] == "i" else s[0].upper()
+    return first + s[1:]
 
 
 def absent_txt(p):
-    t = TYPE_TR.get((p.get("type") or "").lower(), p.get("type") or "kadroda yok")
-    ret = f", dönüş: {tr_return(p['return'])}" if p.get("return") else ""
+    t = TYPE_TR.get((p.get("type") or "").lower(), _cap(p.get("type")) or "Kadroda yok")
+    ret = f", Dönüş: {_cap(tr_return(p['return']))}" if p.get("return") else ""
     return f"{p['name']} ({t}{ret})"
 
 
@@ -209,8 +217,8 @@ def team_profile(name, rec, season, lu_side, players, table):
         sec["absent"].append("Bilinen eksik yok.")
 
     # --- Kilit oyuncular ---
-    labels = {"goals": "gol", "expected_goals": "xG", "total_scoring_att": "şut/90", "ontarget_scoring_att": "isabetli şut/90",
-              "big_chance_created": "net pozisyon yarattı", "expected_assists": "xA", "defensive_contributions": "savunma aksiyonu/90"}
+    labels = {"goals": "Gol", "expected_goals": "xG", "total_scoring_att": "Şut/90", "ontarget_scoring_att": "İsabetli şut/90",
+              "big_chance_created": "Net pozisyon yarattı", "expected_assists": "xA", "defensive_contributions": "Savunma aksiyonu/90"}
     for k, lab in labels.items():
         top = (players or {}).get(k)
         if top and top["list"]:

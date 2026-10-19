@@ -290,51 +290,53 @@ function matchHtml(b) {
   const scoreTxt = (st.started || st.finished) ? `${b.home.score ?? 0} - ${b.away.score ?? 0}` : timeOf(b.utc);
   const stTxt = st.cancelled ? "İptal" : live ? (st.live || "Canlı") : st.finished ? "Maç sonu" : dateOf(b.utc);
   const w = b.weather;
-  const meta = [
-    `${esc(b.league_name)}${b.round ? " · " + esc(b.round) + ". hafta" : ""}`,
-    b.venue && esc(b.venue),
-    b.referee && "Hakem: " + esc(b.referee),
-    w && `Hava: ${w.temperature}°C, ${esc(trWeather(w.description))}${w.windSpeed != null ? `, rüzgar ${w.windSpeed} m/s` : ""}`,
-  ].filter(Boolean).map((x) => `<span>${x}</span>`).join("");
+  const fav = favoriteSide(P);
+  const chips = [
+    b.round && chip("🗓️", esc(b.round) + ". hafta"),
+    b.venue && chip("🏟️", esc(b.venue)),
+    b.referee && chip("🧑‍⚖️", "Hakem: " + esc(b.referee)),
+    w && chip(weatherIcon(w.description), `${w.temperature}°C · ${esc(cap(trWeather(w.description)))}${w.windSpeed != null ? ` · Rüzgar ${w.windSpeed} m/s` : ""}`),
+  ].filter(Boolean).join("");
+  const conf = { "Yüksek": "#3fb950", "Orta": "#d29922", "Düşük": "#f85149" }[P.confidence] || "#8b98a8";
   return `
-  <a class="back" href="#/">‹ Günün maçları</a>
   <div class="hero">
-    <div class="meta">${meta}</div>
+    <div class="hero-league"><img src="${leagueLogo(b.league_id)}" alt="" onerror="this.remove()"><b>${esc(b.league_name)}</b></div>
     <div class="teams">
-      <div class="team">${crestHtml(b.home, favoriteSide(P) === "home", P.p_home, 84)}${esc(H)}</div>
-      <div class="score">${esc(scoreTxt)}<small>${esc(stTxt)}</small></div>
-      <div class="team">${crestHtml(b.away, favoriteSide(P) === "away", P.p_away, 84)}${esc(W)}</div>
+      <div class="team">${crestHtml(b.home, fav === "home", P.p_home, 84)}<span>${esc(H)}</span>${formDots(b.recent.home.rows)}</div>
+      <div class="score ${live ? "live" : ""}">${esc(scoreTxt)}<small>${esc(stTxt)}</small></div>
+      <div class="team">${crestHtml(b.away, fav === "away", P.p_away, 84)}<span>${esc(W)}</span>${formDots(b.recent.away.rows)}</div>
     </div>
+    <div class="chips">${chips}</div>
     <div class="updated">Son güncelleme: ${ago(b.updated)}${STATIC ? " (veriler 15 dk'da bir yenilenir)" : ""} · <button id="refreshBtn">${REFRESH_LABEL()}</button></div>
   </div>
 
-  <div class="card">
-    <h2>Tahmin ve model özeti</h2>
+  <div class="card" style="--c:#a371f7">
+    ${head("🎯", "Tahmin ve model özeti")}
     <div class="summary">${esc(A.summary)}</div>
     <div class="bigbar">
-      <div style="width:${P.p_home * 100}%;background:var(--home)">1 ${pc(P.p_home)}</div>
-      <div style="width:${P.p_draw * 100}%;background:var(--draw)">X ${pc(P.p_draw)}</div>
-      <div style="width:${P.p_away * 100}%;background:var(--away)">2 ${pc(P.p_away)}</div>
+      <div style="flex:${P.p_home};background:var(--home)" title="${esc(H)} kazanır">1 ${pc(P.p_home)}</div>
+      <div style="flex:${P.p_draw};background:var(--draw)" title="Beraberlik">X ${pc(P.p_draw)}</div>
+      <div style="flex:${P.p_away};background:var(--away)" title="${esc(W)} kazanır">2 ${pc(P.p_away)}</div>
     </div>
     <div class="pred">
-      ${kpi("Beklenen gol (xG)", `${nf(P.lam_home, 2)} – ${nf(P.lam_away, 2)}`, "Poisson modeli")}
-      ${kpi("En olası skorlar", P.scores.slice(0, 3).map((s) => `${s.score}`).join(" · "), P.scores.slice(0, 3).map((s) => pc(s.p)).join(" · "))}
-      ${kpi("Toplam gol", `2.5 Üst ${pc(P.over25)}`, `1.5Ü ${pc(P.over15)} · 3.5Ü ${pc(P.over35)}`)}
-      ${kpi("Karşılıklı gol", pc(P.btts), "KG Var olasılığı")}
-      ${P.corners ? kpi("Korner beklentisi", `${nf(P.corners.home)} – ${nf(P.corners.away)}`, `Toplam ${nf(P.corners.total)} · 9.5Ü ${pc(P.corners.over["9.5"])} · 10.5Ü ${pc(P.corners.over["10.5"])}`) : ""}
-      ${P.shots.home != null ? kpi("Şut beklentisi", `${nf(P.shots.home)} – ${nf(P.shots.away)}`, `İsabetli: ${nf(P.sot.home)} – ${nf(P.sot.away)}`) : ""}
-      ${P.yellow.total != null ? kpi("Sarı kart ort.", nf(P.yellow.total), `${nf(P.yellow.home)} + ${nf(P.yellow.away)} (son maçlar)`) : ""}
-      ${kpi("Model güveni", P.confidence, "Veri miktarına göre")}
+      ${kpi("⚽", "#f85149", "Beklenen gol (xG)", `${nf(P.lam_home, 2)} – ${nf(P.lam_away, 2)}`, "Poisson modeli")}
+      ${kpi("🎲", "#a371f7", "En olası skorlar", P.scores.slice(0, 3).map((s) => `${s.score}`).join(" · "), P.scores.slice(0, 3).map((s) => pc(s.p)).join(" · "))}
+      ${kpi("📈", "#3fb950", "Toplam gol", `2.5 Üst ${pc(P.over25)}`, `1.5Ü ${pc(P.over15)} · 3.5Ü ${pc(P.over35)}`)}
+      ${kpi("🔁", "#58a6ff", "Karşılıklı gol", pc(P.btts), "KG Var olasılığı")}
+      ${P.corners ? kpi("🚩", "#d29922", "Korner beklentisi", `${nf(P.corners.home)} – ${nf(P.corners.away)}`, `Toplam ${nf(P.corners.total)} · 9.5Ü ${pc(P.corners.over["9.5"])} · 10.5Ü ${pc(P.corners.over["10.5"])}`) : ""}
+      ${P.shots.home != null ? kpi("🥅", "#f78166", "Şut beklentisi", `${nf(P.shots.home)} – ${nf(P.shots.away)}`, `İsabetli: ${nf(P.sot.home)} – ${nf(P.sot.away)}`) : ""}
+      ${P.yellow.total != null ? kpi("🟨", "#e3b341", "Sarı kart ort.", nf(P.yellow.total), `${nf(P.yellow.home)} + ${nf(P.yellow.away)} (son maçlar)`) : ""}
+      ${kpi("🧠", conf, "Model güveni", P.confidence, "Veri miktarına göre")}
     </div>
     <h3>Olası senaryolar</h3>
-    <ul>${A.scenarios.map((s) => `<li>${esc(s)}</li>`).join("")}</ul>
+    <ul class="scen">${A.scenarios.map((s) => `<li><span class="si">${scenarioIcon(s)}</span><span>${esc(s)}</span></li>`).join("")}</ul>
   </div>
 
   ${lineupHtml(b)}
 
   <div class="grid2">
-    ${teamHtml(A.home, "home-c")}
-    ${teamHtml(A.away, "away-c")}
+    ${teamHtml(A.home, b.home, b.recent.home.rows, "var(--home)")}
+    ${teamHtml(A.away, b.away, b.recent.away.rows, "var(--away)")}
   </div>
 
   ${compareHtml(b)}
@@ -350,15 +352,95 @@ function matchHtml(b) {
   ${extrasHtml(b)}
   `;
 }
-const kpi = (l, v, s) => `<div class="kpi"><div class="l">${esc(l)}</div><div class="v">${esc(v)}</div><div class="s">${esc(s || "")}</div></div>`;
+const kpi = (ic, color, l, v, s) => `<div class="kpi" style="--k:${color}"><div class="l"><span class="ki">${ic}</span>${esc(l)}</div><div class="v">${esc(v)}</div><div class="s">${esc(s || "")}</div></div>`;
+const head = (ic, title, extra = "") => `<h2 class="ch"><span class="ci">${ic}</span><span class="ct">${title}</span>${extra}</h2>`;
+const chip = (ic, html) => `<span class="mchip"><span>${ic}</span>${html}</span>`;
+const cap = (s) => s ? s.charAt(0).toLocaleUpperCase("tr") + s.slice(1) : s;
+function weatherIcon(d) {
+  d = (d || "").toLowerCase();
+  if (d.includes("thunder") || d.includes("storm")) return "⛈️";
+  if (d.includes("snow")) return "❄️";
+  if (d.includes("rain") || d.includes("shower") || d.includes("drizzle")) return "🌧️";
+  if (d.includes("fog")) return "🌫️";
+  if (d.includes("partly")) return "⛅";
+  if (d.includes("cloud") || d.includes("overcast")) return "☁️";
+  if (d.includes("sun") || d.includes("clear")) return "☀️";
+  return "🌡️";
+}
+function scenarioIcon(s) {
+  const t = s.toLowerCase();
+  if (t.includes("erken gol")) return "⏱️";
+  if (t.includes("korner")) return "🚩";
+  if (t.includes("duran top")) return "🎯";
+  if (t.includes("eksik") || t.includes("bu maçta yok")) return "🚑";
+  if (t.includes("hava") || t.includes("yağış") || t.includes("rüzgar")) return "🌦️";
+  if (t.includes("aralarındaki")) return "🤝";
+  if (t.includes("gollü") || t.includes("az pozisyonlu")) return "⚽";
+  if (t.includes("ceza sahası dışından")) return "💥";
+  if (t.includes("topa sahip") || t.includes("kontrol")) return "🧭";
+  if (t.includes("dengeli")) return "⚖️";
+  return "💡";
+}
+// son maçların sonucu: yeşil G, gri B, kırmızı M (en yenisi solda)
+function formDots(rows) {
+  if (!rows || !rows.length) return "";
+  return `<div class="form">${rows.slice(0, 5).map((r) =>
+    `<span class="fd ${r.result || ""}" title="${esc(dateOf(r.date))} · ${esc(r.opponent)} ${r.gf}-${r.ga}">${r.result || "-"}</span>`).join("")}</div>`;
+}
 
-const SEC = { plan: "Oyun planı ve taktik", attack: "Hücum: şut ve xG", setpiece: "Korner ve duran top", defence: "Savunma", form: "Form ve puan durumu", absent: "Eksikler", players: "Kilit oyuncular (sezon)" };
-function teamHtml(p, cls) {
-  return `<div class="card"><h2 class="${cls}">${esc(p.name)} analizi</h2>
-    ${Object.entries(SEC).map(([k, t]) => p.sections[k] && p.sections[k].length ?
-      `<h3>${t}</h3><ul>${p.sections[k].map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : "").join("")}
+const SEC = {
+  plan: ["🧭", "#58a6ff", "Oyun planı ve taktik"], attack: ["⚽", "#f85149", "Hücum: şut ve xG"],
+  setpiece: ["🚩", "#d29922", "Korner ve duran top"], defence: ["🛡️", "#3fb950", "Savunma"],
+  form: ["📈", "#a371f7", "Form ve puan durumu"], absent: ["🚑", "#f78166", "Eksikler"],
+  players: ["⭐", "#e3b341", "Kilit oyuncular (sezon)"],
+};
+function teamHtml(p, team, rows, color) {
+  return `<div class="card team-card" style="--c:${color}">
+    <h2 class="ch">${crestHtml(team, false, 0, 40)}<span class="ct">${esc(p.name)} <span class="muted">analizi</span></span>${formDots(rows)}</h2>
+    ${Object.entries(SEC).map(([k, [ic, c, t]]) => p.sections[k] && p.sections[k].length ? `
+      <div class="sec" style="--sc:${c}"><h3><span class="si">${ic}</span>${t}</h3>
+      <ul>${p.sections[k].map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : "").join("")}
   </div>`;
 }
+
+const ABSENT_TR = { injury: "Sakat", suspension: "Cezalı", "red card": "Cezalı", "yellow card": "Kart cezalı",
+  "international duty": "Milli takımda", other: "Kadroda yok" };
+// FotMob ülke adları İngilizce gelir
+const COUNTRY_TR = {
+  "Turkiye": "Türkiye", "Türkiye": "Türkiye", "Turkey": "Türkiye", "Germany": "Almanya", "France": "Fransa", "Spain": "İspanya",
+  "Italy": "İtalya", "England": "İngiltere", "Netherlands": "Hollanda", "Portugal": "Portekiz", "Belgium": "Belçika",
+  "Brazil": "Brezilya", "Argentina": "Arjantin", "Croatia": "Hırvatistan", "Serbia": "Sırbistan", "Cameroon": "Kamerun",
+  "Nigeria": "Nijerya", "Ghana": "Gana", "Senegal": "Senegal", "Ivory Coast": "Fildişi Sahili", "Côte d'Ivoire": "Fildişi Sahili",
+  "Morocco": "Fas", "Algeria": "Cezayir", "Tunisia": "Tunus", "Egypt": "Mısır", "Mali": "Mali", "Guinea": "Gine",
+  "DR Congo": "Kongo DC", "Congo DR": "Kongo DC", "Congo": "Kongo", "Gabon": "Gabon", "Cape Verde": "Yeşil Burun Adaları",
+  "Angola": "Angola", "South Africa": "Güney Afrika", "Zambia": "Zambiya", "Burkina Faso": "Burkina Faso", "Benin": "Benin",
+  "Togo": "Togo", "Gambia": "Gambiya", "Sierra Leone": "Sierra Leone", "Kenya": "Kenya", "Zimbabwe": "Zimbabve",
+  "Guinea-Bissau": "Gine-Bissau", "Equatorial Guinea": "Ekvator Ginesi", "Mozambique": "Mozambik", "Madagascar": "Madagaskar",
+  "Comoros": "Komorlar", "Libya": "Libya", "Sudan": "Sudan", "Tanzania": "Tanzanya", "Uganda": "Uganda", "Liberia": "Liberya",
+  "Mauritania": "Moritanya", "Central African Republic": "Orta Afrika Cumhuriyeti", "Chad": "Çad", "Niger": "Nijer",
+  "Burundi": "Burundi", "Rwanda": "Ruanda", "Ethiopia": "Etiyopya",
+  "USA": "ABD", "United States": "ABD", "Canada": "Kanada", "Mexico": "Meksika", "Colombia": "Kolombiya", "Uruguay": "Uruguay",
+  "Chile": "Şili", "Peru": "Peru", "Paraguay": "Paraguay", "Ecuador": "Ekvador", "Venezuela": "Venezuela", "Bolivia": "Bolivya",
+  "Costa Rica": "Kosta Rika", "Jamaica": "Jamaika", "Panama": "Panama", "Honduras": "Honduras", "Haiti": "Haiti",
+  "Curacao": "Curaçao", "Curaçao": "Curaçao", "Suriname": "Surinam", "Trinidad and Tobago": "Trinidad ve Tobago",
+  "El Salvador": "El Salvador", "Guatemala": "Guatemala", "Dominican Republic": "Dominik Cumhuriyeti", "Cuba": "Küba",
+  "Japan": "Japonya", "South Korea": "Güney Kore", "Korea Republic": "Güney Kore", "China": "Çin", "Australia": "Avustralya",
+  "New Zealand": "Yeni Zelanda", "Iran": "İran", "Saudi Arabia": "Suudi Arabistan", "Qatar": "Katar", "Iraq": "Irak",
+  "Israel": "İsrail", "Lebanon": "Lübnan", "Jordan": "Ürdün", "Syria": "Suriye", "United Arab Emirates": "BAE", "UAE": "BAE",
+  "Oman": "Umman", "Bahrain": "Bahreyn", "Kuwait": "Kuveyt", "Uzbekistan": "Özbekistan", "Kazakhstan": "Kazakistan",
+  "Indonesia": "Endonezya", "Philippines": "Filipinler", "Thailand": "Tayland", "Vietnam": "Vietnam", "India": "Hindistan",
+  "Georgia": "Gürcistan", "Armenia": "Ermenistan", "Azerbaijan": "Azerbaycan", "Ukraine": "Ukrayna", "Russia": "Rusya",
+  "Poland": "Polonya", "Czechia": "Çekya", "Czech Republic": "Çekya", "Slovakia": "Slovakya", "Slovenia": "Slovenya",
+  "Hungary": "Macaristan", "Austria": "Avusturya", "Switzerland": "İsviçre", "Denmark": "Danimarka", "Sweden": "İsveç",
+  "Norway": "Norveç", "Finland": "Finlandiya", "Iceland": "İzlanda", "Scotland": "İskoçya", "Wales": "Galler",
+  "Northern Ireland": "Kuzey İrlanda", "Ireland": "İrlanda", "Republic of Ireland": "İrlanda", "Greece": "Yunanistan",
+  "Cyprus": "Kıbrıs", "Albania": "Arnavutluk", "Kosovo": "Kosova", "North Macedonia": "Kuzey Makedonya",
+  "Montenegro": "Karadağ", "Bosnia and Herzegovina": "Bosna-Hersek", "Bosnia & Herzegovina": "Bosna-Hersek",
+  "Bulgaria": "Bulgaristan", "Romania": "Romanya", "Moldova": "Moldova", "Belarus": "Belarus", "Lithuania": "Litvanya",
+  "Latvia": "Letonya", "Estonia": "Estonya", "Luxembourg": "Lüksemburg", "Malta": "Malta", "Faroe Islands": "Faroe Adaları",
+  "Andorra": "Andorra", "Liechtenstein": "Lihtenştayn", "San Marino": "San Marino", "Gibraltar": "Cebelitarık",
+};
+const countryTr = (c) => COUNTRY_TR[c] || c;
 
 // Oyuncu fotoğrafı (FotMob); yüklenemezse forma numarası ya da boş avatar gösterilir
 function playerImg(id, shirt) {
@@ -369,7 +451,7 @@ function playerImg(id, shirt) {
 
 function lineupHtml(b) {
   const lu = b.lineup;
-  if (!lu) return `<div class="card"><h2>Kadrolar</h2><p class="muted">Kadro bilgisi henüz yok.</p></div>`;
+  if (!lu) return `<div class="card" style="--c:#2ea043">${head("👥", "Kadrolar")}<p class="muted">Kadro bilgisi henüz yok.</p></div>`;
   const tag = lineupTag(lu.type, true);
   // dar ekranda saha dikey çizilir: ev sahibi altta, deplasman üstte
   const vert = isNarrow();
@@ -399,22 +481,21 @@ function lineupHtml(b) {
   const abs = (side) => {
     const u = lu[side].unavailable || [];
     if (!u.length) return `<li class="muted">Bilinen eksik yok</li>`;
-    const TR = { injury: "sakat", suspension: "cezalı", "red card": "cezalı", "yellow card": "kart cezalı", "international duty": "milli takımda" };
     return u.map((p) => {
       const t = (p.type || "").toLowerCase();
       const kind = t === "injury" ? "inj" : "sus";
       return `<li class="prow">${playerImg(p.id)}<div class="pinfo"><b>${esc(p.name)}</b>
-        <small><span class="ptag ${kind}">${esc(TR[t] || p.type || "yok")}</span>${p.return ? " dönüş: " + esc(p.return) : ""}</small></div></li>`;
+        <small><span class="ptag ${kind}">${esc(ABSENT_TR[t] || cap(p.type) || "Kadroda yok")}</span>${p.return ? " Dönüş: " + esc(cap(p.return)) : ""}</small></div></li>`;
     }).join("");
   };
   const side = (s, cls, name) => `<div><h3 class="${cls}">${esc(name)} · ${esc(lu[s].formation || "")}</h3>
     <div class="muted">Teknik direktör: ${esc(lu[s].coach || "—")}${lu[s].avg_age ? " · İlk 11 yaş ort. " + nf(lu[s].avg_age, 1) : ""}</div>
     <ul class="plist">${(lu[s].starters || []).map((p) => `<li class="prow">${playerImg(p.id, p.shirt)}
       <div class="pinfo"><b>${p.shirt ? `<span class="shirt">${esc(p.shirt)}</span>` : ""}${esc(p.name)}</b>
-        <small>${[p.country, p.age ? p.age + " yaş" : ""].filter(Boolean).map(esc).join(" · ")}</small></div>
+        <small>${[countryTr(p.country), p.age ? p.age + " yaş" : ""].filter(Boolean).map(esc).join(" · ")}</small></div>
       ${p.rating ? `<span class="prt">${nf(p.rating, 2)}</span>` : ""}</li>`).join("")}</ul>
     <h3>Eksikler</h3><ul class="plist">${abs(s)}</ul></div>`;
-  return `<div class="card"><h2>Kadrolar ${tag}</h2>
+  return `<div class="card" style="--c:#2ea043">${head("👥", "Kadrolar", tag)}
     <div class="pitch ${vert ? "v" : ""}">${lines}${dots("home", "h")}${dots("away", "a")}</div>
     <div class="grid2">${side("home", "home-c", b.home.name)}${side("away", "away-c", b.away.name)}</div></div>`;
 }
@@ -430,32 +511,42 @@ const CMP = [
   ["saves", "Kaleci kurtarışı", 1, null], ["fouls", "Faul", 1, null], ["yellow", "Sarı kart", 1, null],
 ];
 function compareHtml(b) {
-  const h = b.recent.home, a = b.recent.away;
+  const h = b.recent.home, a = b.recent.away, H = b.home.name, W = b.away.name;
+  // karşılıklı çubuk: iki takımın değerinin toplam içindeki payı; kalın değer o kalemde daha iyi olan
   const rows = (src) => CMP.map(([k, l, d, hi]) => {
     const x = h[src][k], y = a[src][k];
     if (x == null && y == null) return "";
     let bx = "", by = "";
     if (hi !== null && x != null && y != null && x !== y) {
       const good = src === "avg_for" ? hi : !hi;
-      if ((x > y) === good) bx = "better"; else by = "better";
+      if ((x > y) === good) bx = "win"; else by = "win";
     }
-    return `<tr><td class="${bx}">${nf(x, d)}</td><td>${l}</td><td class="${by}">${nf(y, d)}</td></tr>`;
+    const fx = Math.max(x || 0, 0), fy = Math.max(y || 0, 0), tot = fx + fy || 1;
+    return `<div class="cmp-row" title="${esc(l)}: ${esc(H)} ${nf(x, d)} · ${esc(W)} ${nf(y, d)}">
+      <span class="cv ${bx}">${nf(x, d)}</span>
+      <div class="cmp-mid"><div class="cmp-l">${l}</div>
+        <div class="cmp-bars"><span class="bh" style="flex:${fx / tot}"></span><span class="ba" style="flex:${fy / tot}"></span></div></div>
+      <span class="cv r ${by}">${nf(y, d)}</span></div>`;
   }).join("");
-  return `<div class="card"><h2>İstatistik karşılaştırması (son ${h.n} / ${a.n} maç ortalaması)</h2>
+  const legend = `<div class="legend"><span><i style="background:var(--home)"></i>${esc(H)}</span><span><i style="background:var(--away)"></i>${esc(W)}</span></div>`;
+  return `<div class="card" style="--c:#58a6ff">${head("📊", `İstatistik karşılaştırması <span class="muted">· son ${h.n} / ${a.n} maç ortalaması</span>`)}
+    ${legend}
     <div class="grid2">
-      <div class="tbl-wrap"><h3>Ürettikleri (maç başı)</h3><table class="cmp"><tr><th class="home-c">${esc(b.home.name)}</th><th></th><th class="away-c">${esc(b.away.name)}</th></tr>${rows("avg_for")}</table></div>
-      <div class="tbl-wrap"><h3>Rakibe izin verdikleri (maç başı)</h3><table class="cmp"><tr><th class="home-c">${esc(b.home.name)}</th><th></th><th class="away-c">${esc(b.away.name)}</th></tr>${rows("avg_against")}</table></div>
-    </div><p class="muted">Altı çizili değer o kalemde daha iyi olan takımı gösterir.</p></div>`;
+      <div><h3>Ürettikleri (maç başı)</h3>${rows("avg_for")}</div>
+      <div><h3>Rakibe izin verdikleri (maç başı)</h3>${rows("avg_against")}</div>
+    </div><p class="muted">Kalın yazılan değer o kalemde daha iyi olan takımı gösterir.</p></div>`;
 }
 
+const RES_TR = { G: "Galibiyet", B: "Beraberlik", M: "Mağlubiyet" };
 function recentHtml(r, name, cls) {
-  if (!r.rows.length) return `<div class="card"><h2 class="${cls}">${esc(name)}: son maçlar</h2><p class="muted">Veri yok</p></div>`;
-  return `<div class="card"><h2 class="${cls}">${esc(name)}: son maçlar</h2><div class="tbl-wrap"><table>
+  const color = cls === "home-c" ? "var(--home)" : "var(--away)";
+  if (!r.rows.length) return `<div class="card" style="--c:${color}">${head("📅", `${esc(name)}: son maçlar`)}<p class="muted">Veri yok</p></div>`;
+  return `<div class="card" style="--c:${color}">${head("📅", `${esc(name)}: son maçlar`)}<div class="tbl-wrap"><table>
     <tr><th class="l">Tarih</th><th class="l">Rakip</th><th>Skor</th><th>xG</th><th>Şut (iç/dış)</th><th>İsab.</th><th>Korner</th><th>Top %</th></tr>
     ${r.rows.map((x) => `<tr>
       <td class="l">${dateOf(x.date)}</td>
       <td class="l">${x.home ? "" : "@ "}${esc(x.opponent)} <small class="muted">${esc(x.comp || "")}</small></td>
-      <td class="res-${x.result}">${x.gf}-${x.ga}</td>
+      <td><span class="rp ${x.result || ""}" title="${RES_TR[x.result] || ""}">${x.gf}-${x.ga}</span></td>
       <td>${nf(x.for.xg, 2)} – ${nf(x.against.xg, 2)}</td>
       <td>${nf(x.for.shots, 0)} (${nf(x.for.shots_in, 0)}/${nf(x.for.shots_out, 0)})</td>
       <td>${nf(x.for.sot, 0)}</td>
@@ -480,25 +571,48 @@ function seasonHtml(b) {
   if (!Object.keys(h).length && !Object.keys(a).length) return "";
   const cell = (v) => v ? `${nf(v.per_match, 2)} <small class="muted">(${nf(v.value, v.value % 1 ? 1 : 0)} top. · ${v.rank}./${v.of})</small>` : "—";
   const rows = SEASON.map(([k, l]) => (h[k] || a[k]) ? `<tr><td class="l">${l}</td><td>${cell(h[k])}</td><td>${cell(a[k])}</td></tr>` : "").join("");
-  return `<div class="card"><h2>Sezon istatistikleri: ${esc(b.season.league_name || b.league_name)}</h2>
+  return `<div class="card" style="--c:#3fb950">${head("🏆", `Sezon istatistikleri <span class="muted">· ${esc(b.season.league_name || b.league_name)}</span>`)}
     <p class="muted">Maç başı değer, parantez içinde sezon toplamı ve FotMob lig sıralaması (1 = ligin en iyisi; ör. yenilen xG'de en az yiyen).</p>
     <div class="tbl-wrap"><table><tr><th class="l">Kalem</th><th class="home-c">${esc(b.home.name)}</th><th class="away-c">${esc(b.away.name)}</th></tr>${rows}</table></div></div>`;
 }
 
+// haber kaynağına göre sabit renk (aynı kaynak hep aynı renkte)
+function sourceColor(s) {
+  const pal = ["#58a6ff", "#f78166", "#3fb950", "#d29922", "#a371f7", "#e3b341", "#39c5cf", "#db61a2"];
+  let h = 0; for (const ch of s || "") h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return pal[h % pal.length];
+}
+function newsItem(x) {
+  const thumb = x.image
+    ? `<img class="nthumb" src="${esc(x.image)}" alt="" loading="lazy" onerror="this.remove()">`
+    : `<span class="nsrc" style="background:${sourceColor(x.source)}">${esc((x.source || "?").trim().charAt(0).toLocaleUpperCase("tr"))}</span>`;
+  return `<a class="nitem" href="${esc(x.link)}" target="_blank" rel="noopener">${thumb}
+    <div><b>${esc(x.title)}</b><small><span class="ntag" style="color:${sourceColor(x.source)}">${esc(x.source)}</span> · ${ago(x.time)}${x.lang === "en" ? " · EN" : ""}</small></div></a>`;
+}
 function newsHtml(n, name, cls) {
-  const li = (x) => `<li><a href="${esc(x.link)}" target="_blank" rel="noopener">${esc(x.title)}</a><br><small>${esc(x.source)} · ${ago(x.time)}${x.lang === "en" ? " · EN" : ""}</small></li>`;
-  return `<div class="card news"><h2 class="${cls}">${esc(name)}: haberler</h2>
-    <h3>Türkçe basın (Google News)</h3><ul>${n.tr.length ? n.tr.map(li).join("") : `<li class="muted">Son 3 günde haber bulunamadı</li>`}</ul>
-    ${n.fotmob.length ? `<h3>FotMob haber akışı</h3><ul>${n.fotmob.map(li).join("")}</ul>` : ""}</div>`;
+  const color = cls === "home-c" ? "var(--home)" : "var(--away)";
+  return `<div class="card news" style="--c:${color}">${head("📰", `${esc(name)}: haberler`)}
+    <h3>Türkçe basın (Google News)</h3><div class="nlist">${n.tr.length ? n.tr.map(newsItem).join("") : `<p class="muted">Son 3 günde haber bulunamadı</p>`}</div>
+    ${n.fotmob.length ? `<h3>FotMob haber akışı</h3><div class="nlist">${n.fotmob.map(newsItem).join("")}</div>` : ""}</div>`;
 }
 
 function extrasHtml(b) {
-  const h2h = b.h2h && b.h2h.matches.length ? `<h3>Aralarındaki son maçlar</h3><div class="tbl-wrap"><table>${b.h2h.matches.map((m) =>
-    `<tr><td class="l">${dateOf(m.date)}</td><td class="l">${esc(m.home)}</td><td>${esc(m.score)}</td><td class="l">${esc(m.away)}</td><td class="l muted">${esc(m.league)}</td></tr>`).join("")}</table></div>` : "";
-  const ins = b.insights.length ? `<h3>FotMob içgörüleri (EN)</h3><ul>${b.insights.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : "";
-  const prev = b.preview.length ? `<h3>Maç önizlemesi</h3><ul>${b.preview.map((p) => `<li><a href="${esc(p.link)}" target="_blank" rel="noopener">${esc(p.title)}</a><br><small class="muted">${esc(p.description || "")}</small></li>`).join("")}</ul>` : "";
+  let h2h = "";
+  if (b.h2h && b.h2h.matches.length) {
+    const s = b.h2h.summary || [0, 0, 0], tot = (s[0] + s[1] + s[2]) || 1;
+    h2h = `<h3>Aralarındaki maçlar</h3>
+      ${s[0] + s[1] + s[2] ? `<div class="h2hbar">
+        <div style="flex:${s[0] / tot};background:var(--home)">${s[0]}</div>
+        <div style="flex:${s[1] / tot};background:var(--draw)">${s[1]}</div>
+        <div style="flex:${s[2] / tot};background:var(--away)">${s[2]}</div></div>
+        <div class="legend"><span><i style="background:var(--home)"></i>${esc(b.home.name)} galibiyeti</span><span><i style="background:var(--draw)"></i>Beraberlik</span><span><i style="background:var(--away)"></i>${esc(b.away.name)} galibiyeti</span></div>` : ""}
+      <div class="tbl-wrap"><table>${b.h2h.matches.map((m) =>
+      `<tr><td class="l">${dateOf(m.date)}</td><td class="l">${esc(m.home)}</td><td><span class="rp">${esc(m.score)}</span></td><td class="l">${esc(m.away)}</td><td class="l muted">${esc(m.league)}</td></tr>`).join("")}</table></div>`;
+  }
+  const ins = b.insights.length ? `<h3>FotMob içgörüleri (EN)</h3><ul class="scen">${b.insights.map((x) => `<li><span class="si">💡</span><span>${esc(x)}</span></li>`).join("")}</ul>` : "";
+  const prev = b.preview.length ? `<h3>Maç önizlemesi</h3><div class="nlist">${b.preview.map((p) => newsItem({ ...p, source: "FotMob önizleme", lang: "en" })).join("")}</div>` : "";
   const prov = b.season.provider ? ` (veri sağlayıcı: ${esc(b.season.provider)})` : "";
-  return `<div class="card">${h2h}${prev}${ins}
+  return `<div class="card" style="--c:#39c5cf">${head("🤝", "Rekabet, önizleme ve kaynaklar")}${h2h}${prev}${ins}
     <h3>Kaynaklar</h3><ul>
       <li><a href="${esc(b.links.fotmob)}" target="_blank" rel="noopener">FotMob maç sayfası</a>${prov}: kadrolar, eksikler, maç ve sezon istatistikleri</li>
       <li><a href="${esc(b.links.mackolik)}" target="_blank" rel="noopener">Maçkolik'te bu maç</a> · <a href="${esc(b.links.sofascore)}" target="_blank" rel="noopener">SofaScore'da bu maç</a> (karşılaştırma için)</li>
@@ -543,11 +657,18 @@ async function loadFeed() {
 }
 
 /* ---------- yönlendirme ---------- */
+let cameFromList = false;
 function route() {
   const m = location.hash.match(/^#\/mac\/(\d+)/);
-  if (m) { state.current = +m[1]; window.scrollTo(0, 0); renderMatch(state.current); }
+  // maç sayfasında üst barda yalnızca Geri butonu görünür
+  document.body.classList.toggle("in-match", !!m);
+  if (m) { cameFromList = state.current === null && ready; state.current = +m[1]; window.scrollTo(0, 0); renderMatch(state.current); }
   else { state.current = null; renderDay(); }
 }
+$("#backBtn").onclick = () => {
+  if (cameFromList && history.length > 1) history.back();
+  else location.hash = "#/";
+};
 function shiftDay(n) {
   const d = new Date(state.date + "T12:00:00"); d.setDate(d.getDate() + n);
   setDate(d.toLocaleDateString("sv-SE"));

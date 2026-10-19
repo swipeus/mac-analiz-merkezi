@@ -1,5 +1,14 @@
 "use strict";
 const $ = (s, el = document) => el.querySelector(s);
+
+// Tarayıcı önbellekten eski sayfayı getirdiyse (bu kodla uyuşmaz) bir kez taze yükle
+if (!$("#filterBtn")) {
+  let tried = false;
+  try { tried = sessionStorage.getItem("reloadedForUpdate") === "1"; sessionStorage.setItem("reloadedForUpdate", "1"); } catch { }
+  if (!tried) location.reload();
+  throw new Error("Sayfa sürümü eski, yenileniyor");
+}
+try { sessionStorage.removeItem("reloadedForUpdate"); } catch { }
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const nf = (x, d = 1) => (x === null || x === undefined || Number.isNaN(x)) ? "—" : Number(x).toLocaleString("tr-TR", { minimumFractionDigits: d, maximumFractionDigits: d });
 const pc = (x) => (x === null || x === undefined) ? "—" : "%" + Math.round(x * 100);

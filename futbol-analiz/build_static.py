@@ -4,6 +4,7 @@ Kullanım: SITE_PASSWORD=... python build_static.py <çıktı-klasörü>
 Önbellek ve önceki analizler DATA_DIR'deki SQLite dosyasında tutulur; Actions bunu cache ile saklar.
 """
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -68,11 +69,13 @@ async def main(out):
         "took": round(time.time() - t0, 1),
     })
 
-    # arayüz: göreli yollar + statik mod işareti
+    # arayüz: göreli yollar + statik mod işareti. Dosyalara içerik özetiyle sürüm eklenir ki
+    # tarayıcı önbelleği eski sayfayla yeni kodu (ya da tersini) karıştırmasın.
+    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
     for f in ("app.js", "style.css"):
         shutil.copy(STATIC_DIR / f, out / f)
-    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
-    html = html.replace('href="/static/', 'href="').replace('src="/static/', 'src="')
+        ver = hashlib.sha1((STATIC_DIR / f).read_bytes()).hexdigest()[:10]
+        html = html.replace(f'"/static/{f}"', f'"{f}?v={ver}"')
     html = html.replace("<script src=", "<script>window.STATIC_SITE = true;</script>\n<script src=", 1)
     (out / "index.html").write_text(html, encoding="utf-8")
     (out / ".nojekyll").write_text("", encoding="utf-8")

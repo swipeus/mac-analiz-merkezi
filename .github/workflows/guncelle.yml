@@ -1,0 +1,62 @@
+name: Verileri güncelle ve yayınla
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"   # 15 dakikada bir (GitHub bazen birkaç dakika geciktirir)
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: guncelle
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: futbol-analiz/requirements-build.txt
+
+      - run: pip install -r futbol-analiz/requirements-build.txt
+
+      # Önceki çalıştırmaların önbelleği ve analizleri (değişiklik bildirimleri için gerekli)
+      - uses: actions/cache/restore@v4
+        with:
+          path: futbol-analiz/data
+          key: veri-${{ github.run_id }}
+          restore-keys: veri-
+
+      - name: Verileri topla, analiz et, şifrele
+        working-directory: futbol-analiz
+        env:
+          SITE_PASSWORD: ${{ secrets.SITE_PASSWORD }}
+          DATA_DIR: data
+        run: python build_static.py ../_site
+
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: futbol-analiz/data
+          key: veri-${{ github.run_id }}
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+      - id: deploy
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maç Analiz Merkezi</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚽</text></svg>">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="#/">Maç Analiz Merkezi</a>
+  <div class="datebar">
+    <button id="prevDay" aria-label="Önceki gün">‹</button>
+    <input type="date" id="date">
+    <button id="nextDay" aria-label="Sonraki gün">›</button>
+    <button id="today">Bugün</button>
+  </div>
+  <div class="right">
+    <span id="liveDot" class="dot" title="Canlı bağlantı"></span>
+    <button id="bell" class="bell" aria-label="Bildirimler">Bildirimler <b id="bellCount"></b></button>
+  </div>
+</header>
+<div id="feed" class="feed hidden"><div class="feed-head">Son gelişmeler</div><ul id="feedList"></ul></div>
+<nav id="leagues" class="leagues"></nav>
+<main id="view"></main>
+<div id="toasts" class="toasts"></div>
+<footer class="foot"><span id="updatedAt"></span> Veriler: FotMob (sağlayıcı lige göre değişir) · Haberler: Google News, FotMob · Tahminler istatistiksel modeldir, kesinlik içermez.</footer>
+<script src="/static/app.js"></script>
+</body>
+</html>

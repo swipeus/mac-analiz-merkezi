@@ -1,0 +1,9 @@
+# yerel veri ve gizli bilgiler
+futbol-analiz/data/
+site-sifresi.txt
+_site/
+__pycache__/
+*.pyc
+
+# yerel araç ayarları
+.claude/

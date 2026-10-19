@@ -479,3 +479,38 @@ body.modal-open { overflow: hidden; }
   .kt { font-size: 13px; }
   .kt img { width: 22px; height: 22px; }
 }
+
+/* ---------- oranlar ---------- */
+.mtabs { padding-top: 14px; }
+.pill.safe { border-color: rgba(46,160,67,.6); background: rgba(46,160,67,.12); color: #7ee2a8; }
+.opicks { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+.opick { display: flex; gap: 12px; padding: 14px; border-radius: 14px; background: var(--panel2); border: 1px solid var(--line); }
+.opick.safe { border-color: rgba(46,160,67,.6); background: color-mix(in srgb, #2ea043 10%, var(--panel2)); }
+.opick.sur { border-color: rgba(227,179,65,.6); background: color-mix(in srgb, #e3b341 10%, var(--panel2)); }
+.opick .oi { font-size: 22px; }
+.opick .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+.opick > div > b { font-size: 17px; display: block; margin: 2px 0 4px; }
+.opick .s { font-size: 13px; margin-bottom: 4px; }
+.omkts { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; }
+.omkt { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--panel2); min-width: 0; }
+.omh { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.orow { display: grid; grid-template-columns: 1fr 52px 50px 50px 52px; gap: 6px; align-items: center; padding: 5px 4px; border-radius: 6px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.orow + .orow { border-top: 1px solid rgba(255,255,255,.04); }
+.orow.ohead { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; border: 0; }
+.orow .oo { font-weight: 800; text-align: right; }
+.orow .op, .orow .om, .orow .ov { text-align: right; color: var(--muted); }
+.orow .om { color: var(--text); }
+.orow .ov.pos { color: #3fb950; font-weight: 800; }
+.orow .ov.neg { color: #f85149; }
+.orow.low .oo { color: var(--muted); text-decoration: line-through; text-decoration-color: rgba(248,81,73,.6); }
+.orow.safe { background: rgba(46,160,67,.14); }
+.orow.sur { background: rgba(227,179,65,.14); }
+.otag { font-style: normal; font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 999px; margin-left: 4px; }
+.otag.safe { background: #2ea043; color: #fff; }
+.otag.sur { background: #e3b341; color: #1a1300; }
+.oscroll { max-height: 300px; overflow-y: auto; }
+@media (max-width: 700px) {
+  .opicks { grid-template-columns: 1fr; }
+  .omkts { grid-template-columns: 1fr; }
+  .orow { grid-template-columns: 1fr 46px 42px 42px 46px; font-size: 12px; }
+}

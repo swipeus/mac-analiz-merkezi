@@ -49,7 +49,9 @@ def enrich_day(store, matches):
             pr = b["body"]["analysis"]["prediction"]
             lu = b["body"].get("lineup") or {}
             m["pred"] = {k: pr[k] for k in ("p_home", "p_draw", "p_away", "over25", "btts", "pick")}
-            m["pred"]["score"] = pr["scores"][0]["score"]
+            m["pred"]["score"] = (pr.get("score_pick") or pr["scores"][0])["score"]
+            bp = pr.get("best_pick")
+            m["pred"]["safe"] = {"label": bp["label"], "odds": bp.get("odds")} if bp else None
             m["lineup_type"] = lu.get("type")
             m["absent"] = [len((lu.get(s) or {}).get("unavailable", [])) for s in ("home", "away")]
             m["updated"] = b["ts"]
@@ -88,7 +90,7 @@ class Updater:
 
     async def _refresh(self, match_id, day):
         old = self.store.bundle_get(match_id)
-        b = await collect.build_bundle(self.src, match_id)
+        b = await collect.build_bundle(self.src, match_id, (old or {}).get("body", {}).get("odds"))
         sig = collect.signature(b)
         self.store.bundle_put(match_id, day, sig, b)
         karne.record(self.store, b)

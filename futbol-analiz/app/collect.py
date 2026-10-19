@@ -8,6 +8,7 @@ import urllib.parse
 from datetime import datetime, timezone
 
 from . import analysis
+from . import odds as odds_mod
 from .config import NEWS_TTL, SEASON_TTL
 from .sources import PLAYER_STATS, TEAM_STATS
 
@@ -54,7 +55,7 @@ STAT_KEYS = {
 _season_memo = {}
 
 # Analiz/paket biçimi değişince artırılır; eski sürümle üretilmiş paketler yeniden oluşturulur
-BUNDLE_VERSION = 3
+BUNDLE_VERSION = 4
 
 
 def _num(v):
@@ -292,7 +293,7 @@ async def team_news(src, team_id, name):
     return {"tr": tr, "fotmob": fm}
 
 
-async def build_bundle(src, match_id):
+async def build_bundle(src, match_id, prev_odds=None):
     md = await src.match_details(match_id, 30)
     gen = md.get("general") or {}
     header = md.get("header") or {}
@@ -311,12 +312,25 @@ async def build_bundle(src, match_id):
             log.warning("sezon istatistiği alınamadı %s: %s", league_id, e)
             return {"teams": {}, "players": {}, "table": {}}
 
-    rec_h, rec_a, season, news_h, news_a = await asyncio.gather(
+    started = (header.get("status") or {}).get("started")
+
+    async def safe_odds():
+        # maç başlayınca canlı oranlar değil, maç öncesi son oranlar kullanılır
+        if started:
+            return prev_odds
+        try:
+            return await odds_mod.fetch(src, match_id, home.get("name"), away.get("name"))
+        except Exception as e:  # noqa: BLE001
+            log.warning("oranlar alınamadı %s: %s", match_id, e)
+            return prev_odds
+
+    rec_h, rec_a, season, news_h, news_a, odds = await asyncio.gather(
         team_recent(src, hid, form[0] if len(form) > 0 else []),
         team_recent(src, aid, form[1] if len(form) > 1 else []),
         safe_season(),
         team_news(src, hid, home.get("name")),
         team_news(src, aid, away.get("name")),
+        safe_odds(),
     )
     info = facts.get("infoBox") or {}
     status = header.get("status") or {}
@@ -363,6 +377,7 @@ async def build_bundle(src, match_id):
             for p in (facts.get("preReview") or [])
         ],
         "news": {"home": news_h, "away": news_a},
+        "odds": odds,
         "links": {
             "fotmob": f"https://www.fotmob.com/match/{match_id}",
             "mackolik": f"https://www.google.com/search?q=site%3Amackolik.com+{q}",

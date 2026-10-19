@@ -1,5 +1,6 @@
 """Kural tabanlı Türkçe takım analizi, senaryolar ve Poisson tahmin modeli."""
 import math
+import re
 
 HOME_ADV = 1.08
 AWAY_ADJ = 0.93
@@ -235,9 +236,175 @@ def _over(lam, line):
     return 1 - sum(_pois(k, lam) for k in range(int(line) + 1))
 
 
+RHO = -0.08          # Dixon-Coles düşük skor düzeltmesi
+MARKET_WEIGHT = 0.6  # oran varsa gol beklentisinde piyasanın ağırlığı
+MIN_ODDS = 1.30      # en garanti tercih bu orandan düşük olamaz
+N_GOALS = 10
+
+
+def score_matrix(lh, la):
+    m = [[_pois(i, lh) * _pois(j, la) for j in range(N_GOALS)] for i in range(N_GOALS)]
+    for (i, j), t in {(0, 0): 1 - lh * la * RHO, (0, 1): 1 + lh * RHO, (1, 0): 1 + la * RHO, (1, 1): 1 - RHO}.items():
+        m[i][j] *= max(t, 0.0)
+    tot = sum(map(sum, m))
+    return [[x / tot for x in r] for r in m]
+
+
+def market_probs(mat, lh, la, corners=None):
+    """Skor matrisinden modelin her bahis seçeneği için olasılığı (kod -> olasılık)."""
+    n = len(mat)
+    cells = [(i, j, mat[i][j]) for i in range(n) for j in range(n)]
+    ph = sum(p for i, j, p in cells if i > j)
+    pd = sum(p for i, j, p in cells if i == j)
+    pa = sum(p for i, j, p in cells if i < j)
+    pr = {"1": ph, "X": pd, "2": pa, "1X": ph + pd, "12": ph + pa, "X2": pd + pa}
+    btts = sum(p for i, j, p in cells if i > 0 and j > 0)
+    pr.update({"btts_yes": btts, "btts_no": 1 - btts})
+    for line in (0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5):
+        o = sum(p for i, j, p in cells if i + j > line)
+        pr[f"o{line:g}"], pr[f"u{line:g}"] = o, 1 - o
+    odd = sum(p for i, j, p in cells if (i + j) % 2 == 1)
+    pr.update({"odd": odd, "even": 1 - odd})
+    if ph + pa:
+        pr.update({"dnb1": ph / (ph + pa), "dnb2": pa / (ph + pa)})
+    p00 = mat[0][0]
+    pr.update({"fts0": p00, "fts1": (1 - p00) * lh / (lh + la), "fts2": (1 - p00) * la / (lh + la)})
+    for i, j, p in cells:
+        if i <= 6 and j <= 6:
+            pr[f"cs:{i}-{j}"] = p
+    if corners:
+        ch, ca = corners["home"], corners["away"]
+        h = [_pois(k, ch) for k in range(30)]
+        a = [_pois(k, ca) for k in range(30)]
+        c1 = sum(h[i] * a[j] for i in range(30) for j in range(30) if i > j)
+        cx = sum(h[i] * a[i] for i in range(30))
+        pr.update({"cm1": c1, "cmX": cx, "cm2": max(0.0, 1 - c1 - cx)})
+    return pr
+
+
+def _odds_market(odds, key, line=None):
+    for m in (odds or {}).get("markets") or []:
+        if m["key"] == key and (line is None or m.get("line") == line):
+            return m
+    return None
+
+
+def fit_market_lambdas(odds):
+    """Maç sonucu ve alt/üst oranlarına en iyi uyan gol beklentileri (Poisson, 0.1 adımlı ızgara araması)."""
+    from .odds import implied
+    mw = _odds_market(odds, "who_will_win")
+    if not mw or len(mw["selections"]) != 3:
+        return None
+    imp = dict(zip([s["code"] for s in mw["selections"]], implied(mw)))
+    if not all(k in imp for k in ("1", "X", "2")):
+        return None
+    ou = _odds_market(odds, "odds_goals_over_under", 2.5)
+    if not ou:
+        ous = [m for m in (odds.get("markets") or []) if m["key"] == "odds_goals_over_under" and m.get("line")]
+        ou = min(ous, key=lambda m: abs(m["line"] - 2.5)) if ous else None
+    over = None
+    if ou and len(ou["selections"]) == 2:
+        oi = dict(zip([s["code"][0] for s in ou["selections"] if s["code"]], implied(ou)))
+        over = (ou["line"], oi.get("o"))
+    grid = [round(0.15 + 0.1 * k, 2) for k in range(40)]
+    n = 9
+    pmf = {l: [_pois(k, l) for k in range(n)] for l in grid}
+    best, best_err = None, 1e9
+    for lh in grid:
+        ph_ = pmf[lh]
+        for la in grid:
+            pa_ = pmf[la]
+            p1 = p2 = 0.0
+            for i in range(n):
+                for j in range(n):
+                    if i > j:
+                        p1 += ph_[i] * pa_[j]
+                    elif i < j:
+                        p2 += ph_[i] * pa_[j]
+            err = (p1 - imp["1"]) ** 2 + (p2 - imp["2"]) ** 2
+            if over and over[1] is not None:
+                po = 1 - sum(ph_[i] * pa_[j] for i in range(n) for j in range(n) if i + j <= over[0])
+                err += (po - over[1]) ** 2
+            if err < best_err:
+                best, best_err = (lh, la), err
+    return best
+
+
+def coherent_score(mat, pr, lh, la):
+    """Skor tahmini: beklenen sonuç ve toplam golle tutarlı skorlar arasından, olasılığı yüksek ve her takımın
+    beklenen gol sayısına yakın olanı seçer (matrisin tepesi tek başına hep 1-1 / 2-1 / 1-0 verir)."""
+    outcome = max(("1", pr["1"]), ("X", pr["X"]), ("2", pr["2"]), key=lambda x: x[1])[0]
+    ok = {"1": lambda i, j: i > j, "X": lambda i, j: i == j, "2": lambda i, j: i < j}[outcome]
+    n = len(mat)
+    cands = [(mat[i][j], i, j) for i in range(n) for j in range(n) if ok(i, j)]
+    over = pr["o2.5"]
+    if over >= 0.55:
+        pref = [c for c in cands if c[1] + c[2] >= 3]
+    elif over <= 0.45:
+        pref = [c for c in cands if c[1] + c[2] <= 2]
+    else:
+        pref = cands
+    p, i, j = max(pref or cands, key=lambda c: c[0] * math.exp(-((c[1] - lh) ** 2 + (c[2] - la) ** 2)))
+    return {"score": f"{i}-{j}", "p": round(p, 3)}
+
+
+SAFE_CODES = {"1", "X", "2", "1X", "12", "X2", "btts_yes", "btts_no", "o1.5", "u1.5", "o2.5", "u2.5",
+              "o3.5", "u3.5", "dnb1", "dnb2"}
+
+
+def code_label(code, home, away):
+    fixed = {"1": f"MS 1 ({home})", "X": "MS X (beraberlik)", "2": f"MS 2 ({away})", "1X": "Çifte şans 1X", "12": "Çifte şans 12",
+             "X2": "Çifte şans X2", "btts_yes": "KG Var", "btts_no": "KG Yok", "odd": "Toplam gol tek", "even": "Toplam gol çift",
+             "dnb1": f"Beraberlikte iade: {home}", "dnb2": f"Beraberlikte iade: {away}", "fts0": "Maçta gol olmaz",
+             "fts1": f"İlk golü {home} atar", "fts2": f"İlk golü {away} atar", "cm1": f"Daha çok korneri {home} kullanır",
+             "cmX": "Korner sayıları eşit", "cm2": f"Daha çok korneri {away} kullanır",
+             "o25": "2.5 Üst", "u25": "2.5 Alt"}
+    if code in fixed:
+        return fixed[code]
+    m = re.fullmatch(r"([ou])(\d+(?:\.\d+)?)", code)
+    if m:
+        return f"{m.group(2)} {'Üst' if m.group(1) == 'o' else 'Alt'}"
+    if code.startswith("cs:"):
+        return "Skor " + code[3:]
+    return code
+
+
+def make_picks(pr, odds, home, away):
+    """En garanti tercih (oran >= 1.30) ve olası sürpriz."""
+    sel = []  # (kod, model olasılığı, oran)
+    for m in (odds or {}).get("markets") or []:
+        for s in m["selections"]:
+            if s.get("code") and s["code"] in pr:
+                sel.append((s["code"], pr[s["code"]], s["odds"]))
+    safe = None
+    cands = [c for c in sel if c[0] in SAFE_CODES and c[2] >= MIN_ODDS]
+    if cands:
+        code, p, o = max(cands, key=lambda c: (c[1], c[2]))
+        safe = {"code": code, "p": round(p, 3), "odds": o}
+    else:  # oran yoksa: adil oranı (1/olasılık) 1.30'un altında kalan seçenekler elenir
+        model = [(c, pr[c]) for c in SAFE_CODES if c in pr and 1 / max(pr[c], 1e-9) >= MIN_ODDS]
+        if model:
+            code, p = max(model, key=lambda c: c[1])
+            safe = {"code": code, "p": round(p, 3), "odds": None}
+    sc = [c for c in sel if 2.8 <= c[2] <= 15 and c[1] >= (0.07 if c[0].startswith("cs:") else 0.15)
+          and not c[0].startswith(("cm", "fts", "odd", "even"))]
+    if sc:
+        code, p, o = max(sc, key=lambda c: c[1] * c[2])
+        surprise = {"code": code, "p": round(p, 3), "odds": o, "ev": round(p * o, 2)}
+    else:
+        dog = min(("1", pr["1"]), ("2", pr["2"]), key=lambda x: x[1])
+        code, p = dog if dog[1] >= 0.18 else ("X", pr["X"])
+        surprise = {"code": code, "p": round(p, 3), "odds": None, "ev": None}
+    for x in (safe, surprise):
+        if x:
+            x["label"] = code_label(x["code"], home, away)
+    return safe, surprise
+
+
 def predict(b, prof_h, prof_a):
     rh, ra = b["recent"]["home"], b["recent"]["away"]
     sh, sa = b["season"]["home"], b["season"]["away"]
+    H, A = b["home"]["name"], b["away"]["name"]
 
     def att(rec, season):
         return _wavg([(rec["avg_for"].get("xg"), 0.6), (_s(season, "expected_goals_team"), 0.4)]) or \
@@ -256,15 +423,13 @@ def predict(b, prof_h, prof_a):
     lam_h *= max(0.88, 1 - 0.03 * prof_h["important_absent"])
     lam_a *= max(0.88, 1 - 0.03 * prof_a["important_absent"])
     lam_h, lam_a = max(0.2, lam_h), max(0.2, lam_a)
+    model_lam = (round(lam_h, 2), round(lam_a, 2))
 
-    N = 9
-    mat = [[_pois(i, lam_h) * _pois(j, lam_a) for j in range(N)] for i in range(N)]
-    ph = sum(mat[i][j] for i in range(N) for j in range(N) if i > j)
-    pd = sum(mat[i][i] for i in range(N))
-    pa = sum(mat[i][j] for i in range(N) for j in range(N) if i < j)
-    tot = lam_h + lam_a
-    btts = (1 - _pois(0, lam_h)) * (1 - _pois(0, lam_a))
-    scores = sorted(((mat[i][j], f"{i}-{j}") for i in range(6) for j in range(6)), reverse=True)[:6]
+    odds = b.get("odds")
+    mk = fit_market_lambdas(odds) if odds else None
+    if mk:
+        lam_h = MARKET_WEIGHT * mk[0] + (1 - MARKET_WEIGHT) * lam_h
+        lam_a = MARKET_WEIGHT * mk[1] + (1 - MARKET_WEIGHT) * lam_a
 
     def exp_pair(k):
         h = _wavg([(rh["avg_for"].get(k), 1), (ra["avg_against"].get(k), 1)])
@@ -281,6 +446,11 @@ def predict(b, prof_h, prof_a):
         ct = c_h + c_a
         corners = {"home": round(c_h, 1), "away": round(c_a, 1), "total": round(ct, 1),
                    "over": {str(l): round(_over(ct, l), 3) for l in (7.5, 8.5, 9.5, 10.5, 11.5)}}
+
+    mat = score_matrix(lam_h, lam_a)
+    pr = market_probs(mat, lam_h, lam_a, corners)
+    n = len(mat)
+    scores = sorted(((mat[i][j], f"{i}-{j}") for i in range(n) for j in range(n)), reverse=True)[:6]
     s_h, s_a = exp_pair("shots")
     o_h, o_a = exp_pair("sot")
     y_h, y_a = rh["avg_for"].get("yellow"), ra["avg_for"].get("yellow")
@@ -288,41 +458,51 @@ def predict(b, prof_h, prof_a):
     n_min = min(rh.get("n_stats") or 0, ra.get("n_stats") or 0)
     has_season = bool(sh) and bool(sa)
     conf = "Yüksek" if n_min >= 5 and has_season else ("Orta" if n_min >= 3 else "Düşük")
-    best = max((ph, "1"), (pd, "X"), (pa, "2"))
+    best = max((pr["1"], "1"), (pr["X"], "X"), (pr["2"], "2"))
+    safe, surprise = make_picks(pr, odds, H, A)
+    # oran sayfası için: oranı olan her seçeneğin model olasılığı
+    codes = {s["code"] for m in (odds or {}).get("markets") or [] for s in m["selections"] if s.get("code")}
     return {
         "lam_home": round(lam_h, 2), "lam_away": round(lam_a, 2),
-        "p_home": round(ph, 3), "p_draw": round(pd, 3), "p_away": round(pa, 3),
-        "over15": round(_over(tot, 1.5), 3), "over25": round(_over(tot, 2.5), 3), "over35": round(_over(tot, 3.5), 3),
-        "btts": round(btts, 3),
+        "lam_model": model_lam, "lam_market": mk, "uses_odds": bool(mk),
+        "p_home": round(pr["1"], 3), "p_draw": round(pr["X"], 3), "p_away": round(pr["2"], 3),
+        "over15": round(pr["o1.5"], 3), "over25": round(pr["o2.5"], 3), "over35": round(pr["o3.5"], 3),
+        "btts": round(pr["btts_yes"], 3),
         "scores": [{"score": s, "p": round(p, 3)} for p, s in scores],
+        "score_pick": coherent_score(mat, pr, lam_h, lam_a),
         "corners": corners,
         "shots": {"home": s_h and round(s_h, 1), "away": s_a and round(s_a, 1)},
         "sot": {"home": o_h and round(o_h, 1), "away": o_a and round(o_a, 1)},
         "yellow": {"home": y_h, "away": y_a, "total": round(y_h + y_a, 1) if y_h is not None and y_a is not None else None},
         "confidence": conf,
         "pick": best[1],
-        "best_pick": best_pick(ph, pd, pa, btts, _over(tot, 2.5)),
+        "best_pick": safe,
+        "surprise": surprise,
+        "probs": {c: round(pr[c], 4) for c in codes if c in pr},
     }
 
 
-# "En garanti tercih": maç sonucu, karşılıklı gol ve 2.5 gol pazarlarında modelin en yüksek olasılık verdiği seçenek
-PICK_LABELS = {"1": "MS 1", "X": "MS X", "2": "MS 2", "btts_yes": "KG Var", "btts_no": "KG Yok",
-               "o25": "2.5 Üst", "u25": "2.5 Alt"}
-
-
-def best_pick(ph, pd, pa, btts, o25):
-    cands = [("1", ph), ("X", pd), ("2", pa), ("btts_yes", btts), ("btts_no", 1 - btts), ("o25", o25), ("u25", 1 - o25)]
-    code, p = max(cands, key=lambda c: c[1])
-    return {"code": code, "label": PICK_LABELS[code], "p": round(p, 3)}
-
-
 def pick_hit(code, hs, as_):
-    """Tercih tuttu mu? hs/as_ maç sonu skoru."""
-    return {
-        "1": hs > as_, "X": hs == as_, "2": hs < as_,
+    """Tercih tuttu mu? hs/as_ maç sonu skoru. None: iade (karnede sayılmaz)."""
+    t = hs + as_
+    fixed = {
+        "1": hs > as_, "X": hs == as_, "2": hs < as_, "1X": hs >= as_, "12": hs != as_, "X2": hs <= as_,
         "btts_yes": hs > 0 and as_ > 0, "btts_no": hs == 0 or as_ == 0,
-        "o25": hs + as_ > 2.5, "u25": hs + as_ < 2.5,
-    }[code]
+        "o25": t > 2.5, "u25": t < 2.5, "odd": t % 2 == 1, "even": t % 2 == 0,
+    }
+    if code in fixed:
+        return fixed[code]
+    if code in ("dnb1", "dnb2"):
+        if hs == as_:
+            return None
+        return (hs > as_) == (code == "dnb1")
+    m = re.fullmatch(r"([ou])(\d+(?:\.\d+)?)", code)
+    if m:
+        line = float(m.group(2))
+        return t > line if m.group(1) == "o" else t < line
+    if code.startswith("cs:"):
+        return code[3:] == f"{hs}-{as_}"
+    return None
 
 
 def scenarios(b, pr, prof_h, prof_a):
@@ -400,10 +580,16 @@ def build(b):
             if gone:
                 sc.insert(0, f"{team} son maçtaki ilk 11'inden {', '.join(gone)} bu maçta yok; kadroda zorunlu değişiklik olacak.")
     pick_txt = {"1": f"{H} kazanır", "X": "beraberlik", "2": f"{A} kazanır"}[pr["pick"]]
+    src = "istatistikler ve bahis oranları birlikte" if pr.get("uses_odds") else "istatistikler"
+    bp, sp = pr.get("best_pick"), pr.get("surprise")
+    odds_txt = lambda x: f", oran {f(x['odds'], 2)}" if x and x.get("odds") else ""
     summary = (
-        f"Model, {H} için {f(pr['lam_home'], 2)}, {A} için {f(pr['lam_away'], 2)} beklenen gol hesaplıyor. "
+        f"Model ({src}), {H} için {f(pr['lam_home'], 2)}, {A} için {f(pr['lam_away'], 2)} beklenen gol hesaplıyor. "
         f"Olasılıklar: 1 {pct(pr['p_home'])} · X {pct(pr['p_draw'])} · 2 {pct(pr['p_away'])}. "
-        f"En olası sonuç {pick_txt}; en olası skor {pr['scores'][0]['score']} ({pct(pr['scores'][0]['p'])}). "
-        f"2.5 üst {pct(pr['over25'])}, karşılıklı gol {pct(pr['btts'])}. Güven: {pr['confidence']}."
+        f"En olası sonuç {pick_txt}; skor tahmini {pr['score_pick']['score']}. "
+        f"2.5 üst {pct(pr['over25'])}, karşılıklı gol {pct(pr['btts'])}. "
+        + (f"En garanti tercih: {bp['label']} ({pct(bp['p'])}{odds_txt(bp)}). " if bp else "")
+        + (f"Olası sürpriz: {sp['label']} ({pct(sp['p'])}{odds_txt(sp)}). " if sp else "")
+        + f"Güven: {pr['confidence']}."
     )
     return {"home": prof_h, "away": prof_a, "prediction": pr, "scenarios": sc, "summary": summary}

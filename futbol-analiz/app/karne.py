@@ -17,13 +17,14 @@ def record(store, b):
 
     if not st.get("started") and not st.get("finished"):
         # başlamadan önce: tahmini güncel tut (maç başlayınca donar)
-        if not pr.get("best_pick") or not pr.get("scores"):
+        if not pr.get("best_pick") or not pr.get("score_pick"):
             return
+        # not: "olası sürpriz" bilerek karneye yazılmaz
         store.pred_put(mid, {
             "id": mid, "utc": b.get("utc"), "league_id": b.get("league_id"), "league": b.get("league_name"),
             "home": {"id": b["home"]["id"], "name": b["home"]["name"]},
             "away": {"id": b["away"]["id"], "name": b["away"]["name"]},
-            "pick": pr["best_pick"], "score": pr["scores"][0],
+            "pick": pr["best_pick"], "score": pr["score_pick"],
             "p": {"1": pr.get("p_home"), "X": pr.get("p_draw"), "2": pr.get("p_away")}, "ms": pr.get("pick"),
             "state": "pending",
         })
@@ -35,9 +36,11 @@ def record(store, b):
             return
         ps = [int(x) for x in old["score"]["score"].split("-")]
         ms_real = "1" if hs > as_ else ("X" if hs == as_ else "2")
+        hit = pick_hit(old["pick"]["code"], hs, as_)
         old.update({
+            # beraberlikte iade gibi durumlarda tercih "iade" sayılır (None)
             "state": "done", "result": [hs, as_],
-            "pick_hit": pick_hit(old["pick"]["code"], hs, as_),
+            "pick_hit": hit,
             "score_hit": ps == [hs, as_],
             "ms_hit": old.get("ms") == ms_real,
         })

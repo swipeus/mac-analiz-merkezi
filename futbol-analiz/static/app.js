@@ -360,6 +360,13 @@ function teamHtml(p, cls) {
   </div>`;
 }
 
+// Oyuncu fotoğrafı (FotMob); yüklenemezse forma numarası ya da boş avatar gösterilir
+function playerImg(id, shirt) {
+  const fb = String(shirt || "").replace(/\D/g, "");
+  return `<span class="pimg" data-fb="${fb}"><img src="https://images.fotmob.com/image_resources/playerimages/${Number(id) || 0}.png" alt="" loading="lazy"
+    onerror="this.parentNode.classList.add('noimg');this.remove()"></span>`;
+}
+
 function lineupHtml(b) {
   const lu = b.lineup;
   if (!lu) return `<div class="card"><h2>Kadrolar</h2><p class="muted">Kadro bilgisi henüz yok.</p></div>`;
@@ -376,7 +383,9 @@ function lineupHtml(b) {
       left = side === "home" ? p.y * 50 : 100 - p.y * 50;
       top = side === "home" ? p.x * 100 : (1 - p.x) * 100;
     }
-    return `<div class="pl ${cls}" style="left:${left}%;top:${top}%"><div class="n">${esc(p.shirt || "")}</div><div class="nm">${esc(p.last)}</div>${p.rating ? `<div class="rt">${nf(p.rating, 1)}</div>` : ""}</div>`;
+    return `<div class="pl ${cls}" style="left:${left}%;top:${top}%">
+      <div class="ph">${playerImg(p.id, p.shirt)}${p.shirt ? `<span class="no">${esc(p.shirt)}</span>` : ""}</div>
+      <div class="nm">${esc(p.last)}</div>${p.rating ? `<div class="rt">${nf(p.rating, 1)}</div>` : ""}</div>`;
   }).join("");
   const lines = vert
     ? `<div class="ln" style="top:50%;left:0;right:0;border-width:2px 0 0 0"></div>
@@ -391,12 +400,20 @@ function lineupHtml(b) {
     const u = lu[side].unavailable || [];
     if (!u.length) return `<li class="muted">Bilinen eksik yok</li>`;
     const TR = { injury: "sakat", suspension: "cezalı", "red card": "cezalı", "yellow card": "kart cezalı", "international duty": "milli takımda" };
-    return u.map((p) => `<li>${esc(p.name)} <small class="muted">(${esc(TR[(p.type || "").toLowerCase()] || p.type || "yok")}${p.return ? ", dönüş: " + esc(p.return) : ""})</small></li>`).join("");
+    return u.map((p) => {
+      const t = (p.type || "").toLowerCase();
+      const kind = t === "injury" ? "inj" : "sus";
+      return `<li class="prow">${playerImg(p.id)}<div class="pinfo"><b>${esc(p.name)}</b>
+        <small><span class="ptag ${kind}">${esc(TR[t] || p.type || "yok")}</span>${p.return ? " dönüş: " + esc(p.return) : ""}</small></div></li>`;
+    }).join("");
   };
   const side = (s, cls, name) => `<div><h3 class="${cls}">${esc(name)} · ${esc(lu[s].formation || "")}</h3>
     <div class="muted">Teknik direktör: ${esc(lu[s].coach || "—")}${lu[s].avg_age ? " · İlk 11 yaş ort. " + nf(lu[s].avg_age, 1) : ""}</div>
-    <ul>${(lu[s].starters || []).map((p) => `<li>${esc(p.shirt || "")} ${esc(p.name)}${p.rating ? ` <small class="muted">${nf(p.rating, 2)}</small>` : ""}</li>`).join("")}</ul>
-    <h3>Eksikler</h3><ul>${abs(s)}</ul></div>`;
+    <ul class="plist">${(lu[s].starters || []).map((p) => `<li class="prow">${playerImg(p.id, p.shirt)}
+      <div class="pinfo"><b>${p.shirt ? `<span class="shirt">${esc(p.shirt)}</span>` : ""}${esc(p.name)}</b>
+        <small>${[p.country, p.age ? p.age + " yaş" : ""].filter(Boolean).map(esc).join(" · ")}</small></div>
+      ${p.rating ? `<span class="prt">${nf(p.rating, 2)}</span>` : ""}</li>`).join("")}</ul>
+    <h3>Eksikler</h3><ul class="plist">${abs(s)}</ul></div>`;
   return `<div class="card"><h2>Kadrolar ${tag}</h2>
     <div class="pitch ${vert ? "v" : ""}">${lines}${dots("home", "h")}${dots("away", "a")}</div>
     <div class="grid2">${side("home", "home-c", b.home.name)}${side("away", "away-c", b.away.name)}</div></div>`;

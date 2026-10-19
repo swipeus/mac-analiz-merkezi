@@ -186,14 +186,40 @@ td.l, th.l { text-align: left; }
   background-image: repeating-linear-gradient(90deg, rgba(255,255,255,.03) 0 9.5%, transparent 9.5% 19%); }
 .pitch .ln { position: absolute; border: 2px solid var(--pitch-line); }
 .pl { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; width: 84px; pointer-events: none; }
-.pl .n { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; color: #0d1117; }
-.pl .nm { font-size: 11px; text-shadow: 0 1px 2px #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 84px; }
-.pl .rt { font-size: 10px; color: #ffe08a; }
-.pl.h .n { background: var(--home); } .pl.a .n { background: var(--away); }
+.pl .ph { position: relative; width: 42px; height: 42px; margin-bottom: 2px; }
+.pl .ph .pimg { width: 100%; height: 100%; border: 2px solid var(--home); box-shadow: 0 2px 6px rgba(0,0,0,.5); }
+.pl.a .ph .pimg { border-color: var(--away); }
+.pl .no { position: absolute; right: -6px; bottom: -3px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px;
+  font-size: 10px; font-weight: 800; line-height: 18px; text-align: center; color: #0d1117; background: var(--home); }
+.pl.a .no { background: var(--away); }
+.pl .nm { font-size: 11px; font-weight: 600; text-shadow: 0 1px 2px #000, 0 0 4px #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 84px; }
+.pl .rt { font-size: 10px; font-weight: 700; color: #1a1300; background: #ffd75e; border-radius: 4px; padding: 0 4px; line-height: 14px; }
+
+/* oyuncu fotoğrafı (sahada ve listelerde ortak) */
+.pimg { position: relative; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto;
+  width: 36px; height: 36px; border-radius: 50%; overflow: hidden; background: #2a323d; }
+.pimg img { width: 100%; height: 100%; object-fit: cover; object-position: top; }
+.pimg.noimg::after { content: attr(data-fb); font-weight: 800; font-size: 13px; color: var(--muted); }
+.plist { list-style: none; padding: 0 !important; margin: 6px 0 0 !important; }
+.prow { display: flex; align-items: center; gap: 10px; padding: 6px 0 !important; margin: 0 !important; border-bottom: 1px solid rgba(255,255,255,.04); }
+.prow:last-child { border-bottom: 0; }
+.pinfo { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+.pinfo b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pinfo small { color: var(--muted); font-size: 12px; }
+.shirt { display: inline-block; min-width: 22px; margin-right: 6px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.prt { font-size: 12px; font-weight: 700; padding: 2px 7px; border-radius: 6px; background: rgba(255,215,94,.14); color: #ffd75e; font-variant-numeric: tabular-nums; }
+.ptag { display: inline-block; font-size: 11px; font-weight: 700; padding: 0 6px; border-radius: 4px; margin-right: 4px; }
+.ptag.inj { background: rgba(248,81,73,.16); color: var(--bad); }
+.ptag.sus { background: rgba(210,153,34,.16); color: var(--warn); }
 .pitch.v { aspect-ratio: 68 / 105; max-width: 440px; margin: 0 auto;
   background-image: repeating-linear-gradient(180deg, rgba(255,255,255,.03) 0 9.5%, transparent 9.5% 19%); }
 .pitch.v .pl { width: 25%; }
 .pitch.v .pl .nm { max-width: 100%; }
+@media (max-width: 700px) {
+  .pl .ph { width: 34px; height: 34px; }
+  .pl .no { min-width: 15px; height: 15px; line-height: 15px; font-size: 9px; right: -5px; }
+  .pl .nm { font-size: 10px; }
+}
 
 /* telefon */
 @media (max-width: 700px) {

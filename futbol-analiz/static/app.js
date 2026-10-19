@@ -162,8 +162,35 @@ async function renderMatch(id, silent, refresh) {
   bindMatch();
   if (silent) window.scrollTo(0, y);
 }
+const REFRESH_LABEL = () => STATIC ? "Yeni veri var mı?" : "Şimdi yenile";
 function bindMatch() {
-  $("#refreshBtn").onclick = () => renderMatch(state.current, true, true);
+  const btn = $("#refreshBtn");
+  btn.onclick = async () => {
+    btn.disabled = true;
+    btn.textContent = STATIC ? "Kontrol ediliyor…" : "Yenileniyor…";
+    try {
+      if (STATIC) {
+        // çevrimiçi sürümde veri GitHub'da 15 dk'da bir üretilir; burada sadece yenisi yayınlanmış mı bakılır
+        const m = await getData("meta.json");
+        const fresh = !meta || m.updated !== meta.updated;
+        meta = m; showUpdated();
+        if (fresh) {
+          await renderMatch(state.current, true);
+          toast({ text: "Yeni veriler yüklendi", match_id: state.current });
+          return;
+        }
+        const left = Math.round((m.updated + 15 * 60 - Date.now() / 1000) / 60);
+        btn.textContent = "Güncel ✓ · yeni veri " + (left > 0 ? `~${left} dk içinde` : "birkaç dk içinde");
+      } else {
+        await renderMatch(state.current, true, true);
+        toast({ text: "Maç verileri yenilendi", match_id: state.current });
+        return;
+      }
+    } catch (e) {
+      btn.textContent = "Hata: " + e.message;
+    }
+    setTimeout(() => { if (btn.isConnected) { btn.disabled = false; btn.textContent = REFRESH_LABEL(); } }, 6000);
+  };
 }
 
 function matchHtml(b) {
@@ -188,7 +215,7 @@ function matchHtml(b) {
       <div class="score">${esc(scoreTxt)}<small>${esc(stTxt)}</small></div>
       <div class="team"><img src="${esc(b.away.logo)}" alt="" onerror="this.style.display='none'">${esc(W)}</div>
     </div>
-    <div class="updated">Son güncelleme: ${ago(b.updated)} · <button id="refreshBtn">Şimdi yenile</button></div>
+    <div class="updated">Son güncelleme: ${ago(b.updated)}${STATIC ? " (veriler 15 dk'da bir yenilenir)" : ""} · <button id="refreshBtn">${REFRESH_LABEL()}</button></div>
   </div>
 
   <div class="card">

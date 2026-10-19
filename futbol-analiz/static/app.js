@@ -75,17 +75,47 @@ async function initLeagues() {
   renderLeagues();
 }
 function renderLeagues() {
-  const nav = $("#leagues");
-  nav.innerHTML = state.leagues.map((l) =>
-    `<button class="chip ${state.off.has(l.id) ? "" : "on"}" data-id="${l.id}">${esc(l.name)}</button>`).join("");
-  nav.querySelectorAll(".chip").forEach((b) => b.onclick = () => {
-    const id = +b.dataset.id;
-    state.off.has(id) ? state.off.delete(id) : state.off.add(id);
-    safeSet("offLeagues", JSON.stringify([...state.off]));
-    renderLeagues();
-    if (!state.current) renderDay();
+  // o günkü maç sayıları (gün listesi yüklendiyse)
+  const counts = {};
+  (dayCache?.matches || []).forEach((m) => counts[m.league_id] = (counts[m.league_id] || 0) + 1);
+  $("#leagues").innerHTML = state.leagues.map((l) => `
+    <label class="lg-opt">
+      <input type="checkbox" data-id="${l.id}" ${state.off.has(l.id) ? "" : "checked"}>
+      <img src="${leagueLogo(l.id)}" alt="" onerror="this.style.visibility='hidden'">
+      <span class="nm">${esc(l.name)}</span>
+      <span class="cnt">${counts[l.id] ? counts[l.id] + " maç" : ""}</span>
+    </label>`).join("");
+  $("#leagues").querySelectorAll("input").forEach((cb) => cb.onchange = () => {
+    const id = +cb.dataset.id;
+    cb.checked ? state.off.delete(id) : state.off.add(id);
+    applyFilter();
   });
+  updateFilterBtn();
 }
+function updateFilterBtn() {
+  const on = state.leagues.filter((l) => !state.off.has(l.id));
+  const all = on.length === state.leagues.length;
+  $("#filterCount").textContent = all ? "" : `${on.length}/${state.leagues.length}`;
+  $("#filterBtn").classList.toggle("active", !all);
+  $("#filterSummary").textContent = all ? "Tüm ligler gösteriliyor"
+    : !on.length ? "Hiç lig seçilmedi"
+    : on.length <= 3 ? on.map((l) => l.name).join(", ") : `${on.length} lig seçili`;
+}
+function applyFilter() {
+  safeSet("offLeagues", JSON.stringify([...state.off]));
+  updateFilterBtn();
+  if (!state.current) renderDay(true);
+}
+function openFilter(open) {
+  $("#filterSheet").classList.toggle("hidden", !open);
+  $("#filterBackdrop").classList.toggle("hidden", !open);
+  if (open) { renderLeagues(); $("#filterDone").focus(); }
+}
+$("#filterBtn").onclick = () => openFilter(true);
+$("#filterClose").onclick = $("#filterDone").onclick = $("#filterBackdrop").onclick = () => openFilter(false);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") openFilter(false); });
+$("#filterAll").onclick = () => { state.off.clear(); renderLeagues(); applyFilter(); };
+$("#filterNone").onclick = () => { state.leagues.forEach((l) => state.off.add(l.id)); renderLeagues(); applyFilter(); };
 
 /* ---------- gün listesi ---------- */
 let dayCache = null;
@@ -500,7 +530,7 @@ function setDate(s) { state.date = s; $("#date").value = s; if (location.hash.st
 
 /* ---------- statik mod (GitHub Pages): şifre ve yoklama ---------- */
 async function showLogin(err) {
-  $("#leagues").innerHTML = "";
+  $("#toolbar").classList.add("hidden");
   $("#view").innerHTML = `<form id="login" class="card" style="max-width:360px;margin:40px auto">
     <h2>Giriş</h2><p class="muted">Siteyi görmek için şifreyi gir. Bu cihaz şifreyi hatırlar.</p>
     <input id="pw" type="password" autocomplete="current-password" placeholder="Şifre" required
@@ -524,7 +554,7 @@ async function unlockWith(raw) {
   catch (e) { KEY = null; if (e.message === "NOTFOUND") throw new Error("Site verisi henüz yayınlanmadı"); return false; }
 }
 function showUpdated() {
-  if (meta) $("#updatedAt").textContent = "Veriler: " + ago(new Date(meta.updated * 1000).toISOString());
+  if (meta) $("#updatedAt").textContent = "Son güncelleme: " + ago(new Date(meta.updated * 1000).toISOString()) + " ·";
 }
 function startPolling() {
   let lastEv = +(safeGet("lastEventId") || 0);
@@ -559,6 +589,7 @@ async function boot() {
     showUpdated();
   }
   ready = true;
+  $("#toolbar").classList.remove("hidden");
   await initLeagues();
   route();
   loadFeed();

@@ -22,7 +22,20 @@
   </div>
 </header>
 <div id="feed" class="feed hidden"><div class="feed-head">Son gelişmeler</div><ul id="feedList"></ul></div>
-<nav id="leagues" class="leagues"></nav>
+<div id="toolbar" class="toolbar">
+  <button id="filterBtn" class="filter-btn" aria-haspopup="dialog" aria-controls="filterSheet">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4-2v-4z"/></svg>
+    Filtre <b id="filterCount"></b>
+  </button>
+  <span id="filterSummary" class="filter-summary"></span>
+</div>
+<div id="filterBackdrop" class="backdrop hidden"></div>
+<div id="filterSheet" class="sheet hidden" role="dialog" aria-modal="true" aria-label="Lig filtresi">
+  <div class="sheet-head"><b>Görüntülenecek ligler</b><button id="filterClose" class="x" aria-label="Kapat">✕</button></div>
+  <div class="sheet-actions"><button id="filterAll">Tümünü seç</button><button id="filterNone">Hiçbirini seçme</button></div>
+  <div id="leagues" class="sheet-list"></div>
+  <div class="sheet-foot"><button id="filterDone" class="primary">Tamam</button></div>
+</div>
 <main id="view"></main>
 <div id="toasts" class="toasts"></div>
 <footer class="foot"><span id="updatedAt"></span> Veriler: FotMob (sağlayıcı lige göre değişir) · Haberler: Google News, FotMob · Tahminler istatistiksel modeldir, kesinlik içermez.</footer>

@@ -100,30 +100,81 @@ async function renderDay(silent) {
   if (state.current) return;
   const ms = dayCache.matches.filter((m) => !state.off.has(m.league_id));
   if (!ms.length) { v.innerHTML = `<div class="loading">Bu tarihte seçili liglerde maç yok.</div>`; return; }
-  const groups = {};
-  ms.forEach((m) => (groups[m.league] ||= []).push(m));
-  v.innerHTML = Object.entries(groups).map(([lg, list]) => `
-    <section class="lg-block"><div class="lg-title">${esc(lg)}</div>
-    ${list.map(rowHtml).join("")}</section>`).join("");
-  v.querySelectorAll(".mrow").forEach((r) => r.onclick = () => location.hash = "#/mac/" + r.dataset.id);
+  // Map: sunucunun lig sırasını korur (sayısal anahtarlı nesne sırayı bozar)
+  const groups = new Map();
+  ms.forEach((m) => { if (!groups.has(m.league_id)) groups.set(m.league_id, []); groups.get(m.league_id).push(m); });
+  v.innerHTML = highlightsHtml(ms) + [...groups.values()].map((list) => `
+    <section class="lg-block">
+      <div class="lg-title"><img src="${leagueLogo(list[0].league_id)}" alt="" onerror="this.remove()"><b>${esc(list[0].league)}</b><span>${list.length} maç</span></div>
+      <div class="mgrid">${list.map(cardHtml).join("")}</div>
+    </section>`).join("");
+  v.querySelectorAll("[data-id]").forEach((r) => r.onclick = () => location.hash = "#/mac/" + r.dataset.id);
 }
-function rowHtml(m) {
+
+const teamLogo = (id) => `https://images.fotmob.com/image_resources/logo/teamlogo/${id}.png`;
+const leagueLogo = (id) => `https://images.fotmob.com/image_resources/logo/leaguelogo/dark/${id}.png`;
+// Favori: kazanma olasılığı daha yüksek olan taraf (gösterilen yüzdeler eşitse favori yok)
+function favoriteSide(p) {
+  if (!p) return null;
+  const h = Math.round(p.p_home * 100), a = Math.round(p.p_away * 100);
+  return h === a ? null : h > a ? "home" : "away";
+}
+function crestHtml(team, isFav, pct, size) {
+  const initials = (team.name || "?").split(" ").map((w) => w[0]).join("").replace(/[^\p{L}\p{N}]/gu, "").slice(0, 3);
+  return `<div class="crest ${isFav ? "fav" : ""}"${size ? ` style="width:${size}px;height:${size}px"` : ""}>
+    ${isFav ? `<span class="star" title="Favori · kazanma olasılığı ${pc(pct)}">★</span>` : ""}
+    <img src="${teamLogo(team.id)}" alt="" loading="lazy"${size ? ` style="width:${Math.round(size * 0.72)}px;height:${Math.round(size * 0.72)}px"` : ""}
+      onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'fb',textContent:'${initials}'}))">
+  </div>`;
+}
+function cardHtml(m) {
   const live = m.started && !m.finished;
-  const t = m.cancelled ? "İptal" : live ? (m.live || "Canlı") : m.finished ? "MS" : timeOf(m.utc);
-  const sc = (m.started || m.finished) ? `${m.home.score ?? 0} - ${m.away.score ?? 0}` : "vs";
-  let mini = `<span class="muted">Analiz hazırlanıyor…</span>`;
-  if (m.pred) {
-    const p = m.pred;
-    const lt = lineupTag(m.lineup_type, false);
-    const ab = m.absent && (m.absent[0] + m.absent[1]) ? `<span class="tag warn">${m.absent[0]}+${m.absent[1]} eksik</span>` : "";
-    mini = `<div class="probbar"><span style="width:${p.p_home * 100}%"></span><span style="width:${p.p_draw * 100}%"></span><span style="width:${p.p_away * 100}%"></span></div>
-      <div>1 ${pc(p.p_home)} · X ${pc(p.p_draw)} · 2 ${pc(p.p_away)} · Skor ${esc(p.score)} · 2.5Ü ${pc(p.over25)}</div>
-      <div>${lt} ${ab}</div>`;
-  }
-  return `<div class="mrow" data-id="${m.id}">
-    <div class="t ${live ? "live" : ""}">${esc(t)}</div>
-    <div class="h">${esc(m.home.name)}</div><div class="sc">${sc}</div><div class="a">${esc(m.away.name)}</div>
-    <div class="mini">${mini}</div></div>`;
+  const p = m.pred;
+  const fav = favoriteSide(p);
+  let top = m.cancelled ? `<span class="when">İptal</span>`
+    : live ? `<span class="badge-live">CANLI ${esc(m.live || "")}</span>`
+    : m.finished ? `<span class="when">Maç sonu</span>` : `<span class="when">${esc(dateOf(m.utc))}</span>`;
+  const tags = p ? [lineupTag(m.lineup_type, false),
+    m.absent && (m.absent[0] + m.absent[1]) ? `<span class="tag warn">${m.absent[0]}+${m.absent[1]} eksik</span>` : ""].join("") : "";
+  const mid = (m.started || m.finished)
+    ? `<div class="sc">${m.home.score ?? 0} - ${m.away.score ?? 0}</div><div class="sub">${live ? "devam ediyor" : "skor"}</div>`
+    : `<div class="ko">${esc(timeOf(m.utc))}</div><div class="sub">başlama</div>`;
+  const bottom = p ? `
+    <div class="probs"><span class="ph">${pc(p.p_home)}</span>
+      <div class="probbar"><span style="width:${p.p_home * 100}%"></span><span style="width:${p.p_draw * 100}%"></span><span style="width:${p.p_away * 100}%"></span></div>
+      <span class="pa">${pc(p.p_away)}</span></div>
+    <div class="pills">
+      <span class="pill"><i>Beraberlik</i>${pc(p.p_draw)}</span>
+      <span class="pill"><i>Skor</i>${esc(p.score)}</span>
+      <span class="pill"><i>2.5 Üst</i>${pc(p.over25)}</span>
+      <span class="pill"><i>KG</i>${pc(p.btts)}</span>
+    </div>` : `<div class="pending">Analiz hazırlanıyor…</div>`;
+  return `<div class="mcard ${live ? "is-live" : ""}" data-id="${m.id}">
+    <div class="mtop">${top}<div class="mtags">${tags}</div></div>
+    <div class="mteams">
+      <div class="tm">${crestHtml(m.home, fav === "home", p && p.p_home)}<div class="nm">${esc(m.home.name)}</div></div>
+      <div class="mid">${mid}</div>
+      <div class="tm">${crestHtml(m.away, fav === "away", p && p.p_away)}<div class="nm">${esc(m.away.name)}</div></div>
+    </div>
+    ${bottom}
+  </div>`;
+}
+
+function highlightsHtml(ms) {
+  const open = ms.filter((m) => m.pred && !m.finished && !m.cancelled);
+  if (open.length < 2) return "";
+  const pick = (score) => open.reduce((a, b) => (score(b) > score(a) ? b : a));
+  const favM = pick((m) => Math.max(m.pred.p_home, m.pred.p_away));
+  const goalM = pick((m) => m.pred.over25);
+  const evenM = pick((m) => -Math.abs(m.pred.p_home - m.pred.p_away));
+  const favSide = favoriteSide(favM.pred) || "home";
+  const tile = (cls, ic, k, m, t, s) => `<div class="hl ${cls}" data-id="${m.id}"><div class="ic">${ic}</div>
+    <div><div class="k">${k}</div><div class="t">${esc(t)}</div><div class="s">${esc(s)}</div></div></div>`;
+  return `<div class="highlights">
+    ${tile("fav", "★", "En net favori", favM, favM[favSide].name, `${favM.home.name} - ${favM.away.name} · kazanma ${pc(favM.pred["p_" + favSide])}`)}
+    ${tile("goal", "⚽", "En gollü maç beklentisi", goalM, `${goalM.home.name} - ${goalM.away.name}`, `2.5 Üst ${pc(goalM.pred.over25)} · KG ${pc(goalM.pred.btts)}`)}
+    ${tile("even", "⚖", "En dengeli maç", evenM, `${evenM.home.name} - ${evenM.away.name}`, `1 ${pc(evenM.pred.p_home)} · X ${pc(evenM.pred.p_draw)} · 2 ${pc(evenM.pred.p_away)}`)}
+  </div>`;
 }
 
 const isNarrow = () => window.matchMedia("(max-width: 700px)").matches;
@@ -211,9 +262,9 @@ function matchHtml(b) {
   <div class="hero">
     <div class="meta">${meta}</div>
     <div class="teams">
-      <div class="team"><img src="${esc(b.home.logo)}" alt="" onerror="this.style.display='none'">${esc(H)}</div>
+      <div class="team">${crestHtml(b.home, favoriteSide(P) === "home", P.p_home, 84)}${esc(H)}</div>
       <div class="score">${esc(scoreTxt)}<small>${esc(stTxt)}</small></div>
-      <div class="team"><img src="${esc(b.away.logo)}" alt="" onerror="this.style.display='none'">${esc(W)}</div>
+      <div class="team">${crestHtml(b.away, favoriteSide(P) === "away", P.p_away, 84)}${esc(W)}</div>
     </div>
     <div class="updated">Son güncelleme: ${ago(b.updated)}${STATIC ? " (veriler 15 dk'da bir yenilenir)" : ""} · <button id="refreshBtn">${REFRESH_LABEL()}</button></div>
   </div>

@@ -100,7 +100,7 @@ async def main(out):
     # arayüz: göreli yollar + statik mod işareti. Dosyalara içerik özetiyle sürüm eklenir ki
     # tarayıcı önbelleği eski sayfayla yeni kodu (ya da tersini) karıştırmasın.
     html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
-    for f in ("app.js", "style.css"):
+    for f in ("app.js", "asistan.js", "style.css"):
         shutil.copy(STATIC_DIR / f, out / f)
         ver = hashlib.sha1((STATIC_DIR / f).read_bytes()).hexdigest()[:10]
         html = html.replace(f'"/static/{f}"', f'"{f}?v={ver}"')

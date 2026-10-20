@@ -1099,11 +1099,25 @@ function shiftDay(n) {
   const d = new Date(state.date + "T12:00:00"); d.setDate(d.getDate() + n);
   setDate(d.toLocaleDateString("sv-SE"));
 }
-function setDate(s) { state.date = s; $("#date").value = s; if (location.hash.startsWith("#/mac")) location.hash = "#/"; else renderDay(); }
+function setDate(s) {
+  state.date = s; $("#date").value = s; updateCalLabel(); openCal(false);
+  if (location.hash.startsWith("#/mac") || location.hash.startsWith("#/oyuncu") || location.hash.startsWith("#/karne")) location.hash = "#/"; else renderDay();
+}
+// takvim butonu: seçili günü kısa yazar (Dün / Bugün / Yarın / 22 Eki)
+function updateCalLabel() {
+  const t = todayStr();
+  const diff = Math.round((new Date(state.date + "T12:00:00") - new Date(t + "T12:00:00")) / 86400000);
+  $("#calLabel").textContent = { "-1": "Dün", "0": "Bugün", "1": "Yarın" }[diff] ??
+    new Date(state.date + "T12:00:00").toLocaleDateString("tr-TR", { day: "numeric", month: "short" });
+}
+function openCal(open) { $("#calPop").classList.toggle("hidden", !open); }
+$("#calBtn").onclick = (e) => { e.stopPropagation(); openCal($("#calPop").classList.contains("hidden")); };
+document.addEventListener("click", (e) => { if (!e.target.closest(".calwrap")) openCal(false); });
 
 /* ---------- statik mod (GitHub Pages): şifre ve yoklama ---------- */
 async function showLogin(err) {
   $("#toolbar").classList.add("hidden");
+  document.body.classList.add("locked");
   $("#view").innerHTML = `<form id="login" class="card" style="max-width:360px;margin:40px auto">
     <h2>Giriş</h2><p class="muted">Siteyi görmek için şifreyi gir. Bu cihaz şifreyi hatırlar.</p>
     <input id="pw" type="password" autocomplete="current-password" placeholder="Şifre" required
@@ -1202,6 +1216,15 @@ const RELEASES = [
       ["💰", "100 ₺ ile kâr/zarar", "Karnede her tercihe ayrı ayrı 100 ₺ oynansaydı ne kazanılır/kaybedilirdi; yatırılan, dönen ve getiri oranı. Gün gün kâr/zarar."],
     ],
   },
+  {
+    id: 5, date: "20 Ekim 2026", title: "Yeni: Model asistanı", sub: "Bu güncellemede gelenler",
+    items: [
+      ["🤖", "Model asistanı", "Sağ üstteki robota dokun ve sor: \"Bugün Fenerbahçe maçı ne olur?\" Sitedeki analiz, oran ve tahminlerle cevap verir; ne oynayacağını ve riskini söyler."],
+      ["🎟️", "Garanti tercihler ve kupon", "\"Günün en garanti tercihleri\" ya da \"kupon\" yaz: en güvenilen tercihler, toplam oran ve tutma ihtimali."],
+      ["🏃", "Oyuncu soruları", "\"Salah kaç gol attı?\" gibi sorulara oyuncu istatistikleriyle cevap."],
+      ["📅", "Takvim simgesi", "Tarih çubuğu kalktı; Filtre butonunun yanındaki takvimden gün değiştirebilirsin."],
+    ],
+  },
 ];
 function showWhatsNew() {
   const seen = +(safeGet("seenRelease") || 0);
@@ -1239,6 +1262,7 @@ async function boot() {
   }
   ready = true;
   $("#toolbar").classList.remove("hidden");
+  document.body.classList.remove("locked");
   await initLeagues();
   route();
   showWhatsNew();
@@ -1247,6 +1271,7 @@ async function boot() {
 }
 
 $("#date").value = state.date;
+updateCalLabel();
 $("#date").onchange = (e) => setDate(e.target.value);
 $("#prevDay").onclick = () => shiftDay(-1);
 $("#nextDay").onclick = () => shiftDay(1);

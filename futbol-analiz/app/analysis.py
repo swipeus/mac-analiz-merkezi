@@ -43,6 +43,14 @@ def tr_return(s):
         return "Maça yetişmesi şüpheli"
     if low in ("unknown", "no return date"):
         return "Belirsiz"
+    fixed = {"day to day": "Günlük kontrol ediliyor", "few weeks": "Birkaç hafta", "few days": "Birkaç gün",
+             "end of season": "Sezon sonu", "next season": "Gelecek sezon", "long term": "Uzun süre", "long-term": "Uzun süre"}
+    if low in fixed:
+        return fixed[low]
+    m = re.fullmatch(r"(?:about |approx\.? |around )?(\d+(?:\s*-\s*\d+)?)\s+(day|days|week|weeks|month|months)", low)
+    if m:
+        unit = {"day": "gün", "week": "hafta", "month": "ay"}[m.group(2).rstrip("s")]
+        return f"Yaklaşık {m.group(1).replace(' ', '')} {unit}"
     parts = s.split()
     if len(parts) == 3 and parts[0] in PHASE and parts[1] in MONTHS:
         return f"{MONTHS[parts[1]]} {parts[2]} {PHASE[parts[0]]}"

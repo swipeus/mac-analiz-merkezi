@@ -55,7 +55,7 @@ STAT_KEYS = {
 _season_memo = {}
 
 # Analiz/paket biçimi değişince artırılır; eski sürümle üretilmiş paketler yeniden oluşturulur
-BUNDLE_VERSION = 5
+BUNDLE_VERSION = 6
 
 
 def _num(v):
@@ -259,6 +259,7 @@ def parse_lineup(lu):
             "value": p.get("marketValue"),
             "age": p.get("age"),
             "country": p.get("countryName"),
+            "cc": p.get("countryCode"),
             "type": un.get("type"),
             "return": analysis.tr_return(un.get("expectedReturn")),
         }

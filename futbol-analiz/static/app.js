@@ -327,7 +327,7 @@ function matchHtml(b) {
   const chips = [
     b.round && chip("🗓️", esc(b.round) + ". hafta"),
     b.venue && chip("🏟️", esc(b.venue)),
-    b.referee && chip("🧑‍⚖️", "Hakem: " + esc(b.referee)),
+    b.referee && chip(WHISTLE, "Hakem: " + esc(b.referee)),
     w && chip(weatherIcon(w.description), `${w.temperature}°C · ${esc(cap(trWeather(w.description)))}${w.windSpeed != null ? ` · Rüzgar ${w.windSpeed} m/s` : ""}`),
   ].filter(Boolean).join("");
   const conf = { "Yüksek": "#3fb950", "Orta": "#d29922", "Düşük": "#f85149" }[P.confidence] || "#8b98a8";
@@ -478,6 +478,8 @@ function marketHtml(m, probs, safe, sur, b) {
 
 const kpi = (ic, color, l, v, s) => `<div class="kpi" style="--k:${color}"><div class="l"><span class="ki">${ic}</span>${esc(l)}</div><div class="v">${esc(v)}</div><div class="s">${esc(s || "")}</div></div>`;
 const head = (ic, title, extra = "") => `<h2 class="ch"><span class="ci">${ic}</span><span class="ct">${title}</span>${extra}</h2>`;
+// hakem düdüğü (emoji setinde düdük yok)
+const WHISTLE = `<svg class="whistle" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M3 10.5a5.5 5.5 0 0 0 9.9 3.3H21V9.5h-8.4l-1.8-1.6A5.5 5.5 0 0 0 3 10.5z" fill="#c9d1d9"/><circle cx="8.5" cy="10.5" r="2.2" fill="#0d1117"/><rect x="14.5" y="7.2" width="3" height="2.6" rx=".8" fill="#c9d1d9"/><path d="M8.5 5V2.8" stroke="#e3b341" stroke-width="1.6" stroke-linecap="round"/></svg>`;
 const chip = (ic, html) => `<span class="mchip"><span>${ic}</span>${html}</span>`;
 const cap = (s) => s ? s.charAt(0).toLocaleUpperCase("tr") + s.slice(1) : s;
 function weatherIcon(d) {
@@ -565,6 +567,14 @@ const COUNTRY_TR = {
   "Andorra": "Andorra", "Liechtenstein": "Lihtenştayn", "San Marino": "San Marino", "Gibraltar": "Cebelitarık",
 };
 const countryTr = (c) => COUNTRY_TR[c] || c;
+// FotMob ülke adı -> FIFA kodu (bayrak görseli için); kadrolarda kod doğrudan gelir
+const COUNTRY_CODE = {"Albania":"ALB","Algeria":"ALG","Andorra":"AND","Angola":"ANG","Argentina":"ARG","Armenia":"ARM","Australia":"AUS","Austria":"AUT","Azerbaijan":"AZE","Bangladesh":"BAN","Barbados":"BRB","Belarus":"BLR","Belgium":"BEL","Benin":"BEN","Bolivia":"BOL","Bosnia and Herzegovina":"BIH","Botswana":"BOT","Brazil":"BRA","Bulgaria":"BUL","Burkina Faso":"BFA","Burundi":"BDI","Cameroon":"CMR","Canada":"CAN","Cape Verde":"CPV","Central African Rep.":"CTA","Chad":"CHA","Chile":"CHI","Colombia":"COL","Comoros":"COM","Congo":"CGO","Costa Rica":"CRC","Croatia":"CRO","Cuba":"CUB","Curacao":"CUW","Curaçao":"CUW","Cyprus":"CYP","Czechia":"CZE","Côte d'Ivoire":"CIV","DR Congo":"COD","Denmark":"DEN","Dominican Republic":"DOM","Ecuador":"ECU","Egypt":"EGY","England":"ENG","Equatorial Guinea":"EQG","Eritrea":"ERI","Estonia":"EST","Faroe Islands":"FRO","Finland":"FIN","France":"FRA","Gabon":"GAB","Gambia":"GAM","Georgia":"GEO","Germany":"GER","Ghana":"GHA","Gibraltar":"GIB","Greece":"GRE","Grenada":"GRN","Guadeloupe":"GLP","Guinea":"GUI","Guinea-Bissau":"GNB","Guyana":"GUY","Haiti":"HAI","Honduras":"HON","Hungary":"HUN","Iceland":"ISL","Indonesia":"IDN","Iran":"IRN","Iraq":"IRQ","Ireland":"IRL","Israel":"ISR","Italy":"ITA","Ivory Coast":"CIV","Jamaica":"JAM","Japan":"JPN","Jordan":"JOR","Kazakhstan":"KAZ","Kenya":"KEN","Korea Republic":"KOR","Kosovo":"KVX","Latvia":"LVA","Lebanon":"LIB","Liberia":"LBR","Liechtenstein":"LIE","Lithuania":"LTU","Luxembourg":"LUX","Madagascar":"MAD","Malaysia":"MAS","Mali":"MLI","Martinique":"MTQ","Mauritania":"MTN","Mexico":"MEX","Moldova":"MDA","Mongolia":"MGL","Montenegro":"MNE","Morocco":"MAR","Mozambique":"MOZ","Netherlands":"NED","Netherlands Antilles":"ANT","New Zealand":"NZL","Nicaragua":"NCA","Niger":"NIG","Nigeria":"NGA","North Macedonia":"MKD","Northern Ireland":"NIR","Norway":"NOR","Pakistan":"PAK","Palestine":"PLE","Panama":"PAN","Paraguay":"PAR","Peru":"PER","Philippines":"PHI","Poland":"POL","Portugal":"POR","Puerto Rico":"PUR","Republic of Ireland":"IRL","Romania":"ROU","Russia":"RUS","Rwanda":"RWA","Sao Tome and Principe":"STP","Saudi Arabia":"KSA","Scotland":"SCO","Senegal":"SEN","Serbia":"SRB","Sierra Leone":"SLE","Slovakia":"SVK","Slovenia":"SVN","Somalia":"SOM","South Africa":"RSA","South Korea":"KOR","Spain":"ESP","St. Kitts and Nevis":"SKN","Suriname":"SUR","Sweden":"SWE","Switzerland":"SUI","Syria":"SYR","Tajikistan":"TJK","Tanzania":"TAN","Thailand":"THA","The Gambia":"GAM","Togo":"TOG","Trinidad and Tobago":"TRI","Tunisia":"TUN","Turkiye":"TUR","USA":"USA","Uganda":"UGA","Ukraine":"UKR","Uruguay":"URU","Uzbekistan":"UZB","Venezuela":"VEN","Wales":"WAL","Zambia":"ZAM","Zimbabwe":"ZIM","Türkiye":"TUR","Turkey":"TUR","United States":"USA"};
+function flagHtml(name, code) {
+  const c = (code || COUNTRY_CODE[name] || "").toLowerCase();
+  const label = esc(countryTr(name) || "");
+  if (!c) return label;
+  return `<img class="flag" src="https://images.fotmob.com/image_resources/logo/teamlogo/${c}.png" alt="${label}" title="${label}" loading="lazy" onerror="this.replaceWith(document.createTextNode('${label.replace(/'/g, "")}'))">`;
+}
 
 // Oyuncu fotoğrafı (FotMob); yüklenemezse forma numarası ya da boş avatar gösterilir
 function playerImg(id, shirt) {
@@ -616,7 +626,7 @@ function lineupHtml(b) {
     <div class="muted">Teknik direktör: ${esc(lu[s].coach || "—")}${lu[s].avg_age ? " · İlk 11 yaş ort. " + nf(lu[s].avg_age, 1) : ""}</div>
     <ul class="plist">${(lu[s].starters || []).map((p) => `<li class="prow" data-pid="${Number(p.id) || 0}">${playerImg(p.id, p.shirt)}
       <div class="pinfo"><b>${p.shirt ? `<span class="shirt">${esc(p.shirt)}</span>` : ""}${esc(p.name)}</b>
-        <small>${[countryTr(p.country), p.age ? p.age + " yaş" : ""].filter(Boolean).map(esc).join(" · ")}</small></div>
+        <small class="pmeta">${p.country ? flagHtml(p.country, p.cc) : ""}${p.age ? `<span>${p.age} yaş</span>` : ""}</small></div>
       ${p.rating ? `<span class="prt">${nf(p.rating, 2)}</span>` : ""}</li>`).join("")}</ul>
     <h3>Eksikler</h3><ul class="plist">${abs(s)}</ul></div>`;
   return `<div class="card" style="--c:#2ea043">${head("👥", "Kadrolar", tag)}
@@ -757,9 +767,14 @@ async function renderKarne(silent) {
 // karnede tercih türü (örn. "MS 1 (Liverpool)" -> "MS 1")
 const pickType = (p) => {
   const c = p.code || "";
+  if (["1", "X", "2"].includes(c)) return "Maç sonucu";
+  if (["1X", "12", "X2"].includes(c)) return "Çifte şans";
+  if (/^dnb/.test(c)) return "Beraberlikte iade";
+  if (/^btts/.test(c)) return "Karşılıklı gol";
+  if (/^[ou]\d/.test(c) || c === "o25" || c === "u25") return "Gol alt/üst";
   if (/^cm/.test(c)) return "En çok korner";
   if (/^rc/.test(c)) return "Kırmızı kart";
-  if (/^dnb/.test(c)) return "Beraberlikte iade";
+  if (/^cs:/.test(c)) return "Skor";
   return (p.label || "").replace(/ \(.*\)$/, "");
 };
 const STAKE = 100;
@@ -953,7 +968,7 @@ function playerHero(p) {
     i.age && chip("🎂", esc(i.age) + " yaş"),
     i.height && chip("📏", esc(i.height)),
     i.foot && chip("🦶", esc(FOOT_TR[i.foot] || i.foot) + " ayak"),
-    i.country && chip("🌍", esc(countryTr(i.country))),
+    i.country && chip(flagHtml(i.country), `<span class="sr">${esc(countryTr(i.country))}</span>`),
     i.value && chip("💶", esc(i.value)),
     p.contract && chip("📝", "Sözleşme: " + esc(new Date(p.contract).toLocaleDateString("tr-TR", { month: "long", year: "numeric" }))),
   ].filter(Boolean).join("");

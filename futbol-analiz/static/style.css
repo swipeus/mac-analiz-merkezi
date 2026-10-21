@@ -588,3 +588,10 @@ body.chat-open { overflow: hidden; }
 .mtabs .ptab.tlive::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #f85149; animation: pulse 1.2s infinite; }
 .mtab-body { min-height: 50vh; }
 @media (max-width: 700px) { .mtabs { top: 54px; margin: 8px -12px 0; padding: 8px 12px; } }
+
+/* bayrak ve düdük */
+.flag { width: 20px; height: 14px; object-fit: cover; border-radius: 2px; vertical-align: -2px; box-shadow: 0 0 0 1px rgba(255,255,255,.15); }
+.pmeta { display: inline-flex; align-items: center; gap: 6px; }
+.mchip .flag { width: 22px; height: 15px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.whistle { display: block; }

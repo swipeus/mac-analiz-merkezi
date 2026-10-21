@@ -1,16 +1,15 @@
 name: Verileri güncelle ve yayınla
 
+# Tek bir iş ~5.5 saat açık kalır ve 6 dakikada bir veriyi yeniler (GitHub'ın zamanlayıcısı 15 dk ayarını
+# 30-45 dakikaya geciktirdiği için). Bitince kendini yeniden başlatır; saatlik zamanlama yedek olarak durur.
 on:
   schedule:
-    - cron: "*/15 * * * *"   # 15 dakikada bir (GitHub bazen birkaç dakika geciktirir)
+    - cron: "17 * * * *"
   workflow_dispatch:
-  push:
-    branches: [main]
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write   # gh-pages dalına yayın
+  actions: write    # kendini yeniden başlatma
 
 concurrency:
   group: guncelle
@@ -19,10 +18,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
+    timeout-minutes: 345
     steps:
       - uses: actions/checkout@v5
 
@@ -34,20 +30,24 @@ jobs:
 
       - run: pip install -r futbol-analiz/requirements-build.txt
 
-      # Önceki çalıştırmaların önbelleği ve analizleri (değişiklik bildirimleri için gerekli)
+      # Önceki çalıştırmaların önbelleği ve analizleri (değişiklik bildirimleri ve karne için gerekli)
       - uses: actions/cache/restore@v4
         with:
           path: futbol-analiz/data
           key: veri-${{ github.run_id }}
           restore-keys: veri-
 
-      - name: Verileri topla, analiz et, şifrele
+      - name: Sürekli güncelle (6 dakikada bir yayın)
         working-directory: futbol-analiz
         env:
           SITE_PASSWORD: ${{ secrets.SITE_PASSWORD }}
           DATA_DIR: data
           PAGES_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
-        run: python build_static.py ../_site
+          GH_TOKEN: ${{ github.token }}
+          LOOP_MINUTES: "320"
+          PUBLISH_EVERY: "360"
+          PLAYER_BUDGET: "150"
+        run: bash ../.github/scripts/loop.sh
 
       - uses: actions/cache/save@v4
         if: always()
@@ -55,9 +55,8 @@ jobs:
           path: futbol-analiz/data
           key: veri-${{ github.run_id }}
 
-      - uses: actions/upload-pages-artifact@v4
-        with:
-          path: _site
-
-      - id: deploy
-        uses: actions/deploy-pages@v4
+      - name: Kendini yeniden başlat
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run guncelle.yml --repo ${{ github.repository }} --ref main

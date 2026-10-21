@@ -49,10 +49,14 @@ def record(store, b):
 
 
 def seed(store, rows):
-    """Önbellek kaybolduysa yayındaki karneden geçmişi geri yükler (mevcut kayıtların üstüne yazmaz)."""
+    """Yayındaki karneyi yerel kayıtlarla birleştirir: eksik kayıtları ekler, yerelde hâlâ "bekliyor" olup
+    yayında sonuçlanmış kayıtları günceller (önbellek eski bir sürüme döndüğünde geçmiş kaybolmasın)."""
     n = 0
     for r in rows or []:
-        if r.get("id") and not store.pred_get(r["id"]):
+        if not r.get("id"):
+            continue
+        local = store.pred_get(r["id"])
+        if not local or (local.get("state") == "pending" and r.get("state") == "done"):
             store.pred_put(r["id"], r)
             n += 1
     return n

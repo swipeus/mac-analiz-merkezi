@@ -157,6 +157,7 @@ async function renderDay(silent) {
       <div class="mgrid">${list.map(cardHtml).join("")}</div>
     </section>`).join("");
   v.querySelectorAll("[data-id]").forEach((r) => r.onclick = () => location.hash = "#/mac/" + r.dataset.id);
+  if (typeof liveTick === "function") setTimeout(liveTick, 50);  // kartlara anlık skorları uygula
 }
 
 const teamLogo = (id) => `https://images.fotmob.com/image_resources/logo/teamlogo/${id}.png`;
@@ -268,6 +269,7 @@ async function renderMatch(id, silent, refresh) {
 }
 const REFRESH_LABEL = () => STATIC ? "Yeni veri var mı?" : "Şimdi yenile";
 function bindMatch() {
+  if (typeof liveTick === "function") setTimeout(liveTick, 50);  // canlı kutuyu hemen doldur
   $("#view").querySelectorAll("[data-mt]").forEach((t) => t.onclick = () => {
     matchTab = t.dataset.mt;
     const y = window.scrollY;
@@ -332,6 +334,7 @@ function matchHtml(b) {
   </div>
   ${matchTabsHtml(b)}
   ${matchTab === "odds" ? oddsHtml(b) : `
+  <div id="liveBox"></div>
   ${commentaryHtml(A)}
   <div class="card" style="--c:#a371f7">
     ${head("🎯", "Tahmin ve model özeti")}
@@ -1135,7 +1138,9 @@ async function showLogin(err) {
     } catch (ex) { $("#loginErr").textContent = "Hata: " + ex.message; }
   };
 }
+let RAW_KEY = null;  // canlı köprü anahtarı bundan türetilir (canli.js)
 async function unlockWith(raw) {
+  RAW_KEY = raw;
   KEY = await importAesKey(raw);
   try { meta = await getData("meta.json"); return true; }
   catch (e) { KEY = null; if (e.message === "NOTFOUND") throw new Error("Site verisi henüz yayınlanmadı"); return false; }

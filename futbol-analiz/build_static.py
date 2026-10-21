@@ -40,11 +40,13 @@ async def main(out):
     if not pages and "/" in os.environ.get("GITHUB_REPOSITORY", ""):
         owner, repo = os.environ["GITHUB_REPOSITORY"].split("/", 1)
         pages = f"https://{owner.lower()}.github.io/{repo}/"
-    if pages and not store.pred_all():
+    last = store.cache_get("karne:synced")
+    if pages and (not last or time.time() - last[0] > 5 * 3600):  # her yeni işin başında (≈5.5 saatte bir)
         try:
             r = await src.client.get(pages.rstrip("/") + f"/data/karne.json?t={int(time.time())}")
             if r.status_code == 200:
-                log.info("karne geri yüklendi: %s kayıt", karne.seed(store, unseal(key, r.json())))
+                log.info("karne yayındakiyle birleştirildi: %s kayıt", karne.seed(store, unseal(key, r.json())))
+                store.cache_put("karne:synced", True)
         except Exception as e:  # noqa: BLE001
             log.warning("karne geri yüklenemedi: %s", e)
     await up.cycle()
@@ -95,12 +97,14 @@ async def main(out):
         "leagues": [{"id": k, "name": v} for k, v in LEAGUES.items()],
         "matches": n_match,
         "took": round(time.time() - t0, 1),
+        # canlı veri köprüsü (Cloudflare Worker) adresi; anahtar tarayıcıda şifreden türetilir
+        "live": {"url": os.environ.get("LIVE_URL") or None},
     })
 
     # arayüz: göreli yollar + statik mod işareti. Dosyalara içerik özetiyle sürüm eklenir ki
     # tarayıcı önbelleği eski sayfayla yeni kodu (ya da tersini) karıştırmasın.
     html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
-    for f in ("app.js", "asistan.js", "style.css"):
+    for f in ("app.js", "asistan.js", "canli.js", "style.css"):
         shutil.copy(STATIC_DIR / f, out / f)
         ver = hashlib.sha1((STATIC_DIR / f).read_bytes()).hexdigest()[:10]
         html = html.replace(f'"/static/{f}"', f'"{f}?v={ver}"')

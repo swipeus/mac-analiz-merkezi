@@ -283,7 +283,7 @@ function bindMatch() {
     btn.textContent = STATIC ? "Kontrol ediliyor…" : "Yenileniyor…";
     try {
       if (STATIC) {
-        // çevrimiçi sürümde veri GitHub'da 15 dk'da bir üretilir; burada sadece yenisi yayınlanmış mı bakılır
+        // çevrimiçi sürümde analiz GitHub'da 6 dk'da bir üretilir; burada sadece yenisi yayınlanmış mı bakılır
         const m = await getData("meta.json");
         const fresh = !meta || m.updated !== meta.updated;
         meta = m; showUpdated();
@@ -292,7 +292,7 @@ function bindMatch() {
           toast({ text: "Yeni veriler yüklendi", match_id: state.current });
           return;
         }
-        const left = Math.round((m.updated + 15 * 60 - Date.now() / 1000) / 60);
+        const left = Math.round((m.updated + 6 * 60 - Date.now() / 1000) / 60);
         btn.textContent = "Güncel ✓ · yeni veri " + (left > 0 ? `~${left} dk içinde` : "birkaç dk içinde");
       } else {
         await renderMatch(state.current, true, true);
@@ -330,7 +330,7 @@ function matchHtml(b) {
       <div class="team">${crestHtml(b.away, fav === "away", P.p_away, 84)}<span>${esc(W)}</span>${formDots(b.recent.away.rows)}</div>
     </div>
     <div class="chips">${chips}</div>
-    <div class="updated">Son güncelleme: ${ago(b.updated)}${STATIC ? " (veriler 15 dk'da bir yenilenir)" : ""} · <button id="refreshBtn">${REFRESH_LABEL()}</button></div>
+    <div class="updated">Son güncelleme: ${ago(b.updated)}${STATIC ? " (analizler 6 dk'da bir, skorlar anlık yenilenir)" : ""} · <button id="refreshBtn">${REFRESH_LABEL()}</button></div>
   </div>
   ${matchTabsHtml(b)}
   ${matchTab === "odds" ? oddsHtml(b) : `
@@ -1228,6 +1228,16 @@ const RELEASES = [
       ["🎟️", "Garanti tercihler ve kupon", "\"Günün en garanti tercihleri\" ya da \"kupon\" yaz: en güvenilen tercihler, toplam oran ve tutma ihtimali."],
       ["🏃", "Oyuncu soruları", "\"Salah kaç gol attı?\" gibi sorulara oyuncu istatistikleriyle cevap."],
       ["📅", "Takvim simgesi", "Tarih çubuğu kalktı; Filtre butonunun yanındaki takvimden gün değiştirebilirsin."],
+    ],
+  },
+  {
+    id: 6, date: "21 Ekim 2026", title: "Yeni: Canlı veriler", sub: "Bu güncellemede gelenler",
+    items: [
+      ["🔴", "Anlık skor ve dakika", "Canlı maçların skoru ve dakikası artık saniyeler içinde geliyor; sayfa açıkken 30 saniyede bir yenilenir."],
+      ["⚽", "Gol bildirimi", "Açık sayfada gol olunca anında \"GOL!\" bildirimi çıkar."],
+      ["📜", "Maç olayları ve canlı istatistik", "Maç sayfasında goller, kartlar, oyuncu değişiklikleri ve canlı topla oynama, xG, şut, korner."],
+      ["📋", "Resmi 11 anında", "Resmi ilk 11'ler açıklandığı an maç sayfasında görünür."],
+      ["⏱️", "Analizler 6 dakikada bir", "Tahminler, oranlar ve haberler artık 30-45 dakika yerine 6 dakikada bir yenileniyor."],
     ],
   },
 ];

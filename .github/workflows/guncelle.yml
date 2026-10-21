@@ -47,6 +47,7 @@ jobs:
           LOOP_MINUTES: "320"
           PUBLISH_EVERY: "360"
           PLAYER_BUDGET: "150"
+          LIVE_URL: https://mac-analiz-canli.macanaliz-8spa.workers.dev
         run: bash ../.github/scripts/loop.sh
 
       - uses: actions/cache/save@v4

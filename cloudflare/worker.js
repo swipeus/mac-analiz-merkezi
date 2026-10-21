@@ -19,7 +19,8 @@ export default {
     };
     if (req.method === "OPTIONS") return new Response(null, { headers: cors });
     if (url.pathname === "/") return json({ ok: true, service: "mac-analiz-canli" }, 200, cors);
-    if (!env.ACCESS_KEY || req.headers.get("X-Key") !== env.ACCESS_KEY) return json({ error: "yetkisiz" }, 401, cors);
+    const expected = (env.ACCESS_KEY || "").trim();  // gizli değişkene satır sonu karışabiliyor
+    if (!expected || (req.headers.get("X-Key") || "").trim() !== expected) return json({ error: "yetkisiz" }, 401, cors);
     try {
       if (url.pathname === "/day") {
         const date = (url.searchParams.get("date") || "").replace(/\D/g, "");

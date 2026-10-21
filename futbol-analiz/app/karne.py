@@ -60,3 +60,30 @@ def seed(store, rows):
             store.pred_put(r["id"], r)
             n += 1
     return n
+
+
+FROZEN_KEYS = ("prediction", "summary", "scenarios", "commentary")
+
+
+def freeze(store, b, old_body):
+    """Başlama düdüğünden sonra maç sayfasındaki tahmin değişmesin: maç öncesi son analizi korur.
+    Önce önceki paketin dondurulmuş kopyası, yoksa maç öncesi son paketin analizi kullanılır; o da yoksa
+    (bu düzeltmeden önce başlamış maçlar) en azından garanti tercih ve skor karnedeki kayıtla eşitlenir."""
+    if not (b.get("status") or {}).get("started"):
+        b.pop("frozen", None)
+        return b
+    snap = None
+    if old_body:
+        if old_body.get("frozen"):
+            snap = old_body["frozen"]
+        elif not (old_body.get("status") or {}).get("started"):
+            snap = {k: old_body["analysis"][k] for k in FROZEN_KEYS if k in old_body.get("analysis", {})}
+    if snap:
+        b["frozen"] = snap
+        b["analysis"].update(snap)
+    rec = store.pred_get(b["id"])
+    if rec:
+        pr = b["analysis"]["prediction"]
+        pr["best_pick"], pr["score_pick"] = rec["pick"], rec["score"]
+    b["analysis"]["frozen"] = True
+    return b

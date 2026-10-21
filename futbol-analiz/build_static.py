@@ -74,7 +74,8 @@ async def main(out):
         for m in matches:
             b = store.bundle_get(m["id"])
             if b:
-                write(f"match-{m['id']}.json", b["body"])
+                # başlamış maçlarda sayfadaki tahmin karnedeki (maç öncesi) kayıtla aynı olsun
+                write(f"match-{m['id']}.json", karne.freeze(store, b["body"], b["body"]))
                 n_match += 1
                 player_ids += players.lineup_player_ids(b["body"])
     days.sort()

@@ -337,7 +337,7 @@ function matchHtml(b) {
   <div id="liveBox"></div>
   ${commentaryHtml(A)}
   <div class="card" style="--c:#a371f7">
-    ${head("🎯", "Tahmin ve model özeti")}
+    ${head("🎯", `Tahmin ve model özeti${A.frozen ? ` <span class="muted">· maç öncesi tahmin, başlama düdüğünde donduruldu 🔒</span>` : ""}`)}
     <div class="summary">${esc(A.summary)}</div>
     <div class="bigbar">
       <div style="flex:${P.p_home};background:var(--home)" title="${esc(H)} kazanır">1 ${pc(P.p_home)}</div>

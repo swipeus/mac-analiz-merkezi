@@ -91,6 +91,7 @@ class Updater:
     async def _refresh(self, match_id, day):
         old = self.store.bundle_get(match_id)
         b = await collect.build_bundle(self.src, match_id, (old or {}).get("body", {}).get("odds"))
+        karne.freeze(self.store, b, (old or {}).get("body"))
         sig = collect.signature(b)
         self.store.bundle_put(match_id, day, sig, b)
         karne.record(self.store, b)

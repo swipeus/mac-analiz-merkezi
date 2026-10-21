@@ -64,9 +64,9 @@ async function liveMatch(id) {
     sc.classList.toggle("live", live);
     sc.innerHTML = `${d.home.score ?? 0} - ${d.away.score ?? 0}<small>${esc(live ? (st.live || "Canlı") : st.finished ? "Maç sonu" : "")}</small>`;
   }
-  const box = document.getElementById("liveBox");
-  if (!box) return;
-  const parts = [];
+  const box = document.getElementById("liveBox"), lbox = document.getElementById("liveLineup");
+  if (!box && !lbox) return;
+  const parts = [], lineupParts = [];
   if (st.started) {
     const evs = d.events.slice().sort((a, b) => (b.min + (b.plus || 0) / 100) - (a.min + (a.plus || 0) / 100));
     const evHtml = evs.length ? evs.map((e) => {
@@ -92,10 +92,11 @@ async function liveMatch(id) {
   const staticType = (lastB && lastB.lineup && lastB.lineup.type) || null;
   if (lu.type && !["predicted", "lastStarting11"].includes(lu.type) && staticType !== lu.type && lu.home && lu.away && !st.finished) {
     const side = (t, name) => `<div><h3>${esc(name)} · ${esc(t.formation || "")}</h3><div class="muted">${t.starters.map((p) => `${esc(p.shirt || "")} ${esc(p.name)}`).join(" · ")}</div></div>`;
-    parts.push(`<div class="card" style="--c:#2ea043">${head("📋", `Resmi ilk 11'ler açıklandı <span class="muted">· analiz birkaç dakika içinde güncellenecek</span>`)}
+    lineupParts.push(`<div class="card" style="--c:#2ea043">${head("📋", `Resmi ilk 11'ler açıklandı <span class="muted">· analiz birkaç dakika içinde güncellenecek</span>`)}
       <div class="grid2">${side(lu.home, d.home.name)}${side(lu.away, d.away.name)}</div></div>`);
   }
-  box.innerHTML = parts.join("");
+  if (box) box.innerHTML = parts.join("") || `<div class="card"><p class="muted">Maç henüz başlamadı.</p></div>`;
+  if (lbox) lbox.innerHTML = lineupParts.join("");
 }
 
 async function liveTick() {
@@ -104,7 +105,10 @@ async function liveTick() {
   try {
     if (state.current) await liveMatch(state.current);
     else if (!state.player && !state.karne) await liveDay();
-  } catch (e) { /* bağlantı sorunu: bir sonraki turda tekrar */ }
+  } catch (e) {
+    const box = document.getElementById("liveBox");
+    if (box && !box.querySelector(".live-card")) box.innerHTML = `<div class="card"><p class="muted">Canlı verilere şu an ulaşılamıyor; 30 saniye içinde tekrar denenecek.</p></div>`;
+  }
   LIVE.busy = false;
 }
 // sayfa değişince ve görünür olunca hemen, sonra 30 sn'de bir

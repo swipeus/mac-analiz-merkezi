@@ -250,7 +250,11 @@ function lineupTag(t, long) {
 const WEATHER = { "clear": "açık", "sunny": "güneşli", "mostly sunny": "çoğunlukla güneşli", "partly cloudy": "parçalı bulutlu",
   "mostly cloudy": "çok bulutlu", "cloudy": "bulutlu", "overcast": "kapalı", "fog": "sisli", "light rain": "hafif yağmurlu",
   "rain": "yağmurlu", "showers": "sağanak", "heavy rain": "şiddetli yağmur", "thunderstorms": "fırtınalı", "snow": "karlı", "windy": "rüzgarlı",
-  "mostly clear": "çoğunlukla açık", "partly sunny": "parçalı güneşli", "drizzle": "çiseleyen yağmur" };
+  "mostly clear": "çoğunlukla açık", "partly sunny": "parçalı güneşli", "drizzle": "çiseleyen yağmur",
+  "scattered thunderstorms": "yer yer gök gürültülü sağanak", "isolated thunderstorms": "yer yer gök gürültülü sağanak",
+  "scattered showers": "yer yer sağanak", "light rain showers": "hafif sağanak", "rain showers": "sağanak", "light showers": "hafif sağanak",
+  "thunderstorm": "gök gürültülü sağanak", "mist": "puslu", "haze": "puslu", "fair": "açık", "light snow": "hafif karlı",
+  "rain and snow": "karla karışık yağmur", "freezing rain": "dondurucu yağmur", "mostly cloudy night": "çok bulutlu", "clear night": "açık" };
 const trWeather = (d) => WEATHER[(d || "").toLowerCase()] || d || "";
 
 /* ---------- maç detayı ---------- */
@@ -263,6 +267,7 @@ async function renderMatch(id, silent, refresh) {
   if (state.current !== id) return;
   const y = window.scrollY;
   lastB = b;
+  if (matchTabId !== id) { matchTab = defaultMatchTab(b); matchTabId = id; }  // yeni maç: varsayılan sekme
   v.innerHTML = matchHtml(b);
   bindMatch();
   if (silent) window.scrollTo(0, y);
@@ -272,12 +277,17 @@ function bindMatch() {
   if (typeof liveTick === "function") setTimeout(liveTick, 50);  // canlı kutuyu hemen doldur
   $("#view").querySelectorAll("[data-mt]").forEach((t) => t.onclick = () => {
     matchTab = t.dataset.mt;
-    const y = window.scrollY;
-    $("#view").innerHTML = matchHtml(lastB);
-    bindMatch();
-    window.scrollTo(0, y);
+    $("#view").querySelectorAll("[data-mt]").forEach((x) => x.classList.toggle("on", x.dataset.mt === matchTab));
+    $(".mtab-body").innerHTML = matchTabBody(lastB);
+    // aşağı kaydırılmışsa yeni sekmenin başına dön (sekme çubuğu üstte sabit kalır)
+    const bar = $(".mtabs"), body = $(".mtab-body");
+    const target = body.getBoundingClientRect().top + window.scrollY - bar.offsetHeight - 64;
+    if (window.scrollY > target) window.scrollTo(0, target);
+    t.scrollIntoView({ inline: "center", block: "nearest" });
+    if (typeof liveTick === "function") setTimeout(liveTick, 50);
   });
   const btn = $("#refreshBtn");
+  if (!btn) return;
   btn.onclick = async () => {
     btn.disabled = true;
     btn.textContent = STATIC ? "Kontrol ediliyor…" : "Yenileniyor…";
@@ -330,12 +340,59 @@ function matchHtml(b) {
       <div class="team">${crestHtml(b.away, fav === "away", P.p_away, 84)}<span>${esc(W)}</span>${formDots(b.recent.away.rows)}</div>
     </div>
     <div class="chips">${chips}</div>
-    <div class="updated">Son güncelleme: ${ago(b.updated)}${STATIC ? " (analizler 6 dk'da bir, skorlar anlık yenilenir)" : ""} · <button id="refreshBtn">${REFRESH_LABEL()}</button></div>
+    <div class="updated">${b.status.finished ? "Maç sona erdi · tahminler maç öncesi hâliyle saklanıyor"
+      : `Son güncelleme: ${ago(b.updated)}${STATIC ? " (analizler 6 dk'da bir, skorlar anlık yenilenir)" : ""} · <button id="refreshBtn">${REFRESH_LABEL()}</button>`}</div>
   </div>
   ${matchTabsHtml(b)}
-  ${matchTab === "odds" ? oddsHtml(b) : `
-  <div id="liveBox"></div>
-  ${commentaryHtml(A)}
+  <div class="mtab-body">${matchTabBody(b)}</div>`;
+}
+
+/* ---------- maç sayfası sekmeleri ----------
+   Başlamış maçlar Canlı (bittiyse Maç) sekmesinde, diğerleri Özet sekmesinde açılır. */
+function defaultMatchTab(b) { return b.status && (b.status.started || b.status.finished) ? "live" : "ozet"; }
+function matchTabList(b) {
+  const st = b.status || {}, live = st.started && !st.finished;
+  const nOdds = (b.odds && b.odds.markets || []).length;
+  const nNews = ((b.news.home.tr || []).length + (b.news.away.tr || []).length);
+  const t = [];
+  if (st.started || st.finished) t.push(["live", live ? "🔴 Canlı" : "🏁 Maç", live ? (st.live || "") : ""]);
+  t.push(["ozet", "📊 Özet", ""], ["kadro", "👥 Kadrolar", b.lineup ? lineupTypeShort(b.lineup.type) : ""],
+    ["analiz", "🧠 Takım analizi", ""], ["istat", "📈 İstatistikler", ""],
+    ["odds", "💰 Oranlar", nOdds ? nOdds + " pazar" : ""], ["haber", "📰 Haberler", nNews ? String(nNews) : ""]);
+  return t;
+}
+const lineupTypeShort = (t) => ({ predicted: "olası", lastStarting11: "son 11" }[t] || (t ? "resmi" : ""));
+function matchTabsHtml(b) {
+  return `<div class="ptabs mtabs">${matchTabList(b).map(([k, l, sub]) =>
+    `<button class="ptab ${matchTab === k ? "on" : ""} ${k === "live" && b.status.started && !b.status.finished ? "tlive" : ""}" data-mt="${k}">${l}${sub ? ` <small>${esc(sub)}</small>` : ""}</button>`).join("")}</div>`;
+}
+function matchTabBody(b) {
+  const A = b.analysis, H = b.home.name, W = b.away.name;
+  switch (matchTab) {
+    case "live":
+      return `<div id="liveBox"><div class="card"><p class="muted">Canlı veriler yükleniyor…</p></div></div>`;
+    case "kadro":
+      return `<div id="liveLineup"></div>${lineupHtml(b)}`;
+    case "analiz":
+      return `<div class="grid2">
+        ${teamHtml(A.home, b.home, b.recent.home.rows, "var(--home)")}
+        ${teamHtml(A.away, b.away, b.recent.away.rows, "var(--away)")}</div>`;
+    case "istat":
+      return `${compareHtml(b)}
+        <div class="grid2">${recentHtml(b.recent.home, H, "home-c")}${recentHtml(b.recent.away, W, "away-c")}</div>
+        ${seasonHtml(b)}`;
+    case "odds":
+      return oddsHtml(b);
+    case "haber":
+      return `<div class="grid2">${newsHtml(b.news.home, H, "home-c")}${newsHtml(b.news.away, W, "away-c")}</div>${extrasHtml(b)}`;
+    default:
+      return `${commentaryHtml(A)}${predictionHtml(b)}`;
+  }
+}
+function predictionHtml(b) {
+  const A = b.analysis, P = A.prediction, H = b.home.name, W = b.away.name;
+  const conf = { "Yüksek": "#3fb950", "Orta": "#d29922", "Düşük": "#f85149" }[P.confidence] || "#8b98a8";
+  return `
   <div class="card" style="--c:#a371f7">
     ${head("🎯", `Tahmin ve model özeti${A.frozen ? ` <span class="muted">· maç öncesi tahmin, başlama düdüğünde donduruldu 🔒</span>` : ""}`)}
     <div class="summary">${esc(A.summary)}</div>
@@ -358,27 +415,7 @@ function matchHtml(b) {
     </div>
     <h3>Olası senaryolar</h3>
     <ul class="scen">${A.scenarios.map((s) => `<li><span class="si">${scenarioIcon(s)}</span><span>${esc(s)}</span></li>`).join("")}</ul>
-  </div>
-
-  ${lineupHtml(b)}
-
-  <div class="grid2">
-    ${teamHtml(A.home, b.home, b.recent.home.rows, "var(--home)")}
-    ${teamHtml(A.away, b.away, b.recent.away.rows, "var(--away)")}
-  </div>
-
-  ${compareHtml(b)}
-  <div class="grid2">
-    ${recentHtml(b.recent.home, H, "home-c")}
-    ${recentHtml(b.recent.away, W, "away-c")}
-  </div>
-  ${seasonHtml(b)}
-  <div class="grid2">
-    ${newsHtml(b.news.home, H, "home-c")}
-    ${newsHtml(b.news.away, W, "away-c")}
-  </div>
-  ${extrasHtml(b)}
-  `}`;
+  </div>`;
 }
 /* ---------- maç yorumu ---------- */
 function commentaryHtml(A) {
@@ -392,13 +429,7 @@ function commentaryHtml(A) {
 }
 
 /* ---------- maç sayfası sekmeleri ve oranlar ---------- */
-let matchTab = "analysis", matchTabId = null;
-function matchTabsHtml(b) {
-  const n = (b.odds && b.odds.markets || []).length;
-  return `<div class="ptabs mtabs">
-    <button class="ptab ${matchTab === "analysis" ? "on" : ""}" data-mt="analysis">📊 Analiz</button>
-    <button class="ptab ${matchTab === "odds" ? "on" : ""}" data-mt="odds">💰 Oranlar <small>${n ? n + " pazar" : "yok"}</small></button></div>`;
-}
+let matchTab = "ozet", matchTabId = null;
 const ODDS_GROUPS = ["Maç", "Goller", "Yarılar", "Korner", "Kart ve penaltı", "Skor", "Oyuncular", "Diğer"];
 const GROUP_IC = { "Maç": "⚽", "Goller": "🥅", "Yarılar": "⏱️", "Korner": "🚩", "Kart ve penaltı": "🟨", "Skor": "🎯", "Oyuncular": "🏃", "Diğer": "📋" };
 function oddsHtml(b) {
@@ -1083,7 +1114,7 @@ function route() {
   state.player = pm ? +pm[1] : null;
   state.karne = km;
   if (km) { state.current = null; window.scrollTo(0, 0); renderKarne(); }
-  else if (mm) { if (+mm[1] !== matchTabId) { matchTab = "analysis"; matchTabId = +mm[1]; } state.current = +mm[1]; window.scrollTo(0, 0); renderMatch(state.current); }
+  else if (mm) { state.current = +mm[1]; window.scrollTo(0, 0); renderMatch(state.current); }
   else if (pm) { state.current = null; window.scrollTo(0, 0); renderPlayer(state.player); }
   else { state.current = null; renderDay(); }
 }
@@ -1238,6 +1269,15 @@ const RELEASES = [
       ["📜", "Maç olayları ve canlı istatistik", "Maç sayfasında goller, kartlar, oyuncu değişiklikleri ve canlı topla oynama, xG, şut, korner."],
       ["📋", "Resmi 11 anında", "Resmi ilk 11'ler açıklandığı an maç sayfasında görünür."],
       ["⏱️", "Analizler 6 dakikada bir", "Tahminler, oranlar ve haberler artık 30-45 dakika yerine 6 dakikada bir yenileniyor."],
+    ],
+  },
+  {
+    id: 7, date: "21 Ekim 2026", title: "Yeni: Maç sekmeleri", sub: "Bu güncellemede gelenler",
+    items: [
+      ["🗂️", "Sekmeli maç sayfası", "Maç sayfası artık sekmelere ayrıldı: Özet, Kadrolar, Takım analizi, İstatistikler, Oranlar, Haberler."],
+      ["🔴", "Canlı sekmesi", "Maç başladıysa sayfa doğrudan Canlı sekmesinde açılır: olaylar ve maç istatistikleri anlık. Maç bitince sekmenin adı 🏁 Maç olur."],
+      ["📌", "Sabit sekme çubuğu", "Aşağı kaydırsan da sekmeler üstte kalır; tek dokunuşla geçiş."],
+      ["🔒", "Donmuş tahminler", "Maç başlayınca tahminler maç öncesi hâliyle kilitlenir; karne ile maç sayfası her zaman aynı."],
     ],
   },
 ];

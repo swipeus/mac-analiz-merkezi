@@ -580,3 +580,11 @@ body.chat-open { overflow: hidden; }
 .lev.goal { background: rgba(46,160,67,.14); }
 .lmin { font-weight: 800; color: var(--muted); font-variant-numeric: tabular-nums; }
 .lsc { font-variant-numeric: tabular-nums; }
+
+/* ---------- maç sekmeleri ---------- */
+.mtabs { position: sticky; top: 52px; z-index: 9; margin: 10px -4px 0; padding: 8px 4px; background: rgba(13,17,23,.92); backdrop-filter: blur(6px); }
+.mtabs .ptab { padding: 8px 13px; }
+.mtabs .ptab.tlive:not(.on) { border-color: rgba(248,81,73,.6); color: #ff7b72; }
+.mtabs .ptab.tlive::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #f85149; animation: pulse 1.2s infinite; }
+.mtab-body { min-height: 50vh; }
+@media (max-width: 700px) { .mtabs { top: 54px; margin: 8px -12px 0; padding: 8px 12px; } }

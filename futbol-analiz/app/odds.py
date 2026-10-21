@@ -14,7 +14,7 @@ log = logging.getLogger("odds")
 
 # FotMob her bölgede farklı şirket gösterir ve bu zamanla değişir; hepsi denenir, en çok pazar verenden başlanır
 REGIONS = ["IND", "DNK", "AUS", "KEN", "ESP", "MEX", "SWE"]
-ODDS_TTL = 15 * 60
+ODDS_TTL = 5 * 60
 
 MARKET_TR = {
     "who_will_win": ("Maç sonucu", "Maç"), "double_chance": ("Çifte şans", "Maç"),

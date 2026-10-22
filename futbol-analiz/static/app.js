@@ -27,7 +27,6 @@ const state = {
   date: todayStr(),
   leagues: [],
   off: new Set(JSON.parse(safeGet("offLeagues") || "[]")),
-  unread: 0,
   current: null, // açık maç id
   player: null, // açık oyuncu id
 };
@@ -1086,7 +1085,7 @@ function connect() {
   let pending = null;
   es.onmessage = (e) => {
     const ev = JSON.parse(e.data);
-    if (ev.text) { toast(ev); addFeed(ev, true); }
+    if (ev.text) addFeed(ev, true);
     clearTimeout(pending);
     pending = setTimeout(() => {
       if (state.current && ev.match_id === state.current) renderMatch(state.current, true);
@@ -1107,7 +1106,6 @@ function addFeed(ev, fresh) {
   li.onclick = () => { location.hash = "#/mac/" + ev.match_id; $("#feed").classList.add("hidden"); };
   const list = $("#feedList");
   fresh ? list.prepend(li) : list.append(li);
-  if (fresh) { state.unread++; $("#bellCount").textContent = state.unread; }
 }
 async function loadFeed() {
   try { (await api("/api/events/recent")).forEach((ev) => addFeed(ev, false)); } catch { }
@@ -1202,7 +1200,7 @@ function startPolling() {
       if (meta && m.updated === meta.updated) { showUpdated(); return; }
       meta = m; showUpdated();
       const evs = await getData("events.json");
-      evs.filter((e) => e.id > lastEv).reverse().forEach((ev) => { toast(ev); addFeed(ev, true); });
+      evs.filter((e) => e.id > lastEv).reverse().forEach((ev) => addFeed(ev, true));
       if (evs.length) { lastEv = Math.max(lastEv, evs[0].id); safeSet("lastEventId", String(lastEv)); }
       state.karne ? renderKarne(true) : state.player ? renderPlayer(state.player, true) : state.current ? renderMatch(state.current, true) : renderDay(true);
     } catch { /* bir sonraki turda tekrar dener */ }
@@ -1346,7 +1344,7 @@ $("#date").onchange = (e) => setDate(e.target.value);
 $("#prevDay").onclick = () => shiftDay(-1);
 $("#nextDay").onclick = () => shiftDay(1);
 $("#today").onclick = () => setDate(todayStr());
-$("#bell").onclick = () => { $("#feed").classList.toggle("hidden"); state.unread = 0; $("#bellCount").textContent = ""; };
+$("#bell").onclick = () => $("#feed").classList.toggle("hidden");
 window.addEventListener("hashchange", () => { if (ready) route(); });
 // liste görünümünü 60 sn'de bir sessizce tazele (canlı skorlar için)
 if (!STATIC) setInterval(() => { if (ready && !state.current) renderDay(true); }, 60000);

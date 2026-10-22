@@ -649,3 +649,11 @@ body.chat-open { overflow: hidden; }
   .cd b { font-size: 10.5px; }
   .calgrid { gap: 3px; }
 }
+
+/* karne: gün kartları tarihe dokununca açılır */
+.kday:not([open]) > summary .ch { margin-bottom: 0 !important; }
+.kdgrp > summary { list-style: none; cursor: pointer; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); margin: 10px 0; }
+.kdgrp > summary::-webkit-details-marker { display: none; }
+.kdgrp > summary::after { content: "▾"; color: var(--muted); margin-left: 6px; transition: transform .2s; }
+.kdgrp:not([open]) > summary::after { transform: rotate(-90deg); }
+.kdgrp > summary .kpl { margin-left: auto; }

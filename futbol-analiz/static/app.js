@@ -828,6 +828,7 @@ async function renderCoupons() {
 
 /* ---------- model karnesi ---------- */
 let karneRows = [], karneCoupons = [], karneStart = null, karneTab = "pick", calMonth = null;
+const karneOpen = new Set();  // açılan gün kartları (yenilemede kapanmasın)
 async function renderKarne(silent) {
   const v = $("#view");
   if (!silent) v.innerHTML = `<div class="loading">Model karnesi yükleniyor…</div>`;
@@ -904,6 +905,7 @@ function drawKarne() {
   const body = karneTab === "kupon" ? couponKarneHtml(S.kupon) : singlesKarneHtml(S[karneTab]);
   $("#view").innerHTML = head1 + tabs + body + `<div id="plCal">${calendarHtml()}</div>`;
   $("#view").querySelectorAll("[data-kt]").forEach((b) => b.onclick = () => { karneTab = b.dataset.kt; drawKarne(); });
+  $("#view").querySelectorAll("[data-kd]").forEach((d) => d.ontoggle = () => { d.open ? karneOpen.add(d.dataset.kd) : karneOpen.delete(d.dataset.kd); });
   bindCalendar();
 }
 function statKpis(s, stake, unit) {
@@ -946,8 +948,8 @@ function singlesKarneHtml(s) {
     const dayPl = pick ? d.filter((r) => r.pick.odds).reduce((a, r) => a + rowProfit(r), 0)
       : d.filter((r) => r.score && r.score.odds).reduce((a, r) => a + scoreProfit(r), 0);
     const title = new Date(k + "T12:00:00").toLocaleDateString("tr-TR", { weekday: "long", day: "numeric", month: "long" });
-    return `<div class="card kday" style="--c:#58a6ff">${head("🗓️", `${cap(title)} <span class="muted">· ${d.length ? `${hits}/${d.length} tuttu` : "sonuç bekleniyor"}</span>${d.length ? `<span class="kpl ${dayPl >= 0 ? "pos" : "neg"}">${tl(dayPl, true)}</span>` : ""}`)}
-      ${g.map(karneRow).join("")}</div>`;
+    return `<details class="card kday ogrp" style="--c:#58a6ff" data-kd="${karneTab}:${k}" ${karneOpen.has(karneTab + ":" + k) ? "open" : ""}><summary>${head("🗓️", `${cap(title)} <span class="muted">· ${g.length} maç · ${d.length ? `${hits}/${d.length} tuttu` : "sonuç bekleniyor"}</span>${d.length ? `<span class="kpl ${dayPl >= 0 ? "pos" : "neg"}">${tl(dayPl, true)}</span>` : ""}`)}</summary>
+      ${g.map(karneRow).join("")}</details>`;
   }).join("") : `<div class="card"><p class="muted">Karne sıfırlandı. Model yeni tahminlerini maçlar başlamadan önce kaydediyor; maçlar bittikçe karne dolacak.</p></div>`;
   return top + list;
 }
@@ -961,8 +963,8 @@ function couponKarneHtml(s) {
     const g = byDay.get(k), d = g.filter((c) => c.state === "done");
     const pl = d.reduce((a, c) => a + c.profit, 0);
     const title = new Date(k + "T12:00:00").toLocaleDateString("tr-TR", { weekday: "long", day: "numeric", month: "long" });
-    return `<h3 class="kdayh">🗓️ ${cap(title)} <span class="muted">· ${d.length ? `${d.filter((c) => c.won).length}/${d.length} kupon tuttu` : "sonuç bekleniyor"}</span>${d.length ? `<span class="kpl ${pl >= 0 ? "pos" : "neg"}">${tl(pl, true)}</span>` : ""}</h3>
-      ${g.map((c) => couponCard(c, c.draft)).join("")}`;
+    return `<details class="kdgrp" data-kd="kupon:${k}" ${karneOpen.has("kupon:" + k) ? "open" : ""}><summary class="kdayh">🗓️ ${cap(title)} <span class="muted">· ${g.length} kupon · ${d.length ? `${d.filter((c) => c.won).length}/${d.length} tuttu` : "sonuç bekleniyor"}</span>${d.length ? `<span class="kpl ${pl >= 0 ? "pos" : "neg"}">${tl(pl, true)}</span>` : ""}</summary>
+      ${g.map((c) => couponCard(c, c.draft)).join("")}</details>`;
   }).join("") : `<div class="card"><p class="muted">Henüz kupon yok. Model günün kombinelerini maçlar başlamadan önce hazırlıyor.</p></div>`;
   return top + list;
 }

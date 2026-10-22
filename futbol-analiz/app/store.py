@@ -22,6 +22,7 @@ class Store:
                     id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL, match_id INTEGER,
                     kind TEXT, text TEXT);
                 CREATE TABLE IF NOT EXISTS predictions (match_id INTEGER PRIMARY KEY, ts REAL, body TEXT);
+                CREATE TABLE IF NOT EXISTS coupons (day TEXT PRIMARY KEY, ts REAL, body TEXT);
                 """
             )
 
@@ -95,6 +96,23 @@ class Store:
     def pred_all(self):
         with self.lock:
             rows = self.conn.execute("SELECT body FROM predictions").fetchall()
+        return [json.loads(r[0]) for r in rows]
+
+    # --- günün kombineleri (temizlikte silinmez) ---
+    def coupon_get(self, day):
+        with self.lock:
+            row = self.conn.execute("SELECT body FROM coupons WHERE day=?", (day,)).fetchone()
+        return json.loads(row[0]) if row else None
+
+    def coupon_put(self, day, obj):
+        with self.lock:
+            self.conn.execute("INSERT OR REPLACE INTO coupons(day, ts, body) VALUES (?,?,?)",
+                              (day, time.time(), json.dumps(obj, ensure_ascii=False)))
+            self.conn.commit()
+
+    def coupon_all(self):
+        with self.lock:
+            rows = self.conn.execute("SELECT body FROM coupons ORDER BY day").fetchall()
         return [json.loads(r[0]) for r in rows]
 
     def recent_events(self, limit=50, since_id=0):

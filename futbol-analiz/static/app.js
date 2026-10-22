@@ -144,18 +144,19 @@ async function renderDay(silent) {
   } catch (e) {
     v.innerHTML = `<div class="loading">Hata: ${esc(e.message)}</div>`; return;
   }
-  if (state.current || state.player || state.karne) return;
+  if (state.current || state.player || state.karne || state.kombine) return;
   const ms = dayCache.matches.filter((m) => !state.off.has(m.league_id));
   if (!ms.length) { v.innerHTML = `<div class="loading">Bu tarihte seçili liglerde maç yok.</div>`; return; }
   // Map: sunucunun lig sırasını korur (sayısal anahtarlı nesne sırayı bozar)
   const groups = new Map();
   ms.forEach((m) => { if (!groups.has(m.league_id)) groups.set(m.league_id, []); groups.get(m.league_id).push(m); });
-  v.innerHTML = highlightsHtml(ms) + [...groups.values()].map((list) => `
+  v.innerHTML = highlightsHtml(ms, dayCache.coupons || []) + [...groups.values()].map((list) => `
     <section class="lg-block">
       <div class="lg-title"><img src="${leagueLogo(list[0].league_id)}" alt="" onerror="this.remove()"><b>${esc(list[0].league)}</b><span>${list.length} maç</span></div>
       <div class="mgrid">${list.map(cardHtml).join("")}</div>
     </section>`).join("");
   v.querySelectorAll("[data-id]").forEach((r) => r.onclick = () => location.hash = "#/mac/" + r.dataset.id);
+  v.querySelectorAll("[data-go]").forEach((r) => r.onclick = () => location.hash = r.dataset.go);
   if (typeof liveTick === "function") setTimeout(liveTick, 50);  // kartlara anlık skorları uygula
 }
 
@@ -209,9 +210,12 @@ function cardHtml(m) {
   </div>`;
 }
 
-function highlightsHtml(ms) {
+function highlightsHtml(ms, coupons) {
   const open = ms.filter((m) => m.pred && !m.finished && !m.cancelled);
-  if (open.length < 2) return "";
+  const kTile = coupons.length ? `<div class="hl kombi" data-go="#/kombine"><div class="ic">🧩</div>
+    <div class="hlb"><div class="k">Günün kombineleri</div><div class="t">${coupons.length} kupon hazır ›</div>
+    <div class="s">${coupons.map((c) => `${c.icon} ${nf(c.odds, 2)}`).join(" · ")}</div></div></div>` : "";
+  if (open.length < 2) return kTile ? `<div class="highlights">${kTile}</div>` : "";
   const pick = (score) => open.reduce((a, b) => (score(b) > score(a) ? b : a));
   const favM = pick((m) => Math.max(m.pred.p_home, m.pred.p_away));
   const goalM = pick((m) => m.pred.over25);
@@ -224,6 +228,7 @@ function highlightsHtml(ms) {
   const pair = (m) => `${tl(m.home)}<span class="hlv">-</span>${tl(m.away)}`;
   const opp = favSide === "home" ? favM.away : favM.home;
   return `<div class="highlights">
+    ${kTile}
     ${tile("fav", "★", "En net favori", favM, tl(favM[favSide]), `Rakip: ${opp.name} · kazanma ${pc(favM.pred["p_" + favSide])}`)}
     ${tile("goal", "⚽", "En gollü maç beklentisi", goalM, pair(goalM), `2.5 Üst ${pc(goalM.pred.over25)} · KG ${pc(goalM.pred.btts)}`)}
     ${tile("even", "⚖", "En dengeli maç", evenM, pair(evenM), `1 ${pc(evenM.pred.p_home)} · X ${pc(evenM.pred.p_draw)} · 2 ${pc(evenM.pred.p_away)}`)}
@@ -785,17 +790,57 @@ function extrasHtml(b) {
     </ul></div>`;
 }
 
+/* ---------- günün kombineleri ---------- */
+const COUPON_STAKE = 250, SCORE_STAKE = 10;
+const legStatus = (l) => l.void ? `<span class="kst wait">↩ İade</span>` : l.hit === true ? `<span class="kst ok">✓</span>`
+  : l.hit === false ? `<span class="kst no">✗</span>` : `<span class="kst wait">${esc(timeOf(l.utc))}</span>`;
+function couponCard(c, draft) {
+  const done = c.state === "done";
+  const ret = COUPON_STAKE * (done && c.won ? c.paid_odds || c.odds : c.odds);
+  const color = done ? (c.won ? "#2ea043" : "#f85149") : "#e3b341";
+  const status = done ? (c.won ? `<span class="kst ok">✓ Kazandı</span>` : `<span class="kst no">✗ Kaybetti</span>`)
+    : `<span class="kst wait">⏳ ${draft ? "İlk maça kadar güncellenebilir" : "Bekliyor"}</span>`;
+  return `<div class="card kupon ${done ? (c.won ? "won" : "lost") : ""}" style="--c:${color}">
+    ${head(c.icon || "🧩", `${esc(c.name)} <span class="muted">· ${c.legs.length} maç</span><span class="kodds">${nf(c.odds, 2)}</span>`)}
+    <p class="muted kdesc">${esc(c.desc || "")}</p>
+    <div class="klegs">${c.legs.map((l) => `<div class="kleg ${l.hit === true ? "hit" : l.hit === false ? "miss" : ""}" data-mid="${l.mid}">
+      <div class="klt"><img src="${teamLogo(l.home.id)}" alt="" onerror="this.remove()"><span>${esc(l.home.name)} – ${esc(l.away.name)}</span>
+        ${l.result ? `<b class="kres">${l.result[0]}-${l.result[1]}</b>` : ""}</div>
+      <div class="klp"><span class="kpick">${esc(l.label)}</span><small>${pc(l.p)}</small><b>${nf(l.odds, 2)}</b>${legStatus(l)}</div>
+    </div>`).join("")}</div>
+    <div class="kfoot ksum"><span>Tutma ihtimali <b>${pc(c.p)}</b></span>
+      <span class="kstake ${done ? (c.won ? "pos" : "neg") : ""}">250 ₺ → ${done ? (c.won ? tl(ret) + ` (${tl(c.profit, true)})` : "0 ₺ (−250 ₺)") : tl(ret)}</span>${status}</div>
+  </div>`;
+}
+async function renderCoupons() {
+  const v = $("#view");
+  v.innerHTML = `<div class="loading">Kombineler yükleniyor…</div>`;
+  try { if (!dayCache || dayCache.date !== state.date) dayCache = await api("/api/day?date=" + state.date); }
+  catch (e) { v.innerHTML = `<div class="card"><p>${esc(e.message)}</p></div>`; return; }
+  if (!state.kombine) return;
+  const cs = dayCache.coupons || [];
+  const title = new Date(state.date + "T12:00:00").toLocaleDateString("tr-TR", { weekday: "long", day: "numeric", month: "long" });
+  const intro = `<div class="card" style="--c:#a371f7">${head("🧩", `Günün kombineleri <span class="muted">· ${cap(title)}</span>`)}
+    <p class="muted">Model o günün maçlarından 3-5 kupon hazırlar; her kupon 2-5 maçtan oluşur ve her maçtan tek tercih içerir. Tercihler sadece maç sonucu, alt/üst ve KG değil; takım golleri, korner, çifte şans, beraberlikte iade ve kombine pazarlardan da seçilir, her birinin tutma ihtimali yüksek tutulur. Kuponlar ilk maç başlayana kadar en güncel verilerle yenilenir, sonra kilitlenir ve karneye kupon başına 250 ₺ ile yazılır.</p></div>`;
+  v.innerHTML = intro + (cs.length ? cs.map((c) => couponCard(c, !dayCache.coupons_locked)).join("")
+    : `<div class="card"><p class="muted">Bu gün için henüz kombine yok. Kombineler, oranları açıklanmış ve başlamamış en az 2 maç olduğunda hazırlanır.</p></div>`);
+}
+
 /* ---------- model karnesi ---------- */
-let karneRows = [], karneTab = "pick";
+let karneRows = [], karneCoupons = [], karneStart = null, karneTab = "pick", calMonth = null;
 async function renderKarne(silent) {
   const v = $("#view");
   if (!silent) v.innerHTML = `<div class="loading">Model karnesi yükleniyor…</div>`;
-  try { karneRows = await api("/api/karne"); }
+  let k;
+  try { k = await api("/api/karne"); }
   catch (e) { v.innerHTML = `<div class="card"><p>${esc(e.message)}</p></div>`; return; }
   if (!state.karne) return;
+  karneRows = Array.isArray(k) ? k : k.singles || [];
+  karneStart = Array.isArray(k) ? null : k.start;
+  karneCoupons = Array.isArray(k) ? [] : (k.coupons || []).flatMap((d) => d.coupons.map((c) => ({ ...c, draft: !d.locked })));
   drawKarne();
 }
-// karnede tercih türü (örn. "MS 1 (Liverpool)" -> "MS 1")
+// karnede tercih türü (örn. "MS 1 (Liverpool)" -> "Maç sonucu")
 const pickType = (p) => {
   const c = p.code || "";
   if (c.includes("&")) return "Kombine";
@@ -803,7 +848,9 @@ const pickType = (p) => {
   if (["1X", "12", "X2"].includes(c)) return "Çifte şans";
   if (/^dnb/.test(c)) return "Beraberlikte iade";
   if (/^btts/.test(c)) return "Karşılıklı gol";
-  if (/^[ou]\d/.test(c) || c === "o25" || c === "u25") return "Gol alt/üst";
+  if (/^[ou]\d/.test(c)) return "Gol alt/üst";
+  if (/^[ha][ou]\d/.test(c)) return "Takım golü alt/üst";
+  if (/^c[ou]\d/.test(c)) return "Toplam korner";
   if (/^cm/.test(c)) return "En çok korner";
   if (/^rc/.test(c)) return "Kırmızı kart";
   if (/^cs:/.test(c)) return "Skor";
@@ -811,88 +858,181 @@ const pickType = (p) => {
 };
 const STAKE = 100;
 const rowProfit = (r) => r.pick_hit ? STAKE * (r.pick.odds - 1) : -STAKE;
-const tl = (x, sign) => (sign && x > 0 ? "+" : "") + Math.round(x).toLocaleString("tr-TR") + " ₺";
+const scoreProfit = (r) => r.score_hit ? SCORE_STAKE * (r.score.odds - 1) : -SCORE_STAKE;
+const tl = (x, sign) => (sign && x > 0 ? "+" : x < 0 ? "−" : "") + Math.abs(Math.round(x)).toLocaleString("tr-TR") + " ₺";
+const trDay = (utc) => new Date(utc).toLocaleDateString("sv-SE", { timeZone: TZ });
 // korner/kart tercihlerinde maç sonu korner ve kırmızı kart bilgisi
 function cornerNote(r) {
   const fz = r.final; if (!fz || r.state !== "done") return "";
-  if (/^cm/.test(r.pick.code) && fz.corners && fz.corners[0] != null) return ` · Korner ${fz.corners[0]}-${fz.corners[1]}`;
+  if (/^(cm|c[ou]\d)/.test(r.pick.code) && fz.corners && fz.corners[0] != null) return ` · Korner ${fz.corners[0]}-${fz.corners[1]}`;
   if (/^rc/.test(r.pick.code) && fz.red) return ` · Kırmızı kart ${fz.red[0] + fz.red[1]}`;
   return "";
 }
 const rate = (h, n) => n ? `%${Math.round(h / n * 100)}` : "—";
-function drawKarne() {
+// üç karnenin özetleri: tek tercihler (100 ₺), kombineler (250 ₺), skorlar (10 ₺)
+function karneStats() {
   const rows = karneRows || [];
-  const done = rows.filter((r) => r.state === "done"), pending = rows.filter((r) => r.state === "pending");
-  const n = done.length;
+  const done = rows.filter((r) => r.state === "done");
   const pdone = done.filter((r) => r.pick_hit === true || r.pick_hit === false);  // iade olanlar sayılmaz
-  const pn = pdone.length;
-  const ph = pdone.filter((r) => r.pick_hit).length, sh = done.filter((r) => r.score_hit).length, mh = done.filter((r) => r.ms_hit).length;
-  // oranlı tercihlerde 1 birimlik sabit bahisle kâr/zarar
-  // her tercihe ayrı ayrı 100 TL oynanmış gibi: tutarsa 100 × (oran − 1) kazanç, tutmazsa −100
-  const withOdds = pdone.filter((r) => r.pick.odds);
-  const profit = withOdds.reduce((a, r) => a + rowProfit(r), 0);
-  const staked = withOdds.length * STAKE;
-  const avgOdds = withOdds.length ? withOdds.reduce((a, r) => a + r.pick.odds, 0) / withOdds.length : null;
-  const roi = staked ? profit / staked * 100 : null;
-  // tercih türüne göre isabet
-  const byType = {};
-  pdone.forEach((r) => { const t = (byType[pickType(r.pick)] ||= { n: 0, h: 0 }); t.n++; if (r.pick_hit) t.h++; });
-  const types = Object.entries(byType).sort((a, b) => b[1].n - a[1].n);
-  const head1 = `<div class="card" style="--c:#58a6ff">${head("📒", `Model karnesi <span class="muted">· tüm zamanlar</span>`)}
+  const pOdds = pdone.filter((r) => r.pick.odds);
+  const sOdds = done.filter((r) => r.score && r.score.odds);
+  const cdone = karneCoupons.filter((c) => c.state === "done");
+  const sum = (a, f) => a.reduce((x, r) => x + f(r), 0);
+  const pending = rows.filter((r) => r.state === "pending").length;
+  return {
+    pick: { n: pdone.length, h: pdone.filter((r) => r.pick_hit).length, nOdds: pOdds.length, pl: sum(pOdds, rowProfit), staked: pOdds.length * STAKE,
+      avgOdds: pOdds.length ? sum(pOdds, (r) => r.pick.odds) / pOdds.length : null, pending },
+    kupon: { n: cdone.length, h: cdone.filter((c) => c.won).length, nOdds: cdone.length, pl: sum(cdone, (c) => c.profit), staked: cdone.length * COUPON_STAKE,
+      avgOdds: cdone.length ? sum(cdone, (c) => c.odds) / cdone.length : null, pending: karneCoupons.filter((c) => c.state !== "done").length },
+    score: { n: done.length, h: done.filter((r) => r.score_hit).length, nOdds: sOdds.length, pl: sum(sOdds, scoreProfit), staked: sOdds.length * SCORE_STAKE,
+      avgOdds: sOdds.length ? sum(sOdds, (r) => r.score.odds) / sOdds.length : null, pending },
+  };
+}
+const KARNE_TABS = { pick: ["✅", "Tek tercihler", STAKE, "tercih"], kupon: ["🧩", "Kombineler", COUPON_STAKE, "kupon"], score: ["🎯", "Skorlar", SCORE_STAKE, "skor tahmini"] };
+function drawKarne() {
+  const S = karneStats();
+  const total = S.pick.pl + S.kupon.pl + S.score.pl;
+  const since = karneStart ? new Date(karneStart + "T12:00:00").toLocaleDateString("tr-TR", { day: "numeric", month: "long" }) + " itibarıyla" : "tüm zamanlar";
+  const head1 = `<div class="card" style="--c:#58a6ff">${head("📒", `Model karnesi <span class="muted">· ${since}</span>`)}
     <div class="pred">
-      ${kpi("✅", "#2ea043", "En garanti tercih", `${ph}/${pn}`, pn ? `${rate(ph, pn)} isabet` : "Henüz sonuç yok")}
-      ${kpi("💰", profit >= 0 ? "#2ea043" : "#f85149", "Kâr / zarar", withOdds.length ? tl(profit, true) : "—", withOdds.length ? `Her tercihe 100 ₺ · ${withOdds.length} tercih` : "Oranlı tercih sonuçlanınca")}
-      ${kpi("🏦", "#58a6ff", "Yatırılan → dönen", withOdds.length ? `${tl(staked)} → ${tl(staked + profit)}` : "—", withOdds.length ? `Getiri (ROI) ${roi < 0 ? "−" : ""}%${nf(Math.abs(roi), 1)} · ort. oran ${nf(avgOdds, 2)}` : "Oranlı tercih sonuçlanınca")}
-      ${kpi("🎯", "#a371f7", "Skor tahmini", `${sh}/${n}`, n ? `${rate(sh, n)} tam isabet` : "Henüz sonuç yok")}
-      ${kpi("⚖️", "#d29922", "Maç sonucu (1X2)", `${mh}/${n}`, n ? `${rate(mh, n)} isabet` : "Henüz sonuç yok")}
-      ${kpi("⏳", "#8b98a8", "Bekleyen tahmin", String(pending.length), "Maçlar bittikçe sonuçlanır")}
-    </div>
-    ${types.length ? `<h3>Tercih türüne göre</h3>${types.map(([lab, t]) => { const v = Math.round(t.h / t.n * 100); return `<div class="srow">
-      <div class="sl">${esc(lab)} <span class="muted">· ${t.h}/${t.n}</span></div><div class="sv">%${v}</div>
-      <div class="spct"><span style="width:${Math.max(3, v)}%;background:${pctColor(v)}"></span><b>${v}</b></div></div>`; }).join("")}` : ""}
-    <p class="muted">Model her maç için başlama düdüğünden önceki son tahminini kaydeder; maç bitince sonuçla karşılaştırılır. "En garanti tercih": maç sonucu, çifte şans, beraberlikte iade, karşılıklı gol, 1.5–3.5 alt/üst, en çok korner ve kırmızı kart seçenekleri içinde, oranı 1.30 ve üstü olanlardan modelin en yüksek olasılık verdiği tahmin. Kâr/zarar her tercihe ayrı ayrı 100 ₺ oynandığı varsayımıyla, o anki orana göre hesaplanır (tutarsa 100 × (oran − 1) kazanç, tutmazsa 100 ₺ kayıp); beraberlikte iade gibi iade olan sonuçlar sayılmaz. "Olası sürpriz" tahminleri karneye dahil değildir.</p>
+      ${kpi("💰", total >= 0 ? "#2ea043" : "#f85149", "Toplam kâr / zarar", tl(total, true), "Üç karnenin toplamı")}
+      ${Object.entries(KARNE_TABS).map(([k, [ic, name, stake, unit]]) => kpi(ic, S[k].pl >= 0 ? "#2ea043" : "#f85149", name,
+        S[k].nOdds ? tl(S[k].pl, true) : "—", `${S[k].h}/${S[k].n} tuttu${S[k].n ? " · " + rate(S[k].h, S[k].n) : ""} · ${unit} başına ${stake} ₺`)).join("")}
+    </div></div>`;
+  const tabs = `<div class="ptabs">${Object.entries(KARNE_TABS).map(([k, [ic, name]]) =>
+    `<button class="ptab ${karneTab === k ? "on" : ""}" data-kt="${k}">${ic} ${name} <small>${S[k].h}/${S[k].n}</small></button>`).join("")}</div>`;
+  const body = karneTab === "kupon" ? couponKarneHtml(S.kupon) : singlesKarneHtml(S[karneTab]);
+  $("#view").innerHTML = head1 + tabs + body + `<div id="plCal">${calendarHtml()}</div>`;
+  $("#view").querySelectorAll("[data-kt]").forEach((b) => b.onclick = () => { karneTab = b.dataset.kt; drawKarne(); });
+  bindCalendar();
+}
+function statKpis(s, stake, unit) {
+  const roi = s.staked ? s.pl / s.staked * 100 : null;
+  return `<div class="pred">
+    ${kpi("🎯", "#58a6ff", "İsabet", `${s.h}/${s.n}`, s.n ? `${rate(s.h, s.n)} tuttu` : "Henüz sonuç yok")}
+    ${kpi("💰", s.pl >= 0 ? "#2ea043" : "#f85149", "Kâr / zarar", s.nOdds ? tl(s.pl, true) : "—", s.nOdds ? `Her ${unit} için ${stake} ₺ · ${s.nOdds} ${unit}` : "Sonuçlandıkça hesaplanır")}
+    ${kpi("🏦", "#a371f7", "Yatırılan → dönen", s.nOdds ? `${tl(s.staked)} → ${tl(s.staked + s.pl)}` : "—", s.nOdds ? `Getiri (ROI) ${roi < 0 ? "−" : ""}%${nf(Math.abs(roi), 1)} · ort. oran ${nf(s.avgOdds, 2)}` : "Sonuçlandıkça hesaplanır")}
+    ${kpi("⏳", "#8b98a8", "Bekleyen", String(s.pending), "Maçlar bittikçe sonuçlanır")}
   </div>`;
-  const tabs = `<div class="ptabs">
-    <button class="ptab ${karneTab === "pick" ? "on" : ""}" data-kt="pick">✅ En garanti tercihler <small>${ph}/${pn}</small></button>
-    <button class="ptab ${karneTab === "score" ? "on" : ""}" data-kt="score">🎯 Skor tahminleri <small>${sh}/${n}</small></button></div>`;
-  // günlere göre grupla (en yeni gün en üstte)
+}
+function singlesKarneHtml(s) {
+  const pick = karneTab === "pick";
+  const rows = karneRows || [];
+  let extra = "";
+  if (pick) {
+    const byType = {};
+    rows.filter((r) => r.state === "done" && (r.pick_hit === true || r.pick_hit === false))
+      .forEach((r) => { const t = (byType[pickType(r.pick)] ||= { n: 0, h: 0 }); t.n++; if (r.pick_hit) t.h++; });
+    const types = Object.entries(byType).sort((a, b) => b[1].n - a[1].n);
+    extra = types.length ? `<h3>Tercih türüne göre</h3>${types.map(([lab, t]) => { const v = Math.round(t.h / t.n * 100); return `<div class="srow">
+      <div class="sl">${esc(lab)} <span class="muted">· ${t.h}/${t.n}</span></div><div class="sv">%${v}</div>
+      <div class="spct"><span style="width:${Math.max(3, v)}%;background:${pctColor(v)}"></span><b>${v}</b></div></div>`; }).join("")}` : "";
+  }
+  const note = pick
+    ? `Model her maç için başlama düdüğünden önceki son "en garanti tercihini" kaydeder. Tercihler maç sonucu, çifte şans, beraberlikte iade, karşılıklı gol, gol alt/üst, takım golleri, toplam korner, en çok korner, kırmızı kart ve kombine pazarlardan; oranı 1.30 ve üstü olanlar arasından seçilir. Her tercihe 100 ₺: tutarsa 100 × (oran − 1) kazanç, tutmazsa 100 ₺ kayıp; iade olanlar sayılmaz.`
+    : `Skor tahmini, modelin skor dağılımı ile piyasanın skor oranları harmanlanarak beklenen sonuç ve gol sayısıyla tutarlı skorlar arasından seçilir. Her skor tahminine 10 ₺, o skorun oranıyla: tutarsa 10 × (oran − 1) kazanç, tutmazsa 10 ₺ kayıp.`;
+  const top = `<div class="card" style="--c:${pick ? "#2ea043" : "#a371f7"}">${statKpis(s, pick ? STAKE : SCORE_STAKE, pick ? "tercih" : "skor tahmini")}${extra}<p class="muted">${note}</p></div>`;
   const groups = new Map();
   rows.filter((r) => r.state !== "void").forEach((r) => {
-    const k = new Date(r.utc).toLocaleDateString("sv-SE", { timeZone: TZ });
+    const k = trDay(r.utc);
     if (!groups.has(k)) groups.set(k, []);
     groups.get(k).push(r);
   });
   const days = [...groups.keys()].sort().reverse();
   const list = days.length ? days.map((k) => {
     const g = groups.get(k).sort((a, b) => (a.utc || "").localeCompare(b.utc || ""));
-    const d = g.filter((r) => r.state === "done" && (karneTab !== "pick" || r.pick_hit === true || r.pick_hit === false));
-    const hits = d.filter((r) => karneTab === "pick" ? r.pick_hit : r.score_hit).length;
-    const dayPl = karneTab === "pick" ? d.filter((r) => r.pick.odds).reduce((a, r) => a + rowProfit(r), 0) : null;
+    const d = g.filter((r) => r.state === "done" && (!pick || r.pick_hit === true || r.pick_hit === false));
+    const hits = d.filter((r) => pick ? r.pick_hit : r.score_hit).length;
+    const dayPl = pick ? d.filter((r) => r.pick.odds).reduce((a, r) => a + rowProfit(r), 0)
+      : d.filter((r) => r.score && r.score.odds).reduce((a, r) => a + scoreProfit(r), 0);
     const title = new Date(k + "T12:00:00").toLocaleDateString("tr-TR", { weekday: "long", day: "numeric", month: "long" });
-    return `<div class="card kday" style="--c:#58a6ff">${head("🗓️", `${cap(title)} <span class="muted">· ${d.length ? `${hits}/${d.length} tuttu` : "sonuç bekleniyor"}</span>${dayPl != null && d.length ? `<span class="kpl ${dayPl >= 0 ? "pos" : "neg"}">${tl(dayPl, true)}</span>` : ""}`)}
+    return `<div class="card kday" style="--c:#58a6ff">${head("🗓️", `${cap(title)} <span class="muted">· ${d.length ? `${hits}/${d.length} tuttu` : "sonuç bekleniyor"}</span>${d.length ? `<span class="kpl ${dayPl >= 0 ? "pos" : "neg"}">${tl(dayPl, true)}</span>` : ""}`)}
       ${g.map(karneRow).join("")}</div>`;
-  }).join("") : `<div class="card"><p class="muted">Henüz kayıtlı tahmin yok. Model, maçlar başlamadan önce tahminlerini kaydetmeye başladı; maçlar bittikçe karne dolacak.</p></div>`;
-  $("#view").innerHTML = head1 + tabs + list;
-  $("#view").querySelectorAll("[data-kt]").forEach((b) => b.onclick = () => { karneTab = b.dataset.kt; drawKarne(); });
+  }).join("") : `<div class="card"><p class="muted">Karne sıfırlandı. Model yeni tahminlerini maçlar başlamadan önce kaydediyor; maçlar bittikçe karne dolacak.</p></div>`;
+  return top + list;
+}
+function couponKarneHtml(s) {
+  const top = `<div class="card" style="--c:#e3b341">${statKpis(s, COUPON_STAKE, "kupon")}
+    <p class="muted">Günün kombineleri: model her gün 3-5 kupon hazırlar (2-5 maç). Kupondaki ilk maç başlayınca o günün kuponları kilitlenir. Her kupona 250 ₺: bütün tercihler tutarsa 250 × toplam oran döner, biri bile tutmazsa 250 ₺ kayıp. İade olan ya da ertelenen maç kupondan düşer (oranı 1 sayılır).</p></div>`;
+  const byDay = new Map();
+  karneCoupons.forEach((c) => { if (!byDay.has(c.date)) byDay.set(c.date, []); byDay.get(c.date).push(c); });
+  const days = [...byDay.keys()].sort().reverse();
+  const list = days.length ? days.map((k) => {
+    const g = byDay.get(k), d = g.filter((c) => c.state === "done");
+    const pl = d.reduce((a, c) => a + c.profit, 0);
+    const title = new Date(k + "T12:00:00").toLocaleDateString("tr-TR", { weekday: "long", day: "numeric", month: "long" });
+    return `<h3 class="kdayh">🗓️ ${cap(title)} <span class="muted">· ${d.length ? `${d.filter((c) => c.won).length}/${d.length} kupon tuttu` : "sonuç bekleniyor"}</span>${d.length ? `<span class="kpl ${pl >= 0 ? "pos" : "neg"}">${tl(pl, true)}</span>` : ""}</h3>
+      ${g.map((c) => couponCard(c, c.draft)).join("")}`;
+  }).join("") : `<div class="card"><p class="muted">Henüz kupon yok. Model günün kombinelerini maçlar başlamadan önce hazırlıyor.</p></div>`;
+  return top + list;
+}
+// gün gün toplam kâr/zarar (üç karne birlikte)
+function dailyPl() {
+  const m = {};
+  const add = (k, v) => { m[k] = (m[k] || 0) + v; };
+  (karneRows || []).forEach((r) => {
+    if (r.state !== "done") return;
+    const k = trDay(r.utc);
+    if ((r.pick_hit === true || r.pick_hit === false) && r.pick.odds) add(k, rowProfit(r));
+    if (r.score && r.score.odds) add(k, scoreProfit(r));
+  });
+  karneCoupons.forEach((c) => { if (c.state === "done") add(c.date, c.profit); });
+  return m;
+}
+function calendarHtml() {
+  const today = todayStr();
+  const ym = calMonth || today.slice(0, 7);
+  const [y, mo] = ym.split("-").map(Number);
+  const first = new Date(y, mo - 1, 1), nDays = new Date(y, mo, 0).getDate();
+  const lead = (first.getDay() + 6) % 7;  // pazartesi başlangıçlı
+  const pl = dailyPl();
+  let tot = 0, cells = "";
+  for (let i = 0; i < lead; i++) cells += `<div class="cd empty"></div>`;
+  for (let d = 1; d <= nDays; d++) {
+    const k = `${ym}-${String(d).padStart(2, "0")}`;
+    const v = pl[k];
+    if (v != null) tot += v;
+    const cls = v == null ? (k > today ? "future" : "none") : v > 0 ? "pos" : v < 0 ? "neg" : "zero";
+    cells += `<div class="cd ${cls} ${k === today ? "today" : ""}"><span class="dn">${d}</span>${v != null ? `<b>${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(Math.round(v)).toLocaleString("tr-TR")}</b>` : ""}</div>`;
+  }
+  const name = cap(first.toLocaleDateString("tr-TR", { month: "long", year: "numeric" }));
+  return `<div class="card" style="--c:#39c5cf">${head("📅", `Günlük kâr / zarar <span class="muted">· tek tercih + kombine + skor</span>`)}
+    <div class="calnav"><button class="calbtn" data-cm="-1" aria-label="Önceki ay">‹</button><b>${name}</b><button class="calbtn" data-cm="1" aria-label="Sonraki ay">›</button>
+      <span class="kpl ${tot >= 0 ? "pos" : "neg"}">Ay toplamı ${tl(tot, true)}</span></div>
+    <div class="calgrid">${["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"].map((w) => `<div class="cw">${w}</div>`).join("")}${cells}</div>
+    <p class="muted">Kutulardaki tutar o gün sonuçlanan bütün tahminlerin toplamıdır (₺): yeşil kâr, kırmızı zarar. Boş kutu: o gün sonuçlanan tahmin yok.</p></div>`;
+}
+function bindCalendar() {
+  $("#plCal").querySelectorAll("[data-cm]").forEach((b) => b.onclick = () => {
+    const [y, m] = (calMonth || todayStr().slice(0, 7)).split("-").map(Number);
+    const d = new Date(y, m - 1 + +b.dataset.cm, 1);
+    calMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    $("#plCal").innerHTML = calendarHtml();
+    bindCalendar();
+  });
 }
 function karneRow(r) {
   const done = r.state === "done";
-  const hit = karneTab === "pick" ? r.pick_hit : r.score_hit;
+  const pick = karneTab === "pick";
+  const hit = pick ? r.pick_hit : r.score_hit;
   const rowCls = !done || hit == null ? "" : hit ? "hit" : "miss";
   const status = !done ? `<span class="kst wait">⏳ Bekliyor</span>` : hit == null ? `<span class="kst wait">↩ İade</span>`
     : hit ? `<span class="kst ok">✓ Tuttu</span>` : `<span class="kst no">✗ Tutmadı</span>`;
   const mid = done ? `<div class="sc">${r.result[0]} - ${r.result[1]}</div><div class="sub">maç sonu</div>` : `<div class="ko">${esc(timeOf(r.utc))}</div><div class="sub">başlama</div>`;
-  const tip = karneTab === "pick"
+  const tip = pick
     ? `<span class="kpick">${esc(r.pick.label)} <small>${r.pick.odds ? "@" + nf(r.pick.odds, 2) + " · " : ""}${pc(r.pick.p)}</small></span>`
-    : `<span class="kpick">Skor ${esc(r.score.score)} <small>${pc(r.score.p)}</small></span>`;
-  const linkable = !STATIC || (meta && meta.days && meta.days.includes(new Date(r.utc).toLocaleDateString("sv-SE", { timeZone: TZ })));
+    : `<span class="kpick">Skor ${esc(r.score.score)} <small>${r.score.odds ? "@" + nf(r.score.odds, 2) + " · " : ""}${pc(r.score.p)}</small></span>`;
+  const odds = pick ? r.pick.odds : r.score && r.score.odds;
+  const stake = pick ? STAKE : SCORE_STAKE;
+  const prof = done && hit != null && odds ? (pick ? rowProfit(r) : scoreProfit(r)) : null;
+  const linkable = !STATIC || (meta && meta.days && meta.days.includes(trDay(r.utc)));
   return `<div class="krow ${rowCls}" ${linkable ? `data-mid="${r.id}"` : ""}>
     <div class="kteams">
       <span class="kt"><img src="${teamLogo(r.home.id)}" alt="" onerror="this.remove()">${esc(r.home.name)}</span>
       <div class="mid">${mid}</div>
       <span class="kt r">${esc(r.away.name)}<img src="${teamLogo(r.away.id)}" alt="" onerror="this.remove()"></span>
     </div>
-    <div class="kfoot"><span class="muted kl">${esc(r.league || "")}${cornerNote(r)}</span>${tip}${karneTab === "pick" && r.pick.odds ? `<span class="kstake ${done && hit != null ? (hit ? "pos" : "neg") : ""}">100 ₺ → ${done && hit != null ? tl(rowProfit(r), true) : "@" + nf(r.pick.odds, 2)}</span>` : ""}${status}</div>
+    <div class="kfoot"><span class="muted kl">${esc(r.league || "")}${pick ? cornerNote(r) : ""}</span>${tip}${odds ? `<span class="kstake ${prof != null ? (prof >= 0 ? "pos" : "neg") : ""}">${stake} ₺ → ${prof != null ? tl(prof, true) : "@" + nf(odds, 2)}</span>` : ""}${status}</div>
   </div>`;
 }
 
@@ -1122,7 +1262,7 @@ function connect() {
     clearTimeout(pending);
     pending = setTimeout(() => {
       if (state.current && ev.match_id === state.current) renderMatch(state.current, true);
-      else if (!state.current && !state.player && !state.karne) renderDay(true);
+      else if (!state.current && !state.player && !state.karne && !state.kombine) renderDay(true);
     }, 800);
   };
 }
@@ -1152,14 +1292,17 @@ function route() {
   const mm = location.hash.match(/^#\/mac\/(\d+)/);
   const pm = location.hash.match(/^#\/oyuncu\/(\d+)/);
   const km = location.hash.startsWith("#/karne");
+  const cm = location.hash.startsWith("#/kombine");
   const h = location.hash || "#/";
   if (navStack.length > 1 && navStack[navStack.length - 2] === h) navStack.pop();
   else if (navStack[navStack.length - 1] !== h) navStack.push(h);
   // maç, oyuncu ve karne sayfalarında üst barda yalnızca Geri butonu görünür
-  document.body.classList.toggle("in-match", !!(mm || pm || km));
+  document.body.classList.toggle("in-match", !!(mm || pm || km || cm));
   state.player = pm ? +pm[1] : null;
   state.karne = km;
-  if (km) { state.current = null; window.scrollTo(0, 0); renderKarne(); }
+  state.kombine = cm;
+  if (cm) { state.current = null; window.scrollTo(0, 0); renderCoupons(); }
+  else if (km) { state.current = null; window.scrollTo(0, 0); renderKarne(); }
   else if (mm) { state.current = +mm[1]; window.scrollTo(0, 0); renderMatch(state.current); }
   else if (pm) { state.current = null; window.scrollTo(0, 0); renderPlayer(state.player); }
   else { state.current = null; renderDay(); }
@@ -1181,7 +1324,8 @@ function shiftDay(n) {
 }
 function setDate(s) {
   state.date = s; $("#date").value = s; updateCalLabel(); openCal(false);
-  if (location.hash.startsWith("#/mac") || location.hash.startsWith("#/oyuncu") || location.hash.startsWith("#/karne")) location.hash = "#/"; else renderDay();
+  if (location.hash.startsWith("#/kombine")) renderCoupons();
+  else if (location.hash.startsWith("#/mac") || location.hash.startsWith("#/oyuncu") || location.hash.startsWith("#/karne")) location.hash = "#/"; else renderDay();
 }
 // takvim butonu: seçili günü kısa yazar (Dün / Bugün / Yarın / 22 Eki)
 function updateCalLabel() {
@@ -1235,7 +1379,7 @@ function startPolling() {
       const evs = await getData("events.json");
       evs.filter((e) => e.id > lastEv).reverse().forEach((ev) => addFeed(ev, true));
       if (evs.length) { lastEv = Math.max(lastEv, evs[0].id); safeSet("lastEventId", String(lastEv)); }
-      state.karne ? renderKarne(true) : state.player ? renderPlayer(state.player, true) : state.current ? renderMatch(state.current, true) : renderDay(true);
+      state.kombine ? (dayCache = null, renderCoupons()) : state.karne ? renderKarne(true) : state.player ? renderPlayer(state.player, true) : state.current ? renderMatch(state.current, true) : renderDay(true);
     } catch { /* bir sonraki turda tekrar dener */ }
   };
 
@@ -1335,6 +1479,16 @@ const RELEASES = [
       ["📊", "Daha fazla pazar", "Yarılar, handikaplar, korner/kart/şut/ofsayt/faul toplamları, takım bazlı alt/üst ve dakika aralıkları."],
       ["🔍", "Oranlarda arama", "Oranlar sekmesinde oyuncu veya pazar adı yaz, sadece o seçenekler kalsın; gruplar açılıp kapanır."],
       ["🔕", "Sessiz bildirimler", "Bildirimler artık ekranı kaplamaz; yalnızca sarı çana dokununca görünür."],
+    ],
+  },
+  {
+    id: 9, date: "22 Ekim 2026", title: "Yeni: Günün kombineleri ve yeni karne", sub: "Bu güncellemede gelenler",
+    items: [
+      ["🧩", "Günün kombineleri", "Ana sayfadaki yeni kutu: model her gün 3-5 kupon hazırlar (Banko, En garantiler, Günün favorileri, Gol şöleni, Korner kombinesi, Değerli oranlar); her kupon 2-5 maç."],
+      ["🧠", "Daha geniş tercih yelpazesi", "Model artık takım golleri, toplam korner, beraberlikte iade ve kombine pazarları da değerlendiriyor; tercih başına risk düşük tutuluyor."],
+      ["🎯", "Daha iyi skor tahminleri", "Skor tahmini istatistiklerle birlikte piyasanın skor oranlarını da hesaba katıyor."],
+      ["📒", "Karne sıfırlandı", "Yeni modelle karne 22 Ekim'den başlıyor; üç ayrı başlık: Tek tercihler (100 ₺), Kombineler (250 ₺), Skorlar (10 ₺)."],
+      ["📅", "Kâr/zarar takvimi", "Karnenin altında aylık takvim: her gün toplam kâr yeşil, zarar kırmızı (+100, −50 gibi)."],
     ],
   },
 ];

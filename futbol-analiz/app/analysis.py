@@ -240,6 +240,13 @@ def _pois(k, lam):
     return math.exp(-lam) * lam ** k / math.factorial(k)
 
 
+def _nb_over(mu, line, k=1.4):
+    """Negatif binom (varyans = k × ortalama): korner sayıları Poisson'dan daha dağınıktır."""
+    r, q = mu / (k - 1), 1 / k
+    pmf = lambda n: math.exp(math.lgamma(n + r) - math.lgamma(r) - math.lgamma(n + 1) + r * math.log(q) + n * math.log(1 - q))
+    return 1 - sum(pmf(n) for n in range(int(line) + 1))
+
+
 def _over(lam, line):
     return 1 - sum(_pois(k, lam) for k in range(int(line) + 1))
 
@@ -273,6 +280,11 @@ def market_probs(mat, lh, la, corners=None, red_rate=None):
         pr[f"o{line:g}"], pr[f"u{line:g}"] = o, 1 - o
     odd = sum(p for i, j, p in cells if (i + j) % 2 == 1)
     pr.update({"odd": odd, "even": 1 - odd})
+    # takım gol alt/üstü (ho1.5 = ev sahibi 2+ gol)
+    for line in (0.5, 1.5, 2.5, 3.5, 4.5):
+        ho = sum(p for i, j, p in cells if i > line)
+        ao = sum(p for i, j, p in cells if j > line)
+        pr.update({f"ho{line:g}": ho, f"hu{line:g}": 1 - ho, f"ao{line:g}": ao, f"au{line:g}": 1 - ao})
     if ph + pa:
         pr.update({"dnb1": ph / (ph + pa), "dnb2": pa / (ph + pa)})
     p00 = mat[0][0]
@@ -289,6 +301,11 @@ def market_probs(mat, lh, la, corners=None, red_rate=None):
         c1 = sum(h[i] * a[j] for i in range(30) for j in range(30) if i > j)
         cx = sum(h[i] * a[i] for i in range(30))
         pr.update({"cm1": c1, "cmX": cx, "cm2": max(0.0, 1 - c1 - cx)})
+        # toplam korner alt/üstü (co9.5 = 10+ korner); oranlarla ayrıca harmanlanır
+        for k in range(10):
+            line = 5.5 + k
+            co = _nb_over(corners["total"], line)
+            pr.update({f"co{line:g}": co, f"cu{line:g}": 1 - co})
         # ilk korner 8. dakikadan önce mi: korner sayısı maç boyunca Poisson süreci varsayılır
         f8 = 1 - math.exp(-(ch + ca) * 8 / 90)
         pr.update({"fc8_yes": f8, "fc8_no": 1 - f8})
@@ -373,6 +390,22 @@ COMBO_SHORT = {"1": "MS 1", "X": "MS X", "2": "MS 2", "1X": "ÇŞ 1X", "12": "Ç
                "btts_yes": "KG Var", "btts_no": "KG Yok"}
 
 
+# anlamlı çizgiler: "takım 4.5 alt" ya da "13.5 korner alt" gibi neredeyse kesin ama bilgisiz seçenekler elenir
+TOTAL_CODE = re.compile(r"^([ha]o[01]\.5|[ha]u[12]\.5|co([789]|10)\.5|cu(8|9|10|11)\.5)$")
+
+
+def safe_ok(code):
+    """Garanti tercih adayı: klasik pazarlar, takım gol ve korner alt/üstleri, bunlardan oluşan kombineler."""
+    legs = code.split("&")
+    return len(legs) <= 3 and all(x in SAFE_CODES or TOTAL_CODE.match(x) for x in legs)
+
+
+def safe_score(p, odds):
+    """Önce yüksek olasılık; piyasanın ima ettiğinden iyi görülen (değerli) seçenekler biraz öne çıkar."""
+    edge = p * odds - 1
+    return p + 0.5 * max(-0.10, min(edge, 0.10))
+
+
 def code_label(code, home, away):
     if "&" in code:  # kombine: "MS 1 + KG Var + 2.5 Üst"
         return " + ".join(COMBO_SHORT.get(c) or code_label(c, home, away) for c in code.split("&"))
@@ -389,6 +422,10 @@ def code_label(code, home, away):
     m = re.fullmatch(r"([ou])(\d+(?:\.\d+)?)", code)
     if m:
         return f"{m.group(2)} {'Üst' if m.group(1) == 'o' else 'Alt'}"
+    m = re.fullmatch(r"([hac])([ou])(\d+(?:\.\d+)?)", code)
+    if m:
+        who = {"h": f"{home} gol", "a": f"{away} gol", "c": "Toplam korner"}[m.group(1)]
+        return f"{who} {m.group(3)} {'Üst' if m.group(2) == 'o' else 'Alt'}"
     if code.startswith("cs:"):
         return "Skor " + code[3:]
     return code
@@ -402,9 +439,9 @@ def make_picks(pr, odds, home, away):
             if s.get("code") and s["code"] in pr:
                 sel.append((s["code"], pr[s["code"]], s["odds"]))
     safe = None
-    cands = [c for c in sel if c[2] >= MIN_ODDS and (c[0] in SAFE_CODES or ("&" in c[0] and all(x in SAFE_CODES for x in c[0].split("&"))))]
+    cands = [c for c in sel if c[2] >= MIN_ODDS and c[1] >= 0.5 and safe_ok(c[0])]
     if cands:
-        code, p, o = max(cands, key=lambda c: (c[1], c[2]))
+        code, p, o = max(cands, key=lambda c: (safe_score(c[1], c[2]), c[2]))
         safe = {"code": code, "p": round(p, 3), "odds": o}
     else:  # oran yoksa: adil oranı (1/olasılık) 1.30'un altında kalan seçenekler elenir
         model = [(c, pr[c]) for c in SAFE_CODES if c in pr and 1 / max(pr[c], 1e-9) >= MIN_ODDS]
@@ -424,6 +461,37 @@ def make_picks(pr, odds, home, away):
         if x:
             x["label"] = code_label(x["code"], home, away)
     return safe, surprise
+
+
+BLEND_PREFIX = ("cm", "rc", "fc8", "co", "cu", "ho", "hu", "ao", "au")
+GOAL_CODE = re.compile(r"^(1|X|2|1X|12|X2|btts_yes|btts_no|[ou]\d+(\.\d+)?|[ha][ou]\d+(\.\d+)?|cs:\d+-\d+)$")
+
+
+def _is_goal_code(c):
+    return bool(GOAL_CODE.match(c))
+
+
+def blend_scores(mat, cs_market, w=0.5):
+    """Skor matrisini piyasanın skor oranlarıyla harmanlar. Piyasa yalnızca listelediği skorlara olasılık verir;
+    o skorların modeldeki toplam payı korunur, liste dışı skorlar modelde kalır."""
+    if not cs_market or len(cs_market["selections"]) < 8:
+        return mat
+    from .odds import implied
+    mk = {}
+    for s_, ip in zip(cs_market["selections"], implied(cs_market)):
+        c = s_.get("code")
+        if c:
+            i, j = map(int, c[3:].split("-"))
+            if i < len(mat) and j < len(mat):
+                mk[(i, j)] = ip
+    if not mk:
+        return mat
+    mass = sum(mat[i][j] for i, j in mk)
+    tot = sum(mk.values()) or 1
+    out = [r[:] for r in mat]
+    for (i, j), ip in mk.items():
+        out[i][j] = (1 - w) * mat[i][j] + w * ip / tot * mass
+    return out
 
 
 def predict(b, prof_h, prof_a):
@@ -484,18 +552,31 @@ def predict(b, prof_h, prof_a):
     if odds:  # gol pazarları zaten λ üzerinden piyasaya kalibre; korner ve kart için doğrudan %50 harmanla
         from .odds import implied
         for m in odds.get("markets") or []:
-            if m["key"] in ("odds_most_corners", "odds_red_card", "odds_time_of_first_corner") and len(m["selections"]) >= 2:
-                for s_, ip in zip(m["selections"], implied(m)):
-                    if s_.get("code") in pr:
-                        pr[s_["code"]] = 0.5 * pr[s_["code"]] + 0.5 * ip
-    # kombine bahisler: her ayak skor matrisinde aynı anda tutmalı
+            old = m["key"] in ("odds_most_corners", "odds_red_card", "odds_time_of_first_corner") and len(m["selections"]) >= 2
+            ips = implied(m) if old else [s_.get("ip") for s_ in m["selections"]]
+            for s_, ip in zip(m["selections"], ips):
+                c = s_.get("code")
+                if ip is not None and c in pr and c.startswith(BLEND_PREFIX):
+                    # toplam korner çizgilerinde piyasa çok daha bilgili (modelin korner beklentisi kaba)
+                    w = 0.75 if c.startswith(("co", "cu")) else 0.5
+                    pr[c] = (1 - w) * pr[c] + w * ip
+    # kombine bahisler: gol ayakları skor matrisinde aynı anda tutmalı; korner/kart ayakları bağımsız sayılır
     for m in (odds or {}).get("markets") or []:
         for s_ in m["selections"]:
             c = s_.get("code")
             if c and "&" in c and c not in pr:
                 legs = c.split("&")
-                pr[c] = sum(mat[i][j] for i in range(len(mat)) for j in range(len(mat))
-                            if all(pick_hit(x, i, j) for x in legs))
+                goal = [x for x in legs if _is_goal_code(x)]
+                other = [x for x in legs if not _is_goal_code(x)]
+                if any(x not in pr for x in other):
+                    continue
+                p_ = sum(mat[i][j] for i in range(len(mat)) for j in range(len(mat))
+                         if all(pick_hit(x, i, j) for x in goal)) if goal else 1.0
+                for x in other:
+                    p_ *= pr[x]
+                pr[c] = p_
+    # skor tahmini: modelin skor matrisi ile piyasanın skor oranları harmanlanır (geniş yelpaze)
+    smat = blend_scores(mat, _odds_market(odds, "odds_correct_score"))
     n = len(mat)
     scores = sorted(((mat[i][j], f"{i}-{j}") for i in range(n) for j in range(n)), reverse=True)[:6]
     s_h, s_a = exp_pair("shots")
@@ -507,6 +588,10 @@ def predict(b, prof_h, prof_a):
     conf = "Yüksek" if n_min >= 5 and has_season else ("Orta" if n_min >= 3 else "Düşük")
     best = max((pr["1"], "1"), (pr["X"], "X"), (pr["2"], "2"))
     safe, surprise = make_picks(pr, odds, H, A)
+    score_pick = coherent_score(smat, pr, lam_h, lam_a)
+    cs_m = _odds_market(odds, "odds_correct_score")
+    if cs_m:  # skor tahmininin oranı (karnede 10 ₺'lik skor bahsi için)
+        score_pick["odds"] = next((s_["odds"] for s_ in cs_m["selections"] if s_.get("code") == "cs:" + score_pick["score"]), None)
     # oran sayfası için: oranı olan her seçeneğin model olasılığı
     codes = {s["code"] for m in (odds or {}).get("markets") or [] for s in m["selections"] if s.get("code")}
     return {
@@ -516,7 +601,7 @@ def predict(b, prof_h, prof_a):
         "over15": round(pr["o1.5"], 3), "over25": round(pr["o2.5"], 3), "over35": round(pr["o3.5"], 3),
         "btts": round(pr["btts_yes"], 3),
         "scores": [{"score": s, "p": round(p, 3)} for p, s in scores],
-        "score_pick": coherent_score(mat, pr, lam_h, lam_a),
+        "score_pick": score_pick,
         "corners": corners,
         "shots": {"home": s_h and round(s_h, 1), "away": s_a and round(s_a, 1)},
         "sot": {"home": o_h and round(o_h, 1), "away": o_a and round(o_a, 1)},
@@ -562,6 +647,17 @@ def pick_hit(code, hs, as_, final=None):
         return t > line if m.group(1) == "o" else t < line
     if code.startswith("cs:"):
         return code[3:] == f"{hs}-{as_}"
+    m = re.fullmatch(r"([hac])([ou])(\d+(?:\.\d+)?)", code)
+    if m:  # takım golü (h/a) veya toplam korner (c) alt/üst
+        line = float(m.group(3))
+        if m.group(1) == "c":
+            c = (final or {}).get("corners") or [None, None]
+            if c[0] is None or c[1] is None:
+                return None
+            v = c[0] + c[1]
+        else:
+            v = hs if m.group(1) == "h" else as_
+        return v > line if m.group(2) == "o" else v < line
     return None
 
 

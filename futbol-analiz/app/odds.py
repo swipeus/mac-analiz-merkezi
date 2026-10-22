@@ -248,10 +248,19 @@ def _leg(title, o, home, away):
     return f"{title}: {OUT_TR.get(lab, lab)}"
 
 
-def _leg_code(key, o, line):
-    """Modelin hesaplayabildiği gol ayakları için iç kod (kombine olasılığı skor matrisinden çıkar)."""
-    c = _code(key, o, line) if key else None
-    return c if c and not c.startswith(("cm", "fts", "rc", "dnb")) else None
+def _total_code(crit, o, home, away):
+    """Takım gol alt/üstü (ho/hu/ao/au) ve toplam korner alt/üstü (co/cu) için iç kod."""
+    c = crit.replace(" By ", " by ")
+    pref = {f"Total Goals by {home}": "h", f"Total Goals by {away}": "a", "Total Corners": "c"}.get(c)
+    line = _line(o.get("line"))
+    if not pref or line is None:
+        return None
+    return {"Over": f"{pref}o{line:g}", "Under": f"{pref}u{line:g}"}.get(o.get("label"))
+
+
+def _leg_code(code):
+    """Kombine ayağı olabilecek kodlar (beraberlikte iade gibi iadeli ayaklar kombine olasılığını bozar)."""
+    return code if code and not code.startswith(("fts", "dnb")) else None
 
 
 def parse_kambi(raw, home, away):
@@ -286,12 +295,13 @@ def parse_kambi(raw, home, away):
             if duo:
                 s["label"] = f"{' – '.join(duo)}: {s['label']}"
             c = _code(key, o, _line(o.get("line")) if key == "odds_goals_over_under" else line) if key else None
+            c = c or _total_code(crit, o, home, away)
             if c:
                 s["code"] = c
             if pairable and tot:
                 s["ip"] = round(iv / tot, 4)
             m["selections"].append(s)
-            outs[o["id"]] = (title, o, key)
+            outs[o["id"]] = (title, o, c)
     ou = re.compile(r"^(Üst|Alt) (\d+(?:\.\d+)?)$")
     for m in markets:
         sels = m["selections"]
@@ -316,7 +326,7 @@ def parse_kambi(raw, home, away):
                 if not odds:
                     continue
                 s = {"label": " + ".join(_leg(t, o, home, away) for t, o, _ in legs), "odds": round(odds / 1000, 2)}
-                codes = [_leg_code(k, o, _line(o.get("line")) if k == "odds_goals_over_under" else None) for _, o, k in legs]
+                codes = [_leg_code(k) for _, o, k in legs]
                 if all(codes):
                     s["code"] = "&".join(codes)
                 combos.append(s)
@@ -328,11 +338,15 @@ def parse_kambi(raw, home, away):
                         "provider": PROVIDER, "selections": sorted(uniq.values(), key=lambda s: s["odds"])})
     # "X kazanır ve karşılıklı gol" pazarlarına kod ver
     for m in markets:
-        if m["key"].startswith("k:") and m["key"].endswith("to Win and Both Teams To Score"):
-            side = "1" if home and home in m["key"] else "2"
-            for s in m["selections"]:
-                if s["label"] == "Evet":
-                    s["code"] = f"{side}&btts_yes"
+        k = m["key"]
+        side = "1" if home and home in k else "2"
+        combo = {"to Win and Both Teams To Score": f"{side}&btts_yes",
+                 "to Win to Nil": f"{side}&{'au' if side == '1' else 'hu'}0.5"}
+        for end, code in combo.items():
+            if k.startswith("k:") and k.endswith(end):
+                for s in m["selections"]:
+                    if s["label"] == "Evet":
+                        s["code"] = code
     order = {g: i for i, g in enumerate(GROUPS)}
     markets.sort(key=lambda m: order.get(m["group"], 99))
     return markets

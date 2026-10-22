@@ -181,8 +181,11 @@ async function answerSurprise(day, days) {
 }
 
 async function answerKarne() {
-  let rows = [];
-  try { rows = await api("/api/karne"); } catch { }
+  let rows = [], coupons = [];
+  try { const k = await api("/api/karne"); rows = Array.isArray(k) ? k : k.singles || []; coupons = Array.isArray(k) ? [] : (k.coupons || []).flatMap((d) => d.coupons); } catch { }
+  const cdone = coupons.filter((c) => c.state === "done");
+  const cpl = cdone.reduce((a, c) => a + c.profit, 0);
+  const ctxt = cdone.length ? `<br>🧩 Günün kombineleri: <b>${cdone.filter((c) => c.won).length}/${cdone.length}</b> kupon tuttu, kupon başına 250 ₺ ile <b>${cpl >= 0 ? "+" : ""}${Math.round(cpl).toLocaleString("tr-TR")} ₺</b>.` : "";
   const done = rows.filter((r) => r.state === "done" && (r.pick_hit === true || r.pick_hit === false));
   const pending = rows.filter((r) => r.state === "pending").length;
   if (!done.length) return `Henüz sonuçlanmış tahmin yok; ${pending} tahmin sonucunu bekliyor. <a href="#/karne" class="chat-link">Karneyi aç ›</a>`;
@@ -191,7 +194,7 @@ async function answerKarne() {
   const pl = wo.reduce((a, r) => a + (r.pick_hit ? 100 * (r.pick.odds - 1) : -100), 0);
   const sh = rows.filter((r) => r.state === "done" && r.score_hit).length;
   return `📒 Garanti tercihler: <b>${hit}/${done.length}</b> (${pc(hit / done.length)}). Skor tahminleri: ${sh} tam isabet.<br>` +
-    `💰 Her tercihe 100 ₺ oynansaydı: <b>${pl >= 0 ? "+" : ""}${Math.round(pl).toLocaleString("tr-TR")} ₺</b> (${wo.length} tercih). ${pending} tahmin bekliyor.<br><a href="#/karne" class="chat-link">Karneyi aç ›</a>`;
+    `💰 Her tercihe 100 ₺ oynansaydı: <b>${pl >= 0 ? "+" : ""}${Math.round(pl).toLocaleString("tr-TR")} ₺</b> (${wo.length} tercih). ${pending} tahmin bekliyor.${ctxt}<br><a href="#/karne" class="chat-link">Karneyi aç ›</a>`;
 }
 
 // oyuncu: bugünün/yarının kadrolarında adı geçen oyuncu

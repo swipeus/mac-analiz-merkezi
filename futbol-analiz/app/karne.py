@@ -1,5 +1,29 @@
-"""Model karnesi: her maç için başlamadan önceki son tahmin saklanır, maç bitince sonuçla karşılaştırılır."""
+"""Model karnesi: her maç için başlamadan önceki son tahmin saklanır, maç bitince sonuçla karşılaştırılır.
+
+Karne üç başlıkta tutulur: tek tercihler (her birine 100 ₺), günün kombineleri (kupon başına 250 ₺) ve
+skor tahminleri (her birine 10 ₺, skorun oranıyla). KARNE_START öncesindeki kayıtlar yayınlanmaz (sıfırlama).
+"""
+from datetime import datetime
+
+from . import kupon
 from .analysis import pick_hit
+from .config import TR_TZ
+
+KARNE_START = "2026-10-22"  # yeni oran sağlayıcısı ve genişletilmiş modelle karne bu günden başladı
+
+
+def tr_day(utc):
+    try:
+        return datetime.fromisoformat(utc.replace("Z", "+00:00")).astimezone(TR_TZ).strftime("%Y-%m-%d")
+    except (AttributeError, ValueError):
+        return ""
+
+
+def export(store):
+    singles = [r for r in store.pred_all() if tr_day(r.get("utc")) >= KARNE_START]
+    singles.sort(key=lambda r: r.get("utc") or "", reverse=True)
+    coupons = [d for d in store.coupon_all() if d["date"] >= KARNE_START]
+    return {"start": KARNE_START, "singles": singles, "coupons": coupons}
 
 
 def record(store, b):
@@ -48,10 +72,14 @@ def record(store, b):
         store.pred_put(mid, old)
 
 
-def seed(store, rows):
+def seed(store, data):
     """Yayındaki karneyi yerel kayıtlarla birleştirir: eksik kayıtları ekler, yerelde hâlâ "bekliyor" olup
     yayında sonuçlanmış kayıtları günceller (önbellek eski bir sürüme döndüğünde geçmiş kaybolmasın)."""
-    n = 0
+    if isinstance(data, dict):
+        rows = data.get("singles")
+        n = kupon.seed(store, data.get("coupons"))
+    else:  # eski biçim: yalnızca tek tercih listesi
+        rows, n = data, 0
     for r in rows or []:
         if not r.get("id"):
             continue

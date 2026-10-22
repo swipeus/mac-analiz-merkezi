@@ -130,7 +130,8 @@ async def player(player_id: int):
 
 @app.get("/api/karne")
 def karne_rows():
-    return sorted(store.pred_all(), key=lambda r: r.get("utc") or "", reverse=True)
+    from . import karne
+    return karne.export(store)
 
 
 @app.get("/api/events/recent")

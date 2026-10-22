@@ -55,7 +55,7 @@ STAT_KEYS = {
 _season_memo = {}
 
 # Analiz/paket biçimi değişince artırılır; eski sürümle üretilmiş paketler yeniden oluşturulur
-BUNDLE_VERSION = 7
+BUNDLE_VERSION = 8
 
 
 def _num(v):

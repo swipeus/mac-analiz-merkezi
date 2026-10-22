@@ -14,7 +14,7 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from app import karne, players
+from app import karne, kupon, players
 from app.config import DB_PATH, LEAGUES, STATIC_DIR, TR_TZ
 from app.crypto_box import derive_key, seal, unseal
 from app.sources import Sources
@@ -62,6 +62,7 @@ async def main(out):
 
     now = datetime.now(TR_TZ)
     days, n_match, player_ids = [], 0, []
+    kupon.settle(store)
     # bugün önce: oyuncu yenileme bütçesi önce bugünün maçlarına harcansın
     for d in (now, now + timedelta(days=1), now - timedelta(days=1)):
         try:
@@ -69,7 +70,11 @@ async def main(out):
         except Exception as e:  # noqa: BLE001
             log.warning("gün listesi alınamadı %s: %s", day_key(d), e)
             continue
-        write(f"day-{day_key(d)}.json", {"date": day_key(d), "matches": matches})
+        bodies = [b["body"] for b in (store.bundle_get(m["id"]) for m in matches) if b]
+        # günün kombineleri: bugün ve yarın için (dünün kuponları kilitli, sadece gösterilir)
+        doc = kupon.update_day(store, day_key(d), bodies) if d >= now - timedelta(hours=1) else store.coupon_get(day_key(d))
+        write(f"day-{day_key(d)}.json", {"date": day_key(d), "matches": matches,
+                                         "coupons": (doc or {}).get("coupons") or [], "coupons_locked": bool((doc or {}).get("locked"))})
         days.append(day_key(d))
         for m in matches:
             b = store.bundle_get(m["id"])
@@ -91,7 +96,8 @@ async def main(out):
             n_players += 1
     log.info("oyuncular: %s yenilendi, %s yayınlandı (%s kadroda)", n_fetched, n_players, len(set(player_ids)))
     write("events.json", store.recent_events(60))
-    write("karne.json", sorted(store.pred_all(), key=lambda r: r.get("utc") or "", reverse=True))
+    kupon.settle(store)
+    write("karne.json", karne.export(store))
     write("meta.json", {
         "updated": time.time(),
         "days": days,

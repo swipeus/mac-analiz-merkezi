@@ -16,25 +16,26 @@ MAX_LEGS = 5
 
 GOALISH = re.compile(r"^(o1\.5|o2\.5|o3\.5|btts_yes|[ha]o[01]\.5)$")
 CORNER = re.compile(r"^(c[ou]\d+(\.\d+)?|cm[12X])$")
-WINS = {"1", "2", "dnb1", "dnb2"}
+WINS = {"1", "2"}
 
 # (ad, simge, açıklama, seçici, en az olasılık, tek tercih oran aralığı, hedef toplam oran, en çok maç)
 THEMES = [
     ("Banko", "🔒", "Modelin en emin olduğu tercihler; düşük oran, yüksek isabet.",
-     lambda c: True, 0.75, (1.15, 1.55), (1.7, 2.6), 3),
+     lambda c: True, 0.75, (1.25, 1.55), (2.0, 3.0), 4),
     ("En garantiler", "✅", "Farklı pazarlardan, her biri yüksek olasılıklı ve oranı makul tercihler.",
-     lambda c: True, 0.68, (1.22, 1.90), (2.5, 4.5), 4),
-    ("Günün favorileri", "⭐", "Günün favori takımlarının kazanması (ya da beraberlikte iade).",
-     lambda c: c in WINS or c.split("&")[0] in ("1", "2"), 0.55, (1.20, 2.20), (2.5, 5.0), 4),
+     lambda c: True, 0.68, (1.25, 1.90), (2.5, 5.0), 4),
+    ("Günün favorileri", "⭐", "Günün favori takımlarının kazanması (galibiyet ya da galibiyetli kombine).",
+     lambda c: c in WINS or c.split("&")[0] in ("1", "2"), 0.55, (1.25, 2.20), (2.5, 6.0), 4),
     ("Gol şöleni", "⚽", "Gol beklentisi yüksek maçlardan üst, karşılıklı gol ve takım golü tercihleri.",
-     lambda c: bool(GOALISH.match(c)) or c == "btts_yes&o2.5", 0.58, (1.20, 2.20), (2.5, 5.0), 4),
+     lambda c: bool(GOALISH.match(c)) or c == "btts_yes&o2.5", 0.58, (1.25, 2.20), (2.5, 6.0), 4),
     ("Korner kombinesi", "🚩", "Toplam korner alt/üst ve en çok korner tercihleri.",
-     lambda c: bool(CORNER.match(c)), 0.57, (1.20, 2.20), (2.5, 5.0), 4),
+     lambda c: bool(CORNER.match(c)), 0.57, (1.25, 2.20), (2.5, 6.0), 4),
     ("Değerli oranlar", "💎", "Oranı 1.45 üstü olup modelin piyasa kadar ya da daha olası gördüğü tercihler.",
-     lambda c: True, 0.52, (1.45, 2.60), (3.5, 8.0), 4),
+     lambda c: True, 0.52, (1.45, 2.60), (4.0, 12.0), 5),
 ]
 MIN_LEG_ODDS = 1.25
 MAX_SAME = 2  # bir kuponda aynı pazardan en çok kaç tercih
+MIN_TOTAL, MAX_TOTAL = 2.0, 12.0  # kupon toplam oranı bu aralıkta olmalı
 
 
 def family(c):
@@ -68,7 +69,7 @@ def _cands(b):
     for m in (b.get("odds") or {}).get("markets") or []:
         for s in m["selections"]:
             c = s.get("code")
-            if not c or c not in probs or c.startswith(("cs:", "fts", "odd", "even", "rc_", "fc8")):
+            if not c or c not in probs or c.startswith(("cs:", "fts", "odd", "even", "rc_", "fc8", "dnb")):
                 continue
             legs = c.split("&")
             if len(legs) > 2 or not all(x in SAFE_CODES or TOTAL_CODE.match(x) for x in legs):
@@ -125,7 +126,7 @@ def build(bundles, date, relax=0.0):
             legs.append((x, b))
             used[family(x[0])] += 1
             tot *= x[2]
-        if len(legs) < 2:
+        if len(legs) < 2 or not MIN_TOTAL <= tot <= MAX_TOTAL:
             continue
         sig = tuple(sorted((b["id"], x[0]) for x, b in legs))
         if sig in seen:

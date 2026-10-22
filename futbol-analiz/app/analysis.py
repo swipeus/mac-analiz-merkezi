@@ -383,7 +383,7 @@ def coherent_score(mat, pr, lh, la):
 
 # garanti tercih adayları: maç sonucu, çifte şans, iade, KG, alt/üst, korner ve kart pazarları
 SAFE_CODES = {"1", "X", "2", "1X", "12", "X2", "btts_yes", "btts_no", "o1.5", "u1.5", "o2.5", "u2.5",
-              "o3.5", "u3.5", "dnb1", "dnb2", "cm1", "cm2", "cmX", "rc_yes", "rc_no"}
+              "o3.5", "u3.5", "cm1", "cm2", "cmX", "rc_yes", "rc_no"}  # beraberlikte iade bilerek yok
 
 
 COMBO_SHORT = {"1": "MS 1", "X": "MS X", "2": "MS 2", "1X": "ÇŞ 1X", "12": "ÇŞ 12", "X2": "ÇŞ X2",
@@ -449,7 +449,7 @@ def make_picks(pr, odds, home, away):
             code, p = max(model, key=lambda c: c[1])
             safe = {"code": code, "p": round(p, 3), "odds": None}
     sc = [c for c in sel if 2.8 <= c[2] <= 15 and c[1] >= (0.07 if c[0].startswith("cs:") else 0.15)
-          and not c[0].startswith(("cm", "fts", "odd", "even"))]
+          and not c[0].startswith(("cm", "fts", "odd", "even", "dnb"))]
     if sc:
         code, p, o = max(sc, key=lambda c: c[1] * c[2])
         surprise = {"code": code, "p": round(p, 3), "odds": o, "ev": round(p * o, 2)}

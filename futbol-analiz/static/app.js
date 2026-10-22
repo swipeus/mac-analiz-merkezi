@@ -274,10 +274,12 @@ async function renderMatch(id, silent, refresh) {
 const REFRESH_LABEL = () => STATIC ? "Yeni veri var mı?" : "Şimdi yenile";
 function bindMatch() {
   if (typeof liveTick === "function") setTimeout(liveTick, 50);  // canlı kutuyu hemen doldur
+  bindOdds();
   $("#view").querySelectorAll("[data-mt]").forEach((t) => t.onclick = () => {
     matchTab = t.dataset.mt;
     $("#view").querySelectorAll("[data-mt]").forEach((x) => x.classList.toggle("on", x.dataset.mt === matchTab));
     $(".mtab-body").innerHTML = matchTabBody(lastB);
+    bindOdds();
     // aşağı kaydırılmışsa yeni sekmenin başına dön (sekme çubuğu üstte sabit kalır)
     const bar = $(".mtabs"), body = $(".mtab-body");
     const target = body.getBoundingClientRect().top + window.scrollY - bar.offsetHeight - 64;
@@ -429,38 +431,68 @@ function commentaryHtml(A) {
 
 /* ---------- maç sayfası sekmeleri ve oranlar ---------- */
 let matchTab = "ozet", matchTabId = null;
-const ODDS_GROUPS = ["Maç", "Goller", "Yarılar", "Korner", "Kart ve penaltı", "Skor", "Oyuncular", "Diğer"];
-const GROUP_IC = { "Maç": "⚽", "Goller": "🥅", "Yarılar": "⏱️", "Korner": "🚩", "Kart ve penaltı": "🟨", "Skor": "🎯", "Oyuncular": "🏃", "Diğer": "📋" };
+const ODDS_GROUPS = ["Maç", "Goller", "Yarılar", "Skor", "Kombine", "Korner", "Kart ve penaltı", "Şut ve ofsayt", "Handikap",
+  "Oyuncu: gol", "Oyuncu: şut ve asist", "Oyuncu: kart ve faul", "Zaman aralığı", "Diğer", "Oyuncular"];
+const GROUP_IC = { "Maç": "⚽", "Goller": "🥅", "Yarılar": "⏱️", "Skor": "🎯", "Kombine": "🧩", "Korner": "🚩", "Kart ve penaltı": "🟨",
+  "Şut ve ofsayt": "👟", "Handikap": "⚖️", "Oyuncu: gol": "🏃", "Oyuncu: şut ve asist": "🎯", "Oyuncu: kart ve faul": "🟥",
+  "Zaman aralığı": "⏲️", "Diğer": "📋", "Oyuncular": "🏃" };
+const OPEN_GROUPS = new Set(["Maç", "Goller", "Kombine"]);
 function oddsHtml(b) {
   const P = b.analysis.prediction, o = b.odds;
   if (!o || !o.markets || !o.markets.length) return `<div class="card"><p class="muted">Bu maç için henüz bahis oranı bulunamadı. Oranlar genelde maçtan 1-3 gün önce açılır.</p></div>`;
   const probs = P.probs || {};
   const safe = P.best_pick && P.best_pick.code, sur = P.surprise && P.surprise.code;
+  const nSel = o.markets.reduce((a, m) => a + m.selections.length, 0);
   const pickCard = (cls, ic, title, x, note) => x ? `<div class="opick ${cls}"><div class="oi">${ic}</div><div>
       <div class="k">${title}</div><b>${esc(x.label)}</b>
       <div class="s">${x.odds ? `Oran <b>${nf(x.odds, 2)}</b> · ` : ""}Model olasılığı <b>${pc(x.p)}</b>${x.odds ? ` · Piyasa ${pc(1 / x.odds)}` : ""}</div>
       <small class="muted">${note}</small></div></div>` : "";
-  const top = `<div class="card" style="--c:#e3b341">${head("💰", `Bahis oranları <span class="muted">· ${esc((o.providers || []).join(", "))}</span>`)}
+  const top = `<div class="card" style="--c:#e3b341">${head("💰", `Bahis oranları <span class="muted">· ${esc((o.providers || []).join(", "))} · ${o.markets.length} pazar, ${nSel} seçenek</span>`)}
     <div class="opicks">
-      ${pickCard("safe", "✅", "En garanti tercih", P.best_pick, "Oranı 1.30 ve üstü seçenekler arasında modelin en yüksek olasılık verdiği tercih.")}
+      ${pickCard("safe", "✅", "En garanti tercih", P.best_pick, "Oranı 1.30 ve üstü seçenekler (kombineler dahil) arasında modelin en yüksek olasılık verdiği tercih.")}
       ${pickCard("sur", "⚡", "Olası sürpriz", P.surprise, "Oranı yüksek ama modelin piyasadan daha olası gördüğü seçenek. Karnede yer almaz.")}
     </div>
-    <p class="muted">Model gol beklentisini istatistiklerle bahis oranlarını harmanlayarak hesaplar${P.lam_market ? ` (piyasa: ${nf(P.lam_market[0], 2)} – ${nf(P.lam_market[1], 2)} gol, istatistik: ${nf(P.lam_model[0], 2)} – ${nf(P.lam_model[1], 2)})` : ""}. Tablolarda: oran, oranın ima ettiği olasılık (marjı temizlenmiş), modelin olasılığı ve <b>değer</b> (model olasılığı × oran − 1; yeşil = model piyasadan iyimser). 1.30 altındaki oranlar tercih dışıdır.</p></div>`;
+    <p class="muted">Model gol beklentisini istatistiklerle bahis oranlarını harmanlayarak hesaplar${P.lam_market ? ` (piyasa: ${nf(P.lam_market[0], 2)} – ${nf(P.lam_market[1], 2)} gol, istatistik: ${nf(P.lam_model[0], 2)} – ${nf(P.lam_model[1], 2)})` : ""}. Tablolarda: oran, oranın ima ettiği olasılık (marjı temizlenmiş), modelin olasılığı ve <b>değer</b> (model olasılığı × oran − 1; yeşil = model piyasadan iyimser). Kombinelerde model olasılığı, ayakların aynı anda tutma ihtimalidir. 1.30 altındaki oranlar tercih dışıdır.</p>
+    <input id="oddsSearch" class="osearch" type="search" placeholder="Pazar, oyuncu veya seçenek ara (ör. Gibbs-White, korner, KG)" autocomplete="off"></div>`;
   const groups = ODDS_GROUPS.map((g) => {
     const ms = o.markets.filter((m) => m.group === g);
     if (!ms.length) return "";
-    return `<div class="card" style="--c:#58a6ff">${head(GROUP_IC[g], g)}<div class="omkts">${ms.map((m) => marketHtml(m, probs, safe, sur, b)).join("")}</div></div>`;
+    const n = ms.reduce((a, m) => a + m.selections.length, 0);
+    return `<details class="card ogrp" style="--c:#58a6ff" ${OPEN_GROUPS.has(g) ? "open" : ""}><summary>${head(GROUP_IC[g] || "📋", `${esc(g)} <span class="muted">· ${ms.length} pazar · ${n} seçenek</span>`)}</summary><div class="omkts">${ms.map((m) => marketHtml(m, probs, safe, sur, b)).join("")}</div></details>`;
   }).join("");
   return top + groups;
+}
+function bindOdds() {
+  const q = $("#oddsSearch");
+  if (!q) return;
+  q.oninput = () => {
+    const t = q.value.trim().toLocaleLowerCase("tr");
+    document.querySelectorAll(".ogrp").forEach((g) => {
+      let any = false;
+      g.querySelectorAll(".omkt").forEach((m) => {
+        const title = m.querySelector(".omh b").textContent.toLocaleLowerCase("tr");
+        let hit = 0;
+        m.querySelectorAll(".orow:not(.ohead)").forEach((r) => {
+          const ok = !t || title.includes(t) || r.textContent.toLocaleLowerCase("tr").includes(t);
+          r.style.display = ok ? "" : "none"; hit += ok;
+        });
+        m.style.display = hit ? "" : "none"; any = any || hit > 0;
+      });
+      g.style.display = any ? "" : "none";
+      if (t && any) g.open = true;
+    });
+  };
 }
 function marketHtml(m, probs, safe, sur, b) {
   // "1" / "2" seçeneklerinin yanına takım adı
   const lab = (l) => l === "1" ? `1 · ${b.home.name}` : l === "2" ? `2 · ${b.away.name}` : l;
   const many = m.selections.length > 8;
+  // eski kayıtlarda "ip" yok: küçük pazarlarda burada hesaplanır
   const inv = m.selections.map((s) => 1 / s.odds), tot = inv.reduce((a, x) => a + x, 0);
+  const old = m.selections.length >= 2 && !/^(k:|prepack)/.test(m.key) && !m.selections.some((s) => s.ip != null);
   const rows = m.selections.map((s, i) => {
     const mp = s.code != null ? probs[s.code] : null;
-    const ip = !many && tot ? inv[i] / tot : null;
+    const ip = s.ip != null ? s.ip : old && !many && tot ? inv[i] / tot : null;
     const val = mp != null ? mp * s.odds - 1 : null;
     const cls = s.code && s.code === safe ? "safe" : s.code && s.code === sur ? "sur" : "";
     return `<div class="orow ${cls} ${s.odds < 1.3 ? "low" : ""}">
@@ -470,8 +502,8 @@ function marketHtml(m, probs, safe, sur, b) {
       <span class="om">${mp != null ? pc(mp) : ""}</span>
       <span class="ov ${val == null ? "" : val > 0.05 ? "pos" : val < -0.1 ? "neg" : ""}">${val == null ? "" : (val > 0 ? "+" : "") + Math.round(val * 100) + "%"}</span></div>`;
   }).join("");
-  return `<div class="omkt"><div class="omh"><b>${esc(m.title)}</b><small class="muted">${esc(m.provider || "")}</small></div>
-    <div class="orow ohead"><span class="ol">Seçenek</span><span class="oo">Oran</span><span class="op">${many ? "" : "Piyasa"}</span><span class="om">Model</span><span class="ov">Değer</span></div>
+  return `<div class="omkt"><div class="omh"><b>${esc(m.title)}</b><small class="muted">${m.selections.length > 3 ? m.selections.length + " seçenek" : ""}</small></div>
+    <div class="orow ohead"><span class="ol">Seçenek</span><span class="oo">Oran</span><span class="op">Piyasa</span><span class="om">Model</span><span class="ov">Değer</span></div>
     <div class="${many ? "oscroll" : ""}">${rows}</div></div>`;
 }
 
@@ -766,6 +798,7 @@ async function renderKarne(silent) {
 // karnede tercih türü (örn. "MS 1 (Liverpool)" -> "MS 1")
 const pickType = (p) => {
   const c = p.code || "";
+  if (c.includes("&")) return "Kombine";
   if (["1", "X", "2"].includes(c)) return "Maç sonucu";
   if (["1X", "12", "X2"].includes(c)) return "Çifte şans";
   if (/^dnb/.test(c)) return "Beraberlikte iade";
@@ -1278,7 +1311,7 @@ const RELEASES = [
     id: 6, date: "21 Ekim 2026", title: "Yeni: Canlı veriler", sub: "Bu güncellemede gelenler",
     items: [
       ["🔴", "Anlık skor ve dakika", "Canlı maçların skoru ve dakikası artık saniyeler içinde geliyor; sayfa açıkken 30 saniyede bir yenilenir."],
-      ["⚽", "Gol bildirimi", "Açık sayfada gol olunca anında \"GOL!\" bildirimi çıkar."],
+      ["⚽", "Gol bildirimi", "Açık sayfada gol olunca anında çan listesine \"GOL!\" bildirimi düşer."],
       ["📜", "Maç olayları ve canlı istatistik", "Maç sayfasında goller, kartlar, oyuncu değişiklikleri ve canlı topla oynama, xG, şut, korner."],
       ["📋", "Resmi 11 anında", "Resmi ilk 11'ler açıklandığı an maç sayfasında görünür."],
       ["⏱️", "Analizler 6 dakikada bir", "Tahminler, oranlar ve haberler artık 30-45 dakika yerine 6 dakikada bir yenileniyor."],
@@ -1291,6 +1324,17 @@ const RELEASES = [
       ["🔴", "Canlı sekmesi", "Maç başladıysa sayfa doğrudan Canlı sekmesinde açılır: olaylar ve maç istatistikleri anlık. Maç bitince sekmenin adı 🏁 Maç olur."],
       ["📌", "Sabit sekme çubuğu", "Aşağı kaydırsan da sekmeler üstte kalır; tek dokunuşla geçiş."],
       ["🔒", "Donmuş tahminler", "Maç başlayınca tahminler maç öncesi hâliyle kilitlenir; karne ile maç sayfası her zaman aynı."],
+    ],
+  },
+  {
+    id: 8, date: "22 Ekim 2026", title: "Yeni: Tüm bahis pazarları", sub: "Bu güncellemede gelenler",
+    items: [
+      ["💰", "Tek sağlayıcı: Unibet", "Oranlar artık tek bir yerden, Unibet'ten geliyor; büyük maçlarda 100'ü aşkın pazar ve yaklaşık 1000 seçenek."],
+      ["🧩", "Kombine bahisler", "MS + KG, KG Var + 2.5 Üst, MS + alt/üst, korner ve kart kombinleri gibi hazır kombineler; model her biri için olasılık hesaplar."],
+      ["🏃", "Oyuncu pazarları", "Gol, ilk gol, 2+ gol, kafa golü, asist, gol veya asist, şut, isabetli şut, kart ve faul pazarları."],
+      ["📊", "Daha fazla pazar", "Yarılar, handikaplar, korner/kart/şut/ofsayt/faul toplamları, takım bazlı alt/üst ve dakika aralıkları."],
+      ["🔍", "Oranlarda arama", "Oranlar sekmesinde oyuncu veya pazar adı yaz, sadece o seçenekler kalsın; gruplar açılıp kapanır."],
+      ["🔕", "Sessiz bildirimler", "Bildirimler artık ekranı kaplamaz; yalnızca sarı çana dokununca görünür."],
     ],
   },
 ];

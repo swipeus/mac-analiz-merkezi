@@ -55,7 +55,7 @@ STAT_KEYS = {
 _season_memo = {}
 
 # Analiz/paket biçimi değişince artırılır; eski sürümle üretilmiş paketler yeniden oluşturulur
-BUNDLE_VERSION = 6
+BUNDLE_VERSION = 7
 
 
 def _num(v):
@@ -390,7 +390,7 @@ async def build_bundle(src, match_id, prev_odds=None):
         if started:
             return prev_odds
         try:
-            return await odds_mod.fetch(src, match_id, home.get("name"), away.get("name"))
+            return await odds_mod.fetch(src, match_id, home.get("name"), away.get("name"), league_id, kickoff)
         except Exception as e:  # noqa: BLE001
             log.warning("oranlar alınamadı %s: %s", match_id, e)
             return prev_odds

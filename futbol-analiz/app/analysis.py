@@ -311,7 +311,7 @@ def fit_market_lambdas(odds):
     mw = _odds_market(odds, "who_will_win")
     if not mw or len(mw["selections"]) != 3:
         return None
-    imp = dict(zip([s["code"] for s in mw["selections"]], implied(mw)))
+    imp = dict(zip([s.get("code") for s in mw["selections"]], implied(mw)))
     if not all(k in imp for k in ("1", "X", "2")):
         return None
     ou = _odds_market(odds, "odds_goals_over_under", 2.5)
@@ -320,7 +320,7 @@ def fit_market_lambdas(odds):
         ou = min(ous, key=lambda m: abs(m["line"] - 2.5)) if ous else None
     over = None
     if ou and len(ou["selections"]) == 2:
-        oi = dict(zip([s["code"][0] for s in ou["selections"] if s["code"]], implied(ou)))
+        oi = {s["code"][0]: p for s, p in zip(ou["selections"], implied(ou)) if s.get("code")}
         over = (ou["line"], oi.get("o"))
     grid = [round(0.15 + 0.1 * k, 2) for k in range(40)]
     n = 9
@@ -369,7 +369,13 @@ SAFE_CODES = {"1", "X", "2", "1X", "12", "X2", "btts_yes", "btts_no", "o1.5", "u
               "o3.5", "u3.5", "dnb1", "dnb2", "cm1", "cm2", "cmX", "rc_yes", "rc_no"}
 
 
+COMBO_SHORT = {"1": "MS 1", "X": "MS X", "2": "MS 2", "1X": "ÇŞ 1X", "12": "ÇŞ 12", "X2": "ÇŞ X2",
+               "btts_yes": "KG Var", "btts_no": "KG Yok"}
+
+
 def code_label(code, home, away):
+    if "&" in code:  # kombine: "MS 1 + KG Var + 2.5 Üst"
+        return " + ".join(COMBO_SHORT.get(c) or code_label(c, home, away) for c in code.split("&"))
     fixed = {"1": f"MS 1 ({home})", "X": "MS X (beraberlik)", "2": f"MS 2 ({away})", "1X": "Çifte şans 1X", "12": "Çifte şans 12",
              "X2": "Çifte şans X2", "btts_yes": "KG Var", "btts_no": "KG Yok", "odd": "Toplam gol tek", "even": "Toplam gol çift",
              "dnb1": f"Beraberlikte iade: {home}", "dnb2": f"Beraberlikte iade: {away}", "fts0": "Maçta gol olmaz",
@@ -396,7 +402,7 @@ def make_picks(pr, odds, home, away):
             if s.get("code") and s["code"] in pr:
                 sel.append((s["code"], pr[s["code"]], s["odds"]))
     safe = None
-    cands = [c for c in sel if c[0] in SAFE_CODES and c[2] >= MIN_ODDS]
+    cands = [c for c in sel if c[2] >= MIN_ODDS and (c[0] in SAFE_CODES or ("&" in c[0] and all(x in SAFE_CODES for x in c[0].split("&"))))]
     if cands:
         code, p, o = max(cands, key=lambda c: (c[1], c[2]))
         safe = {"code": code, "p": round(p, 3), "odds": o}
@@ -482,6 +488,14 @@ def predict(b, prof_h, prof_a):
                 for s_, ip in zip(m["selections"], implied(m)):
                     if s_.get("code") in pr:
                         pr[s_["code"]] = 0.5 * pr[s_["code"]] + 0.5 * ip
+    # kombine bahisler: her ayak skor matrisinde aynı anda tutmalı
+    for m in (odds or {}).get("markets") or []:
+        for s_ in m["selections"]:
+            c = s_.get("code")
+            if c and "&" in c and c not in pr:
+                legs = c.split("&")
+                pr[c] = sum(mat[i][j] for i in range(len(mat)) for j in range(len(mat))
+                            if all(pick_hit(x, i, j) for x in legs))
     n = len(mat)
     scores = sorted(((mat[i][j], f"{i}-{j}") for i in range(n) for j in range(n)), reverse=True)[:6]
     s_h, s_a = exp_pair("shots")
@@ -518,6 +532,9 @@ def predict(b, prof_h, prof_a):
 def pick_hit(code, hs, as_, final=None):
     """Tercih tuttu mu? hs/as_ maç sonu skoru, final: korner/kart istatistikleri. None: iade/bilinmiyor (karnede sayılmaz)."""
     t = hs + as_
+    if "&" in code:  # kombine: bütün ayaklar tutmalı; biri bilinmiyorsa değerlendirilmez
+        res = [pick_hit(c, hs, as_, final) for c in code.split("&")]
+        return None if None in res else all(res)
     if code in ("cm1", "cm2", "cmX"):
         c = (final or {}).get("corners") or [None, None]
         if c[0] is None or c[1] is None:
@@ -711,8 +728,8 @@ def commentary(b, pr, prof_h, prof_a):
     mk = []
     if mw and len(mw["selections"]) == 3:
         from .odds import implied
-        imp = dict(zip([s["code"] for s in mw["selections"]], implied(mw)))
-        od = {s["code"]: s["odds"] for s in mw["selections"]}
+        imp = dict(zip([s.get("code") for s in mw["selections"]], implied(mw)))
+        od = {s.get("code"): s["odds"] for s in mw["selections"]}
         if all(k in imp for k in ("1", "X", "2")):
             fav = "1" if imp["1"] >= imp["2"] else "2"
             ft, other = (H, A) if fav == "1" else (A, H)
@@ -728,7 +745,7 @@ def commentary(b, pr, prof_h, prof_a):
     ou = _odds_market(odds, "odds_goals_over_under", 2.5)
     if ou and len(ou["selections"]) == 2:
         from .odds import implied
-        io = dict(zip([s["code"] for s in ou["selections"]], implied(ou)))
+        io = dict(zip([s.get("code") for s in ou["selections"]], implied(ou)))
         if io.get("o2.5", 0) >= 0.6:
             mk.append(f"Oranlar gollü bir maça işaret ediyor (2.5 üst ihtimali {pct(io['o2.5'])}).")
         elif io.get("u2.5", 0) >= 0.55:

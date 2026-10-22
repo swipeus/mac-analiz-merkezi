@@ -595,3 +595,13 @@ body.chat-open { overflow: hidden; }
 .mchip .flag { width: 22px; height: 15px; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 .whistle { display: block; }
+
+/* oranlar: açılır pazar grupları ve arama */
+.ogrp > summary { list-style: none; cursor: pointer; }
+.ogrp > summary::-webkit-details-marker { display: none; }
+.ogrp > summary .ch { margin-bottom: 0 !important; }
+.ogrp > summary .ch::after { content: "▾"; margin-left: auto; color: var(--muted); transition: transform .2s; }
+.ogrp:not([open]) > summary .ch::after { transform: rotate(-90deg); }
+.ogrp[open] > summary .ch { margin-bottom: 12px !important; }
+.osearch { width: 100%; margin-top: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel2); color: var(--text); font-size: 15px; }
+.osearch:focus { outline: none; border-color: var(--accent); }

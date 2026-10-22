@@ -6,6 +6,7 @@ tutulur (model olasılığı en az %50, çoğu temada %60-75). Kuponlar maçlar 
 yeniden hazırlanır; kupondaki ilk maç başladığında o günün kuponları kilitlenir ve karneye yazılır.
 """
 import re
+from collections import Counter
 from datetime import datetime, timezone
 
 from .analysis import SAFE_CODES, TOTAL_CODE, code_label, pick_hit
@@ -32,7 +33,31 @@ THEMES = [
     ("Değerli oranlar", "💎", "Oranı 1.45 üstü olup modelin piyasa kadar ya da daha olası gördüğü tercihler.",
      lambda c: True, 0.52, (1.45, 2.60), (3.5, 8.0), 4),
 ]
-MIN_LEG_ODDS = 1.15
+MIN_LEG_ODDS = 1.25
+MAX_SAME = 2  # bir kuponda aynı pazardan en çok kaç tercih
+
+
+def family(c):
+    """Tercihin pazar ailesi (kuponda çeşitlilik için)."""
+    if "&" in c:
+        return "kombine"
+    if c in ("1", "X", "2"):
+        return "ms"
+    if c in ("1X", "12", "X2"):
+        return "cifte"
+    if c.startswith("dnb"):
+        return "iade"
+    if c.startswith("btts"):
+        return "kg"
+    if c[0] in "ou":
+        return "altust"
+    if c[0] in "ha":
+        return "takim"
+    if c.startswith(("co", "cu")):
+        return "korner"
+    if c.startswith("cm"):
+        return "kornerms"
+    return c
 
 
 def _cands(b):
@@ -82,19 +107,23 @@ def build(bundles, date, relax=0.0):
         else:  # önce olasılık, yakın olasılıklarda daha yüksek oran
             key = lambda x: (round(x[1], 2), x[2])
         best = []
-        for b, cs in pool:  # her maçtan temaya en uygun tek tercih
+        for b, cs in pool:  # her maçın temaya uyan tercihleri, en uygundan başlayarak
             ok = [x for x in cs if sel(x[0]) and x[1] >= pmin - relax and max(omin, MIN_LEG_ODDS) <= x[2] <= omax
                   and (not value or edge(x) >= -0.01)]
             if ok:
-                best.append((max(ok, key=key), b))
-        best.sort(key=lambda t: key(t[0]), reverse=True)
-        legs, tot = [], 1.0
-        for x, b in best:  # hedef toplam orana ulaşana kadar en güvenilir tercihleri ekle
+                best.append((sorted(ok, key=key, reverse=True), b))
+        best.sort(key=lambda t: key(t[0][0]), reverse=True)
+        legs, tot, used = [], 1.0, Counter()
+        for ok, b in best:  # hedef toplam orana ulaşana kadar en güvenilir tercihleri ekle
             if len(legs) >= min(max_legs, MAX_LEGS) or (len(legs) >= 2 and tot >= tmin):
                 break
-            if tot * x[2] > tmax and len(legs) >= 2:
+            # pazarlar karışık olsun: önce kuponda henüz olmayan bir pazar, yoksa en çok 2 aynı pazar
+            x = next((y for y in ok if not used[family(y[0])]), None) \
+                or next((y for y in ok if used[family(y[0])] < MAX_SAME), None)
+            if x is None or (tot * x[2] > tmax and len(legs) >= 2):
                 continue
             legs.append((x, b))
+            used[family(x[0])] += 1
             tot *= x[2]
         if len(legs) < 2:
             continue

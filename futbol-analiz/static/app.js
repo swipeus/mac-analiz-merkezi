@@ -134,6 +134,40 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") openFilter
 $("#filterAll").onclick = () => { state.off.clear(); renderLeagues(); applyFilter(); };
 $("#filterNone").onclick = () => { state.leagues.forEach((l) => state.off.add(l.id)); renderLeagues(); applyFilter(); };
 
+/* ---------- sıralama ---------- */
+// her seçenek: [etiket, kısa ad, maçın değeri (yüksekten düşüğe sıralanır)]
+const SORTS = {
+  league: ["Lig sırası", "Sırala", null],
+  time: ["Başlama saati", "Saat", (m) => -new Date(m.utc).getTime()],
+  fav: ["Favori (kazanma %)", "Favori", (m) => m.pred && Math.max(m.pred.p_home, m.pred.p_away)],
+  btts: ["Karşılıklı gol (KG Var %)", "KG Var", (m) => m.pred && m.pred.btts],
+  over: ["2.5 Üst %", "2.5 Üst", (m) => m.pred && m.pred.over25],
+  under: ["2.5 Alt %", "2.5 Alt", (m) => m.pred && 1 - m.pred.over25],
+  draw: ["Beraberlik %", "Beraberlik", (m) => m.pred && m.pred.p_draw],
+};
+state.sort = SORTS[safeGet("sortBy")] ? safeGet("sortBy") : "league";
+// sıralı listede kartın üstünde sıralama ölçütünün yüzdesi
+function sortBadge(m) {
+  if (!m.pred || state.sort === "league" || state.sort === "time") return "";
+  const v = SORTS[state.sort][2](m);
+  const who = state.sort === "fav" ? (m.pred.p_home >= m.pred.p_away ? m.home.name : m.away.name) + " " : "";
+  return `<span class="tag sortv">${esc(SORTS[state.sort][1])}: ${esc(who)}${pc(v)}</span>`;
+}
+function renderSortMenu() {
+  $("#sortLabel").textContent = SORTS[state.sort][1];
+  $("#sortBtn").classList.toggle("active", state.sort !== "league");
+  $("#sortPop").innerHTML = Object.entries(SORTS).map(([k, [lab]]) =>
+    `<button role="menuitemradio" aria-checked="${k === state.sort}" class="sortopt ${k === state.sort ? "on" : ""}" data-sort="${k}">${esc(lab)}</button>`).join("");
+  $("#sortPop").querySelectorAll("[data-sort]").forEach((b) => b.onclick = () => {
+    state.sort = b.dataset.sort; safeSet("sortBy", state.sort);
+    renderSortMenu(); openSort(false); renderDay(true);
+  });
+}
+function openSort(open) { $("#sortPop").classList.toggle("hidden", !open); }
+$("#sortBtn").onclick = (e) => { e.stopPropagation(); openCal(false); openSort($("#sortPop").classList.contains("hidden")); };
+document.addEventListener("click", (e) => { if (!e.target.closest(".sortwrap")) openSort(false); });
+renderSortMenu();
+
 /* ---------- gün listesi ---------- */
 let dayCache = null;
 async function renderDay(silent) {
@@ -150,11 +184,23 @@ async function renderDay(silent) {
   // Map: sunucunun lig sırasını korur (sayısal anahtarlı nesne sırayı bozar)
   const groups = new Map();
   ms.forEach((m) => { if (!groups.has(m.league_id)) groups.set(m.league_id, []); groups.get(m.league_id).push(m); });
-  v.innerHTML = highlightsHtml(ms, dayCache.coupons || []) + [...groups.values()].map((list) => `
+  const key = SORTS[state.sort][2];
+  let body;
+  if (key) {  // sıralı görünüm: lig grupları yerine tek liste, en yüksekten aşağı (analizi olmayanlar sonda)
+    const val = (m) => { const v = key(m); return v == null || Number.isNaN(v) ? -Infinity : v; };
+    const sorted = [...ms].sort((a, b) => val(b) - val(a));
+    body = `<section class="lg-block">
+      <div class="lg-title"><span class="sorticon">⇅</span><b>${esc(SORTS[state.sort][0])}</b><span>${sorted.length} maç · yüksekten düşüğe</span></div>
+      <div class="mgrid">${sorted.map((m) => cardHtml(m, true)).join("")}</div>
+    </section>`;
+  } else {
+    body = [...groups.values()].map((list) => `
     <section class="lg-block">
       <div class="lg-title"><img src="${leagueLogo(list[0].league_id)}" alt="" onerror="this.remove()"><b>${esc(list[0].league)}</b><span>${list.length} maç</span></div>
-      <div class="mgrid">${list.map(cardHtml).join("")}</div>
+      <div class="mgrid">${list.map((m) => cardHtml(m)).join("")}</div>
     </section>`).join("");
+  }
+  v.innerHTML = highlightsHtml(ms, dayCache.coupons || []) + body;
   v.querySelectorAll("[data-id]").forEach((r) => r.onclick = () => location.hash = "#/mac/" + r.dataset.id);
   v.querySelectorAll("[data-go]").forEach((r) => r.onclick = () => location.hash = r.dataset.go);
   if (typeof liveTick === "function") setTimeout(liveTick, 50);  // kartlara anlık skorları uygula
@@ -176,7 +222,7 @@ function crestHtml(team, isFav, pct, size) {
       onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'fb',textContent:'${initials}'}))">
   </div>`;
 }
-function cardHtml(m) {
+function cardHtml(m, sorted) {
   const live = m.started && !m.finished;
   const p = m.pred;
   const fav = favoriteSide(p);
@@ -200,7 +246,7 @@ function cardHtml(m) {
       <span class="pill"><i>KG</i>${pc(p.btts)}</span>
     </div>` : `<div class="pending">Analiz hazırlanıyor…</div>`;
   return `<div class="mcard ${live ? "is-live" : ""}" data-id="${m.id}">
-    <div class="mtop">${top}<div class="mtags">${tags}</div></div>
+    <div class="mtop">${top}<div class="mtags">${sorted ? `<span class="tag lgt"><img src="${leagueLogo(m.league_id)}" alt="" onerror="this.remove()">${esc(m.league)}</span>${sortBadge(m)}` : tags}</div></div>
     <div class="mteams">
       <div class="tm">${crestHtml(m.home, fav === "home", p && p.p_home)}<div class="nm">${esc(m.home.name)}</div></div>
       <div class="mid">${mid}</div>
@@ -1341,7 +1387,7 @@ function updateCalLabel() {
     new Date(state.date + "T12:00:00").toLocaleDateString("tr-TR", { day: "numeric", month: "short" });
 }
 function openCal(open) { $("#calPop").classList.toggle("hidden", !open); }
-$("#calBtn").onclick = (e) => { e.stopPropagation(); openCal($("#calPop").classList.contains("hidden")); };
+$("#calBtn").onclick = (e) => { e.stopPropagation(); openSort(false); openCal($("#calPop").classList.contains("hidden")); };
 document.addEventListener("click", (e) => { if (!e.target.closest(".calwrap")) openCal(false); });
 
 /* ---------- statik mod (GitHub Pages): şifre ve yoklama ---------- */

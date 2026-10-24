@@ -657,3 +657,14 @@ body.chat-open { overflow: hidden; }
 .kdgrp > summary::after { content: "▾"; color: var(--muted); margin-left: 6px; transition: transform .2s; }
 .kdgrp:not([open]) > summary::after { transform: rotate(-90deg); }
 .kdgrp > summary .kpl { margin-left: auto; }
+
+/* sıralama */
+.sort-btn.active { border-color: var(--accent); color: var(--accent); }
+.sortpop { width: 240px; gap: 4px; padding: 8px; }
+.sortopt { text-align: left; padding: 9px 12px; border-radius: 10px; background: transparent; border: 1px solid transparent; font-size: 14px; }
+.sortopt:hover { background: var(--panel2); }
+.sortopt.on { background: rgba(88,166,255,.14); border-color: rgba(88,166,255,.45); color: #79c0ff; font-weight: 700; }
+.sorticon { font-size: 16px; color: var(--accent); }
+.tag.lgt { display: inline-flex; align-items: center; gap: 4px; }
+.tag.lgt img { width: 14px; height: 14px; object-fit: contain; }
+.tag.sortv { background: rgba(88,166,255,.16); color: #79c0ff; font-weight: 800; }

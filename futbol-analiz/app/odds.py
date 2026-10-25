@@ -325,6 +325,10 @@ def parse_kambi(raw, home, away):
                 odds = (c.get("odds") or {}).get("decimal")
                 if not odds:
                     continue
+                # tutarsız fiyat: kombine, ayaklarının en yükseğinden ucuz olamaz (iki şart birlikte tek şarttan
+                # daha olası değildir). Unibet'in hazır kombinelerinde ara sıra görülüyor; bunlar gösterilmez.
+                if odds <= max(o.get("odds") or 0 for _, o, _ in legs):
+                    continue
                 s = {"label": " + ".join(_leg(t, o, home, away) for t, o, _ in legs), "odds": round(odds / 1000, 2)}
                 codes = [_leg_code(k) for _, o, k in legs]
                 if all(codes):

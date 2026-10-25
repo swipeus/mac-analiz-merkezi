@@ -6,7 +6,7 @@ skor tahminleri (her birine 10 ₺, skorun oranıyla). KARNE_START öncesindeki 
 from datetime import datetime
 
 from . import kupon
-from .analysis import pick_hit
+from .analysis import early_hit, pick_hit
 from .config import TR_TZ
 
 KARNE_START = "2026-10-22"  # yeni oran sağlayıcısı ve genişletilmiş modelle karne bu günden başladı
@@ -54,6 +54,17 @@ def record(store, b):
         })
         return
 
+    if st.get("started") and not st.get("finished") and old and old.get("state") == "pending":
+        # maç sürüyor: canlı skor ve dakika; sonucu kesinleşen tercih (KG Var, üstler...) erkenden sonuçlanır
+        hs, as_ = b["home"].get("score"), b["away"].get("score")
+        old["live"] = {"score": [hs, as_], "min": st.get("live")}
+        if old.get("pick_hit") is None:
+            h = early_hit(old["pick"]["code"], hs, as_, b.get("final"))
+            if h is not None:
+                old["pick_hit"], old["pick_early"] = h, True
+        store.pred_put(mid, old)
+        return
+
     if st.get("finished") and old and old.get("state") == "pending":
         hs, as_ = b["home"].get("score"), b["away"].get("score")
         if hs is None or as_ is None:
@@ -61,6 +72,7 @@ def record(store, b):
         ps = [int(x) for x in old["score"]["score"].split("-")]
         ms_real = "1" if hs > as_ else ("X" if hs == as_ else "2")
         hit = pick_hit(old["pick"]["code"], hs, as_, b.get("final"))
+        old.pop("live", None)
         old.update({
             # beraberlikte iade gibi durumlarda tercih "iade" sayılır (None)
             "state": "done", "result": [hs, as_],

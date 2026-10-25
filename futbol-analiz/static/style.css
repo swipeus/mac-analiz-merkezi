@@ -668,3 +668,7 @@ body.chat-open { overflow: hidden; }
 .tag.lgt { display: inline-flex; align-items: center; gap: 4px; }
 .tag.lgt img { width: 14px; height: 14px; object-fit: contain; }
 .tag.sortv { background: rgba(88,166,255,.16); color: #79c0ff; font-weight: 800; }
+
+/* karnede canlı maçlar */
+.krow .sc.live, .kres.live { color: #ff7b72; }
+.krow .sub.live { color: #ff7b72; font-weight: 700; }

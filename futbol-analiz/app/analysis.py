@@ -661,6 +661,33 @@ def pick_hit(code, hs, as_, final=None):
     return None
 
 
+def early_hit(code, hs, as_, live=None):
+    """Maç sürerken sonucu kesinleşmiş tercihler: KG Var iki takım da gol atınca, üstler çizgi aşılınca tutar;
+    altlar ve KG Yok aynı durumda kaybeder. Maç sonucu, çifte şans, en çok korner gibi tercihler bitişi bekler (None)."""
+    if hs is None or as_ is None:
+        return None
+    if "&" in code:
+        res = [early_hit(c, hs, as_, live) for c in code.split("&")]
+        return False if False in res else True if all(r is True for r in res) else None
+    if code == "btts_yes" and hs > 0 and as_ > 0:
+        return True
+    if code == "btts_no" and hs > 0 and as_ > 0:
+        return False
+    m = re.fullmatch(r"([hac]?)([ou])(\d+(?:\.\d+)?)", code)
+    if not m:
+        return None
+    if m.group(1) == "c":
+        c = (live or {}).get("corners") or [None, None]
+        if c[0] is None or c[1] is None:
+            return None
+        v = c[0] + c[1]
+    else:
+        v = {"": hs + as_, "h": hs, "a": as_}[m.group(1)]
+    if v > float(m.group(3)):
+        return m.group(2) == "o"
+    return None
+
+
 def scenarios(b, pr, prof_h, prof_a):
     H, A = b["home"]["name"], b["away"]["name"]
     rh, ra = b["recent"]["home"]["avg_for"], b["recent"]["away"]["avg_for"]

@@ -7,10 +7,11 @@ en az %52-75). Kuponlar maçlar başlayana kadar en güncel verilerle yeniden ha
 o günün kuponları kilitlenir ve karneye yazılır.
 """
 import re
+import time
 from collections import Counter
 from datetime import datetime, timezone
 
-from .analysis import SAFE_CODES, TOTAL_CODE, code_label, pick_hit
+from .analysis import SAFE_CODES, TOTAL_CODE, code_label, early_hit, pick_hit
 
 STAKE = 1000           # kupon başına
 PER_THEME = 3          # her temada günlük kupon sayısı
@@ -190,6 +191,8 @@ def update_day(store, date, bundles):
     biri başladıysa mevcut kuponları kilitler (karnede maç öncesi hâl kalır)."""
     now = datetime.now(timezone.utc)
     doc = store.coupon_get(date)
+    if doc and not any(c.get("theme") for c in doc["coupons"]):
+        doc = None  # eski düzen (temasız, günde 5 kupon): kalan maçlarla temalı kuponlar kurulur
     if doc and (doc.get("locked") or any(_started(l, now) for c in doc["coupons"] for l in c["legs"])):
         if not doc.get("locked"):
             doc["locked"] = True
@@ -205,41 +208,58 @@ def update_day(store, date, bundles):
     return doc
 
 
+def _update_leg(store, l):
+    """Ayağın canlı skorunu ve sonucunu günceller. Değişiklik olduysa True."""
+    if l.get("void") or (l.get("hit") is not None and not l.get("early")) or "result" in l:
+        return False
+    b = store.bundle_get(l["mid"])
+    body = (b or {}).get("body") or {}
+    st = body.get("status") or {}
+    if st.get("cancelled"):
+        l["void"] = True
+        return True
+    hs, as_ = body.get("home", {}).get("score"), body.get("away", {}).get("score")
+    if hs is None or as_ is None or not st.get("started"):
+        return False
+    if not st.get("finished"):
+        if time.time() - b["ts"] > 3 * 3600:  # paket bayatsa "canlı" gösterme
+            return False
+        # maç sürüyor: canlı skor; sonucu kesinleşen ayak (KG Var, üstler...) erkenden sonuçlanır
+        live = {"score": [hs, as_], "min": st.get("live")}
+        changed = l.get("live") != live
+        l["live"] = live
+        if l.get("hit") is None:
+            h = early_hit(l["code"], hs, as_, body.get("final"))
+            if h is not None:
+                l["hit"], l["early"] = h, True
+                changed = True
+        return changed
+    l.pop("live", None)
+    l["result"] = [hs, as_]
+    if l.get("hit") is None:
+        h = pick_hit(l["code"], hs, as_, body.get("final"))
+        if h is None:
+            l["void"] = True
+        else:
+            l["hit"] = h
+    return True
+
+
 def settle(store):
-    """Bekleyen kuponları maç sonuçlarıyla değerlendirir. Ertelenen/iptal ya da iadeli ayak kupondan düşer (oran 1)."""
+    """Kuponları maç sonuçlarıyla değerlendirir: bir ayak kaybederse kupon hemen kaybeder, bütün ayaklar tutunca
+    kazanır. Ertelenen/iptal ya da iadeli ayak kupondan düşer (oranı 1 sayılır). Sonuçlanmış kuponlarda da
+    kalan maçların skorları güncellenir (ekranda görünsün diye)."""
     for doc in store.coupon_all():
         changed = False
         for c in doc["coupons"]:
+            for l in c["legs"]:
+                changed |= _update_leg(store, l)
             if c["state"] != "pending":
                 continue
-            done = True
-            for l in c["legs"]:
-                if l.get("hit") is not None or l.get("void"):
-                    continue
-                b = store.bundle_get(l["mid"])
-                body = (b or {}).get("body") or {}
-                st = body.get("status") or {}
-                if st.get("cancelled"):
-                    l["void"] = True
-                    changed = True
-                    continue
-                hs, as_ = body.get("home", {}).get("score"), body.get("away", {}).get("score")
-                if not st.get("finished") or hs is None or as_ is None:
-                    done = False
-                    continue
-                h = pick_hit(l["code"], hs, as_, body.get("final"))
-                l["result"] = [hs, as_]
-                if h is None:
-                    l["void"] = True
-                else:
-                    l["hit"] = h
-                changed = True
             if any(l.get("hit") is False for l in c["legs"]):
-                c["state"] = "done"
-                c["won"] = False
-                c["profit"] = -c["stake"]
+                c["state"], c["won"], c["profit"] = "done", False, -c["stake"]
                 changed = True
-            elif done:
+            elif all(l.get("hit") is True or l.get("void") for l in c["legs"]):
                 odds = 1.0
                 for l in c["legs"]:
                     if not l.get("void"):

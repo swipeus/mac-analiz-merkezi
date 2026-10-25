@@ -857,7 +857,7 @@ function couponCard(c, draft) {
     <p class="muted kdesc">${esc(c.desc || "")}</p>
     <div class="klegs">${c.legs.map((l) => `<div class="kleg ${l.hit === true ? "hit" : l.hit === false ? "miss" : ""}" data-mid="${l.mid}">
       <div class="klt"><img src="${teamLogo(l.home.id)}" alt="" onerror="this.remove()"><span>${esc(l.home.name)} – ${esc(l.away.name)}</span>
-        ${l.result ? `<b class="kres">${l.result[0]}-${l.result[1]}</b>` : ""}</div>
+        ${l.result ? `<b class="kres">${l.result[0]}-${l.result[1]}</b>` : l.live ? `<b class="kres live">● ${esc(l.live.min || "")} ${l.live.score[0]}-${l.live.score[1]}</b>` : ""}</div>
       <div class="klp"><span class="kpick">${esc(l.label)}</span><small>${pc(l.p)}</small><b>${nf(l.odds, 2)}</b>${legStatus(l)}</div>
     </div>`).join("")}</div>
     <div class="kfoot ksum"><span>Tutma ihtimali <b>${pc(c.p)}</b></span>
@@ -946,11 +946,14 @@ function cornerNote(r) {
   return "";
 }
 const rate = (h, n) => n ? `%${Math.round(h / n * 100)}` : "—";
+// tek tercih sonuçlandı mı: maç bitti ya da maç sürerken kesinleşti (KG Var, üstler...)
+const pickDecided = (r) => (r.state === "done" || r.pick_early) && (r.pick_hit === true || r.pick_hit === false);
+const liveMid = (lv) => `<div class="sc live">${lv.score[0]} - ${lv.score[1]}</div><div class="sub live">● ${esc(lv.min || "canlı")}</div>`;
 // karne özetleri: tek tercihler (250 ₺), kombineler (1000 ₺), skorlar (yalnızca isabet, bahis yok)
 function karneStats() {
   const rows = karneRows || [];
   const done = rows.filter((r) => r.state === "done");
-  const pdone = done.filter((r) => r.pick_hit === true || r.pick_hit === false);  // iade olanlar sayılmaz
+  const pdone = rows.filter(pickDecided);  // iade olanlar sayılmaz
   const pOdds = pdone.filter((r) => r.pick.odds);
   const sOdds = done.filter((r) => r.score && r.score.odds);
   const cdone = karneCoupons.filter((c) => c.state === "done");
@@ -1025,7 +1028,7 @@ function singlesKarneHtml(s) {
   const days = [...groups.keys()].sort().reverse();
   const list = days.length ? days.map((k) => {
     const g = groups.get(k).sort((a, b) => (a.utc || "").localeCompare(b.utc || ""));
-    const d = g.filter((r) => r.state === "done" && (!pick || r.pick_hit === true || r.pick_hit === false));
+    const d = g.filter((r) => pick ? pickDecided(r) : r.state === "done");
     const hits = d.filter((r) => pick ? r.pick_hit : r.score_hit).length;
     const dayPl = pick ? d.filter((r) => r.pick.odds).reduce((a, r) => a + rowProfit(r), 0)
       : null;
@@ -1056,9 +1059,7 @@ function dailyPl() {
   const m = {};
   const add = (k, v) => { m[k] = (m[k] || 0) + v; };
   (karneRows || []).forEach((r) => {
-    if (r.state !== "done") return;
-    const k = trDay(r.utc);
-    if ((r.pick_hit === true || r.pick_hit === false) && r.pick.odds) add(k, rowProfit(r));
+    if (pickDecided(r) && r.pick.odds) add(trDay(r.utc), rowProfit(r));
   });
   karneCoupons.forEach((c) => { if (c.state === "done") add(c.date, couponProfit(c)); });
   return m;
@@ -1096,13 +1097,15 @@ function bindCalendar() {
   });
 }
 function karneRow(r) {
-  const done = r.state === "done";
   const pick = karneTab === "pick";
+  const done = r.state === "done" || (pick && pickDecided(r));
   const hit = pick ? r.pick_hit : r.score_hit;
   const rowCls = !done || hit == null ? "" : hit ? "hit" : "miss";
-  const status = !done ? `<span class="kst wait">⏳ Bekliyor</span>` : hit == null ? `<span class="kst wait">↩ İade</span>`
-    : hit ? `<span class="kst ok">✓ Tuttu</span>` : `<span class="kst no">✗ Tutmadı</span>`;
-  const mid = done ? `<div class="sc">${r.result[0]} - ${r.result[1]}</div><div class="sub">maç sonu</div>` : `<div class="ko">${esc(timeOf(r.utc))}</div><div class="sub">başlama</div>`;
+  const early = r.state !== "done" && done;
+  const status = !done ? `<span class="kst wait">${r.live ? "● Canlı" : "⏳ Bekliyor"}</span>` : hit == null ? `<span class="kst wait">↩ İade</span>`
+    : hit ? `<span class="kst ok">✓ ${early ? "Kazandı" : "Tuttu"}</span>` : `<span class="kst no">✗ ${early ? "Kaybetti" : "Tutmadı"}</span>`;
+  const mid = r.state === "done" ? `<div class="sc">${r.result[0]} - ${r.result[1]}</div><div class="sub">maç sonu</div>`
+    : r.live ? liveMid(r.live) : `<div class="ko">${esc(timeOf(r.utc))}</div><div class="sub">başlama</div>`;
   const tip = pick
     ? `<span class="kpick">${esc(r.pick.label)} <small>${r.pick.odds ? "@" + nf(r.pick.odds, 2) + " · " : ""}${pc(r.pick.p)}</small></span>`
     : `<span class="kpick">Skor ${esc(r.score.score)} <small>${pc(r.score.p)}</small></span>`;

@@ -113,6 +113,15 @@ def _one(pool, theme, relax, use, theme_use, seen):
             ok.sort(key=lambda x: (theme_use[(b["id"], x[0])] == 0, key(x)), reverse=True)
             best.append((ok, b))
     best.sort(key=lambda t: (theme_use[(t[1]["id"], t[0][0][0])] == 0, key(t[0][0])), reverse=True)
+    # aynı kupon başka temada zaten varsa en üstteki maçı atlayarak farklı bir kombinasyon dene
+    for skip in range(max(1, len(best) - 1)):
+        legs = _fill(best[skip:], tmin, tmax)
+        if legs and tuple(sorted((b["id"], x[0]) for x, b in legs)) not in seen:
+            return legs
+    return None
+
+
+def _fill(best, tmin, tmax):
     legs, tot, fam = [], 1.0, Counter()
     for ok, b in best:
         if len(legs) >= MAX_LEGS or (len(legs) >= 2 and tot >= tmin):
@@ -127,9 +136,6 @@ def _one(pool, theme, relax, use, theme_use, seen):
         tot *= x[2]
     if len(legs) < 2 or not tmin <= tot <= tmax:
         return None
-    sig = tuple(sorted((b["id"], x[0]) for x, b in legs))
-    if sig in seen:
-        return None
     return legs
 
 
@@ -139,30 +145,36 @@ def build(bundles, date):
     pool = [(b, [x for x in cs if x[2] >= MIN_LEG_ODDS]) for b, cs in pool]
     pool = [(b, cs) for b, cs in pool if cs]
     coupons, seen, use = [], set(), Counter()
-    for theme in THEMES:
-        tk, name, icon, desc = theme[:4]
-        theme_use, n = Counter(), 0
-        for relax in (0.0, 0.04, 0.08, 0.12):  # yeterli kupon çıkmazsa olasılık eşiği biraz gevşer
-            while n < PER_THEME:
-                legs = _one(pool, theme, relax, use, theme_use, seen)
-                if not legs:
+    theme_use = {t[0]: Counter() for t in THEMES}
+    count = Counter()
+    # temalar sırayla birer kupon alır (önce herkesin 1. kuponu): güçlü tercihler tek temada tükenmesin
+    for _round in range(PER_THEME):
+        for theme in THEMES:
+            tk, name, icon, desc = theme[:4]
+            legs = None
+            for relax in (0.0, 0.04, 0.08, 0.12, 0.16):  # yeterli tercih yoksa olasılık eşiği biraz gevşer
+                legs = _one(pool, theme, relax, use, theme_use[tk], seen)
+                if legs:
                     break
-                seen.add(tuple(sorted((b["id"], x[0]) for x, b in legs)))
-                for x, b in legs:
-                    use[(b["id"], x[0])] += 1
-                    theme_use[(b["id"], x[0])] += 1
-                legs.sort(key=lambda t: t[1].get("utc") or "")
-                lg = [_leg(b, *x) for x, b in legs]
-                odds, prob = 1.0, 1.0
-                for l in lg:
-                    odds *= l["odds"]
-                    prob *= l["p"]
-                n += 1
-                coupons.append({"id": f"{date}-{tk}-{n}", "date": date, "theme": tk, "name": f"{name} {n}", "icon": icon,
-                                "desc": desc, "legs": lg, "odds": round(odds, 2), "p": round(prob, 3),
-                                "stake": STAKE, "state": "pending"})
-            if n >= PER_THEME:
-                break
+            if not legs:
+                continue
+            seen.add(tuple(sorted((b["id"], x[0]) for x, b in legs)))
+            for x, b in legs:
+                use[(b["id"], x[0])] += 1
+                theme_use[tk][(b["id"], x[0])] += 1
+            legs.sort(key=lambda t: t[1].get("utc") or "")
+            lg = [_leg(b, *x) for x, b in legs]
+            odds, prob = 1.0, 1.0
+            for l in lg:
+                odds *= l["odds"]
+                prob *= l["p"]
+            count[tk] += 1
+            n = count[tk]
+            coupons.append({"id": f"{date}-{tk}-{n}", "date": date, "theme": tk, "name": f"{name} {n}", "icon": icon,
+                            "desc": desc, "legs": lg, "odds": round(odds, 2), "p": round(prob, 3),
+                            "stake": STAKE, "state": "pending"})
+    order = {t[0]: i for i, t in enumerate(THEMES)}
+    coupons.sort(key=lambda c: (order[c["theme"]], c["id"]))
     return coupons
 
 

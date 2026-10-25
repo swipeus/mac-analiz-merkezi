@@ -260,7 +260,7 @@ function highlightsHtml(ms, coupons) {
   const open = ms.filter((m) => m.pred && !m.finished && !m.cancelled);
   const kTile = coupons.length ? `<div class="hl kombi" data-go="#/kombine"><div class="ic">🧩</div>
     <div class="hlb"><div class="k">Günün kombineleri</div><div class="t">${coupons.length} kupon hazır ›</div>
-    <div class="s">${coupons.map((c) => `${c.icon} ${nf(c.odds, 2)}`).join(" · ")}</div></div></div>` : "";
+    <div class="s">${COUPON_THEMES.map(([k, ic]) => [ic, coupons.filter((c) => themeOf(c) === k).length]).filter(([, n]) => n).map(([ic, n]) => `${ic} ${n}`).join(" · ")}</div></div></div>` : "";
   if (open.length < 2) return kTile ? `<div class="highlights">${kTile}</div>` : "";
   const pick = (score) => open.reduce((a, b) => (score(b) > score(a) ? b : a));
   const favM = pick((m) => Math.max(m.pred.p_home, m.pred.p_away));
@@ -837,7 +837,13 @@ function extrasHtml(b) {
 }
 
 /* ---------- günün kombineleri ---------- */
-const COUPON_STAKE = 250;
+const COUPON_STAKE = 1000;
+// kâr/zarar her zaman güncel tutarla hesaplanır (eski kayıtlarda saklanan tutar farklı olabilir)
+const couponProfit = (c) => c.won ? COUPON_STAKE * ((c.paid_odds || c.odds) - 1) : -COUPON_STAKE;
+const COUPON_THEMES = [["banko", "🔒", "Banko"], ["garanti", "✅", "En garantiler"], ["gol", "⚽", "Gol şöleni"], ["korner", "🚩", "Kornerler"], ["deger", "💎", "Değerli oranlar"]];
+const OLD_THEME = { "Banko": "banko", "En garantiler": "garanti", "Gol şöleni": "gol", "Korner kombinesi": "korner", "Değerli oranlar": "deger" };
+const themeOf = (c) => c.theme || OLD_THEME[c.name] || "diger";
+let couponTab = "banko";
 const legStatus = (l) => l.void ? `<span class="kst wait">↩ İade</span>` : l.hit === true ? `<span class="kst ok">✓</span>`
   : l.hit === false ? `<span class="kst no">✗</span>` : `<span class="kst wait">${esc(timeOf(l.utc))}</span>`;
 function couponCard(c, draft) {
@@ -855,7 +861,7 @@ function couponCard(c, draft) {
       <div class="klp"><span class="kpick">${esc(l.label)}</span><small>${pc(l.p)}</small><b>${nf(l.odds, 2)}</b>${legStatus(l)}</div>
     </div>`).join("")}</div>
     <div class="kfoot ksum"><span>Tutma ihtimali <b>${pc(c.p)}</b></span>
-      <span class="kstake ${done ? (c.won ? "pos" : "neg") : ""}">250 ₺ → ${done ? (c.won ? tl(ret) + ` (${tl(c.profit, true)})` : "0 ₺ (−250 ₺)") : tl(ret)}</span>${status}</div>
+      <span class="kstake ${done ? (c.won ? "pos" : "neg") : ""}">${tl(COUPON_STAKE)} → ${done ? (c.won ? tl(ret) + ` (${tl(couponProfit(c), true)})` : `0 ₺ (${tl(-COUPON_STAKE, true)})`) : tl(ret)}</span>${status}</div>
   </div>`;
 }
 async function renderCoupons() {
@@ -864,12 +870,37 @@ async function renderCoupons() {
   try { if (!dayCache || dayCache.date !== state.date) dayCache = await api("/api/day?date=" + state.date); }
   catch (e) { v.innerHTML = `<div class="card"><p>${esc(e.message)}</p></div>`; return; }
   if (!state.kombine) return;
+  drawCoupons();
+}
+function drawCoupons() {
+  const v = $("#view");
   const cs = dayCache.coupons || [];
   const title = new Date(state.date + "T12:00:00").toLocaleDateString("tr-TR", { weekday: "long", day: "numeric", month: "long" });
   const intro = `<div class="card" style="--c:#a371f7">${head("🧩", `Günün kombineleri <span class="muted">· ${cap(title)}</span>`)}
-    <p class="muted">Model o günün maçlarından 3-5 kupon hazırlar; her kupon 2-5 maçtan oluşur ve her maçtan tek tercih içerir. Tercihler sadece maç sonucu, alt/üst ve KG değil; takım golleri, korner, çifte şans, beraberlikte iade ve kombine pazarlardan da seçilir, her birinin tutma ihtimali yüksek tutulur. Kuponlar ilk maç başlayana kadar en güncel verilerle yenilenir, sonra kilitlenir ve karneye kupon başına 250 ₺ ile yazılır.</p></div>`;
-  v.innerHTML = intro + (cs.length ? cs.map((c) => couponCard(c, !dayCache.coupons_locked)).join("")
-    : `<div class="card"><p class="muted">Bu gün için henüz kombine yok. Kombineler, oranları açıklanmış ve başlamamış en az 2 maç olduğunda hazırlanır.</p></div>`);
+    <p class="muted">Model her gün beş temada üçer kupon hazırlar; her kupon 2-5 maçtan oluşur ve her maçtan tek tercih içerir. Aynı tercih en fazla iki kuponda kullanılır. Toplam oranlar: Banko ve En garantiler 2-3.5, Gol şöleni ve Kornerler 2.5-6, Değerli oranlar 3-10. Kuponlar ilk maç başlayana kadar en güncel verilerle yenilenir, sonra kilitlenir ve karneye kupon başına 1.000 ₺ ile yazılır.</p></div>`;
+  const tabs = COUPON_THEMES.concat(cs.some((c) => themeOf(c) === "diger") ? [["diger", "📋", "Diğer"]] : []);
+  if (!tabs.some(([k]) => k === couponTab)) couponTab = "banko";
+  const list = cs.filter((c) => themeOf(c) === couponTab);
+  const bar = `<div class="ptabs ctabs">${tabs.map(([k, ic, name]) => {
+    const n = cs.filter((c) => themeOf(c) === k).length;
+    return `<button class="ptab ${couponTab === k ? "on" : ""}" data-ct="${k}">${ic} ${name}${n ? ` <small>${n}</small>` : ""}</button>`; }).join("")}</div>`;
+  const empty = cs.length ? `<div class="card"><p class="muted">Bu temada bugün kupon çıkmadı: kurallara (oran aralığı, tercih başına yüksek olasılık, aynı tercihin en fazla iki kuponda olması) uyan yeterli maç yok.</p></div>`
+    : `<div class="card"><p class="muted">Bu gün için henüz kombine yok. Kombineler, oranları açıklanmış ve başlamamış en az 2 maç olduğunda hazırlanır.</p></div>`;
+  v.innerHTML = intro + bar + (list.length ? list.map((c) => couponCard(c, !dayCache.coupons_locked)).join("") : empty);
+  v.querySelectorAll("[data-ct]").forEach((b) => b.onclick = () => { couponTab = b.dataset.ct; drawCoupons(); });
+}
+// karnede temalara göre kupon isabeti ve kâr/zarar
+function themeStats() {
+  const done = karneCoupons.filter((c) => c.state === "done");
+  if (!done.length) return "";
+  const rows = COUPON_THEMES.concat([["diger", "📋", "Diğer"]]).map(([k, ic, name]) => {
+    const d = done.filter((c) => themeOf(c) === k);
+    if (!d.length) return "";
+    const h = d.filter((c) => c.won).length, pl = d.reduce((a, c) => a + couponProfit(c), 0), v = Math.round(h / d.length * 100);
+    return `<div class="srow"><div class="sl">${ic} ${esc(name)} <span class="muted">· ${h}/${d.length}</span></div><div class="sv"><span class="kpl ${pl >= 0 ? "pos" : "neg"}">${tl(pl, true)}</span></div>
+      <div class="spct"><span style="width:${Math.max(3, v)}%;background:${pctColor(v)}"></span><b>${v}</b></div></div>`;
+  }).join("");
+  return `<h3>Temaya göre</h3>${rows}`;
 }
 
 /* ---------- model karnesi ---------- */
@@ -903,7 +934,7 @@ const pickType = (p) => {
   if (/^cs:/.test(c)) return "Skor";
   return (p.label || "").replace(/ \(.*\)$/, "");
 };
-const STAKE = 100;
+const STAKE = 250;
 const rowProfit = (r) => r.pick_hit ? STAKE * (r.pick.odds - 1) : -STAKE;
 const tl = (x, sign) => (sign && x > 0 ? "+" : x < 0 ? "−" : "") + Math.abs(Math.round(x)).toLocaleString("tr-TR") + " ₺";
 const trDay = (utc) => new Date(utc).toLocaleDateString("sv-SE", { timeZone: TZ });
@@ -915,7 +946,7 @@ function cornerNote(r) {
   return "";
 }
 const rate = (h, n) => n ? `%${Math.round(h / n * 100)}` : "—";
-// karne özetleri: tek tercihler (100 ₺), kombineler (250 ₺), skorlar (yalnızca isabet, bahis yok)
+// karne özetleri: tek tercihler (250 ₺), kombineler (1000 ₺), skorlar (yalnızca isabet, bahis yok)
 function karneStats() {
   const rows = karneRows || [];
   const done = rows.filter((r) => r.state === "done");
@@ -928,7 +959,7 @@ function karneStats() {
   return {
     pick: { n: pdone.length, h: pdone.filter((r) => r.pick_hit).length, nOdds: pOdds.length, pl: sum(pOdds, rowProfit), staked: pOdds.length * STAKE,
       avgOdds: pOdds.length ? sum(pOdds, (r) => r.pick.odds) / pOdds.length : null, pending },
-    kupon: { n: cdone.length, h: cdone.filter((c) => c.won).length, nOdds: cdone.length, pl: sum(cdone, (c) => c.profit), staked: cdone.length * COUPON_STAKE,
+    kupon: { n: cdone.length, h: cdone.filter((c) => c.won).length, nOdds: cdone.length, pl: sum(cdone, couponProfit), staked: cdone.length * COUPON_STAKE,
       avgOdds: cdone.length ? sum(cdone, (c) => c.odds) / cdone.length : null, pending: karneCoupons.filter((c) => c.state !== "done").length },
     score: { n: done.length, h: done.filter((r) => r.score_hit).length, nOdds: 0, pl: 0, staked: 0,
       avgOdds: sOdds.length ? sum(sOdds, (r) => r.score.odds) / sOdds.length : null, pending },
@@ -982,7 +1013,7 @@ function singlesKarneHtml(s) {
       <div class="spct"><span style="width:${Math.max(3, v)}%;background:${pctColor(v)}"></span><b>${v}</b></div></div>`; }).join("")}` : "";
   }
   const note = pick
-    ? `Model her maç için başlama düdüğünden önceki son "en garanti tercihini" kaydeder. Tercihler maç sonucu, çifte şans, beraberlikte iade, karşılıklı gol, gol alt/üst, takım golleri, toplam korner, en çok korner, kırmızı kart ve kombine pazarlardan; oranı 1.30 ve üstü olanlar arasından seçilir. Her tercihe 100 ₺: tutarsa 100 × (oran − 1) kazanç, tutmazsa 100 ₺ kayıp; iade olanlar sayılmaz.`
+    ? `Model her maç için başlama düdüğünden önceki son "en garanti tercihini" kaydeder. Tercihler maç sonucu, çifte şans, beraberlikte iade, karşılıklı gol, gol alt/üst, takım golleri, toplam korner, en çok korner, kırmızı kart ve kombine pazarlardan; oranı 1.30 ve üstü olanlar arasından seçilir. Her tercihe 250 ₺: tutarsa 250 × (oran − 1) kazanç, tutmazsa 250 ₺ kayıp; iade olanlar sayılmaz.`
     : `Skor tahmini, modelin skor dağılımı ile piyasanın skor oranları harmanlanarak beklenen sonuç ve gol sayısıyla tutarlı skorlar arasından seçilir. Skor tahminlerine bahis yapılmaz; yalnızca isabet takip edilir.`;
   const top = `<div class="card" style="--c:${pick ? "#2ea043" : "#a371f7"}">${statKpis(s, pick ? STAKE : 0, pick ? "tercih" : "skor tahmini")}${extra}<p class="muted">${note}</p></div>`;
   const groups = new Map();
@@ -1006,13 +1037,14 @@ function singlesKarneHtml(s) {
 }
 function couponKarneHtml(s) {
   const top = `<div class="card" style="--c:#e3b341">${statKpis(s, COUPON_STAKE, "kupon")}
-    <p class="muted">Günün kombineleri: model her gün 3-5 kupon hazırlar (2-5 maç). Kupondaki ilk maç başlayınca o günün kuponları kilitlenir. Her kupona 250 ₺: bütün tercihler tutarsa 250 × toplam oran döner, biri bile tutmazsa 250 ₺ kayıp. İade olan ya da ertelenen maç kupondan düşer (oranı 1 sayılır).</p></div>`;
+    ${themeStats()}
+    <p class="muted">Günün kombineleri: model her gün beş temada üçer kupon hazırlar (2-5 maç). Kupondaki ilk maç başlayınca o günün kuponları kilitlenir. Her kupona 1.000 ₺: bütün tercihler tutarsa 1.000 × toplam oran döner, biri bile tutmazsa 1.000 ₺ kayıp. İade olan ya da ertelenen maç kupondan düşer (oranı 1 sayılır). Tutarlar geçmiş kuponlar için de bu tutarla hesaplanır.</p></div>`;
   const byDay = new Map();
   karneCoupons.forEach((c) => { if (!byDay.has(c.date)) byDay.set(c.date, []); byDay.get(c.date).push(c); });
   const days = [...byDay.keys()].sort().reverse();
   const list = days.length ? days.map((k) => {
     const g = byDay.get(k), d = g.filter((c) => c.state === "done");
-    const pl = d.reduce((a, c) => a + c.profit, 0);
+    const pl = d.reduce((a, c) => a + couponProfit(c), 0);
     const title = new Date(k + "T12:00:00").toLocaleDateString("tr-TR", { weekday: "long", day: "numeric", month: "long" });
     return `<details class="kdgrp" data-kd="kupon:${k}" ${karneOpen.has("kupon:" + k) ? "open" : ""}><summary class="kdayh">🗓️ ${cap(title)} <span class="muted">· ${g.length} kupon · ${d.length ? `${d.filter((c) => c.won).length}/${d.length} tuttu` : "sonuç bekleniyor"}</span>${d.length ? `<span class="kpl ${pl >= 0 ? "pos" : "neg"}">${tl(pl, true)}</span>` : ""}</summary>
       ${g.map((c) => couponCard(c, c.draft)).join("")}</details>`;
@@ -1028,7 +1060,7 @@ function dailyPl() {
     const k = trDay(r.utc);
     if ((r.pick_hit === true || r.pick_hit === false) && r.pick.odds) add(k, rowProfit(r));
   });
-  karneCoupons.forEach((c) => { if (c.state === "done") add(c.date, c.profit); });
+  karneCoupons.forEach((c) => { if (c.state === "done") add(c.date, couponProfit(c)); });
   return m;
 }
 function calendarHtml() {
@@ -1534,12 +1566,21 @@ const RELEASES = [
     ],
   },
   {
+    id: 10, date: "25 Ekim 2026", title: "Yeni: Temalı kombineler", sub: "Bu güncellemede gelenler",
+    items: [
+      ["🧩", "Beş tema, günde 15 kupon", "Günün kombinelerinde sekmeler: Banko, En garantiler, Gol şöleni, Kornerler, Değerli oranlar; her temada her gün 3 kupon (2-5 maç)."],
+      ["🎚️", "Sabit oran aralıkları", "Banko ve En garantiler 2-3.5, Gol şöleni ve Kornerler 2.5-6, Değerli oranlar 3-10 toplam oran."],
+      ["🔁", "Daha çeşitli kuponlar", "Aynı tercih günün en fazla iki kuponunda kullanılır."],
+      ["💰", "Yeni tutarlar", "Karnede her tek tercihe 250 ₺, her kombineye 1.000 ₺; geçmiş sonuçlar da bu tutarlarla yeniden hesaplandı."],
+    ],
+  },
+  {
     id: 9, date: "22 Ekim 2026", title: "Yeni: Günün kombineleri ve yeni karne", sub: "Bu güncellemede gelenler",
     items: [
       ["🧩", "Günün kombineleri", "Ana sayfadaki yeni kutu: model her gün 3-5 kupon hazırlar (Banko, En garantiler, Günün favorileri, Gol şöleni, Korner kombinesi, Değerli oranlar); her kupon 2-5 maç."],
       ["🧠", "Daha geniş tercih yelpazesi", "Model artık takım golleri, toplam korner, beraberlikte iade ve kombine pazarları da değerlendiriyor; tercih başına risk düşük tutuluyor."],
       ["🎯", "Daha iyi skor tahminleri", "Skor tahmini istatistiklerle birlikte piyasanın skor oranlarını da hesaba katıyor."],
-      ["📒", "Karne sıfırlandı", "Yeni modelle karne 22 Ekim'den başlıyor; üç ayrı başlık: Tek tercihler (100 ₺), Kombineler (250 ₺), Skorlar (isabet)."],
+      ["📒", "Karne sıfırlandı", "Yeni modelle karne 22 Ekim'den başlıyor; üç ayrı başlık: Tek tercihler (250 ₺), Kombineler (1.000 ₺), Skorlar (isabet)."],
       ["📅", "Kâr/zarar takvimi", "Karnenin altında aylık takvim: her gün toplam kâr yeşil, zarar kırmızı (+100, −50 gibi)."],
     ],
   },

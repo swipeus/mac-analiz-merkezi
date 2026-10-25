@@ -1,9 +1,10 @@
-"""Günün kombineleri: modelin o günün maçlarından hazırladığı 3-5 kupon (her biri 2-5 maç).
+"""Günün kombineleri: model her gün beş temada (Banko, En garantiler, Gol şöleni, Kornerler, Değerli oranlar)
+üçer kupon hazırlar; her kupon 2-5 maç.
 
-Her kuponun bir teması var (Banko, En garantiler, Günün favorileri, Gol şöleni, Korner kombinesi, Değerli oranlar).
-Bir kupon içinde her maçtan tek tercih olur; aynı tercih farklı kuponlarda yer alabilir. Tercih başına risk düşük
-tutulur (model olasılığı en az %50, çoğu temada %60-75). Kuponlar maçlar başlayana kadar en güncel verilerle
-yeniden hazırlanır; kupondaki ilk maç başladığında o günün kuponları kilitlenir ve karneye yazılır.
+Bir kupon içinde her maçtan tek tercih olur. Aynı tercih (aynı maçta aynı seçenek) günün en fazla iki kuponunda
+kullanılır. Her temanın toplam oran aralığı sabittir. Tercih başına risk düşük tutulur (model olasılığı temaya göre
+en az %52-75). Kuponlar maçlar başlayana kadar en güncel verilerle yeniden hazırlanır; kupondaki ilk maç başladığında
+o günün kuponları kilitlenir ve karneye yazılır.
 """
 import re
 from collections import Counter
@@ -11,31 +12,29 @@ from datetime import datetime, timezone
 
 from .analysis import SAFE_CODES, TOTAL_CODE, code_label, pick_hit
 
-STAKE = 250
+STAKE = 1000           # kupon başına
+PER_THEME = 3          # her temada günlük kupon sayısı
 MAX_LEGS = 5
+MAX_USE = 2            # aynı tercih günün en fazla kaç kuponunda yer alır
 
 GOALISH = re.compile(r"^(o1\.5|o2\.5|o3\.5|btts_yes|[ha]o[01]\.5)$")
 CORNER = re.compile(r"^(c[ou]\d+(\.\d+)?|cm[12X])$")
-WINS = {"1", "2"}
 
-# (ad, simge, açıklama, seçici, en az olasılık, tek tercih oran aralığı, hedef toplam oran, en çok maç)
+# (anahtar, ad, simge, açıklama, seçici, en az olasılık, tek tercih oran aralığı, toplam oran aralığı)
 THEMES = [
-    ("Banko", "🔒", "Modelin en emin olduğu tercihler; düşük oran, yüksek isabet.",
-     lambda c: True, 0.75, (1.25, 1.55), (2.0, 3.0), 4),
-    ("En garantiler", "✅", "Farklı pazarlardan, her biri yüksek olasılıklı ve oranı makul tercihler.",
-     lambda c: True, 0.68, (1.25, 1.90), (2.5, 5.0), 4),
-    ("Günün favorileri", "⭐", "Günün favori takımlarının kazanması (galibiyet ya da galibiyetli kombine).",
-     lambda c: c in WINS or c.split("&")[0] in ("1", "2"), 0.55, (1.25, 2.20), (2.5, 6.0), 4),
-    ("Gol şöleni", "⚽", "Gol beklentisi yüksek maçlardan üst, karşılıklı gol ve takım golü tercihleri.",
-     lambda c: bool(GOALISH.match(c)) or c == "btts_yes&o2.5", 0.58, (1.25, 2.20), (2.5, 6.0), 4),
-    ("Korner kombinesi", "🚩", "Toplam korner alt/üst ve en çok korner tercihleri.",
-     lambda c: bool(CORNER.match(c)), 0.57, (1.25, 2.20), (2.5, 6.0), 4),
-    ("Değerli oranlar", "💎", "Oranı 1.45 üstü olup modelin piyasa kadar ya da daha olası gördüğü tercihler.",
-     lambda c: True, 0.52, (1.45, 2.60), (4.0, 12.0), 5),
+    ("banko", "Banko", "🔒", "Modelin en emin olduğu tercihler; düşük oran, yüksek isabet.",
+     lambda c: True, 0.75, (1.25, 1.60), (2.0, 3.5)),
+    ("garanti", "En garantiler", "✅", "Farklı pazarlardan, her biri yüksek olasılıklı ve oranı makul tercihler.",
+     lambda c: True, 0.68, (1.25, 1.90), (2.0, 3.5)),
+    ("gol", "Gol şöleni", "⚽", "Gol beklentisi yüksek maçlardan üst, karşılıklı gol ve takım golü tercihleri.",
+     lambda c: bool(GOALISH.match(c)) or c == "btts_yes&o2.5", 0.58, (1.25, 2.30), (2.5, 6.0)),
+    ("korner", "Kornerler", "🚩", "Toplam korner alt/üst ve en çok korner tercihleri.",
+     lambda c: bool(CORNER.match(c)), 0.57, (1.25, 2.30), (2.5, 6.0)),
+    ("deger", "Değerli oranlar", "💎", "Oranı 1.45 üstü olup modelin piyasa kadar ya da daha olası gördüğü tercihler.",
+     lambda c: True, 0.52, (1.45, 2.60), (3.0, 10.0)),
 ]
 MIN_LEG_ODDS = 1.25
 MAX_SAME = 2  # bir kuponda aynı pazardan en çok kaç tercih
-MIN_TOTAL, MAX_TOTAL = 2.0, 12.0  # kupon toplam oranı bu aralıkta olmalı
 
 
 def family(c):
@@ -90,60 +89,80 @@ def _leg(b, c, p, o):
             "p": round(p, 3), "odds": o}
 
 
-def build(bundles, date, relax=0.0):
-    """bundles: o günün başlamamış, oranı olan maç paketleri. 3-5 kupon döner (yeterli maç yoksa daha az)."""
-    pool = [(b, _cands(b)) for b in bundles]
-    pool = [(b, cs) for b, cs in pool if cs]
-    coupons, seen = [], set()
-    for name, icon, desc, sel, pmin, (omin, omax), (tmin, tmax), max_legs in THEMES:
-        value = name == "Değerli oranlar"
-        edge = lambda x: x[1] * x[2] - 1
-        if value:
-            key = lambda x: (edge(x), x[1])
-        elif name == "Günün favorileri":  # favori temasında düz galibiyet, iadeden önce gelir
-            key = lambda x: (x[0] in ("1", "2") and x[1] >= 0.62, x[1])
-        elif name == "Gol şöleni":  # 1.5 üst her maçta tutar gibi görünür; daha gollü seçenekler öne
-            key = lambda x: (2 if x[0] in ("o2.5", "o3.5", "btts_yes", "btts_yes&o2.5") and x[1] >= 0.58
-                             else 0 if x[0] == "o1.5" else 1, x[1])
-        else:  # önce olasılık, yakın olasılıklarda daha yüksek oran
-            key = lambda x: (round(x[1], 2), x[2])
-        best = []
-        for b, cs in pool:  # her maçın temaya uyan tercihleri, en uygundan başlayarak
-            ok = [x for x in cs if sel(x[0]) and x[1] >= pmin - relax and max(omin, MIN_LEG_ODDS) <= x[2] <= omax
-                  and (not value or edge(x) >= -0.01)]
-            if ok:
-                best.append((sorted(ok, key=key, reverse=True), b))
-        best.sort(key=lambda t: key(t[0][0]), reverse=True)
-        legs, tot, used = [], 1.0, Counter()
-        for ok, b in best:  # hedef toplam orana ulaşana kadar en güvenilir tercihleri ekle
-            if len(legs) >= min(max_legs, MAX_LEGS) or (len(legs) >= 2 and tot >= tmin):
-                break
-            # pazarlar karışık olsun: önce kuponda henüz olmayan bir pazar, yoksa en çok 2 aynı pazar
-            x = next((y for y in ok if not used[family(y[0])]), None) \
-                or next((y for y in ok if used[family(y[0])] < MAX_SAME), None)
-            if x is None or (tot * x[2] > tmax and len(legs) >= 2):
-                continue
-            legs.append((x, b))
-            used[family(x[0])] += 1
-            tot *= x[2]
-        if len(legs) < 2 or not MIN_TOTAL <= tot <= MAX_TOTAL:
-            continue
-        sig = tuple(sorted((b["id"], x[0]) for x, b in legs))
-        if sig in seen:
-            continue
-        seen.add(sig)
-        legs.sort(key=lambda t: t[1].get("utc") or "")
-        lg = [_leg(b, *x) for x, b in legs]
-        odds, prob = 1.0, 1.0
-        for l in lg:
-            odds *= l["odds"]
-            prob *= l["p"]
-        coupons.append({"id": f"{date}-{len(coupons) + 1}", "date": date, "name": name, "icon": icon, "desc": desc,
-                        "legs": lg, "odds": round(odds, 2), "p": round(prob, 3), "stake": STAKE, "state": "pending"})
-        if len(coupons) == 5:
+def _theme_key(tk):
+    edge = lambda x: x[1] * x[2] - 1
+    if tk == "deger":
+        return lambda x: (edge(x), x[1])
+    if tk == "gol":  # 1.5 üst her maçta tutar gibi görünür; daha gollü seçenekler öne
+        return lambda x: (2 if x[0] in ("o2.5", "o3.5", "btts_yes", "btts_yes&o2.5") and x[1] >= 0.58
+                          else 0 if x[0] == "o1.5" else 1, x[1])
+    return lambda x: (round(x[1], 2), x[2])  # önce olasılık, yakın olasılıklarda daha yüksek oran
+
+
+def _one(pool, theme, relax, use, theme_use, seen):
+    """Temaya uygun tek kupon: hedef toplam orana ulaşana kadar en güvenilir tercihleri ekler."""
+    tk, name, icon, desc, sel, pmin, (omin, omax), (tmin, tmax) = theme
+    key = _theme_key(tk)
+    edge = lambda x: x[1] * x[2] - 1
+    best = []
+    for b, cs in pool:
+        ok = [x for x in cs if sel(x[0]) and x[1] >= pmin - relax and omin <= x[2] <= omax
+              and use[(b["id"], x[0])] < MAX_USE and (tk != "deger" or edge(x) >= -0.01 - relax / 4)]
+        if ok:
+            # bu temada henüz kullanılmamış tercihler önce: temanın üç kuponu birbirinin kopyası olmasın
+            ok.sort(key=lambda x: (theme_use[(b["id"], x[0])] == 0, key(x)), reverse=True)
+            best.append((ok, b))
+    best.sort(key=lambda t: (theme_use[(t[1]["id"], t[0][0][0])] == 0, key(t[0][0])), reverse=True)
+    legs, tot, fam = [], 1.0, Counter()
+    for ok, b in best:
+        if len(legs) >= MAX_LEGS or (len(legs) >= 2 and tot >= tmin):
             break
-    if len(coupons) < 3 and relax < 0.12 and len(pool) >= 2:
-        return build(bundles, date, relax + 0.06)
+        # pazarlar karışık olsun: önce kuponda henüz olmayan bir pazar, yoksa en çok 2 aynı pazar
+        x = next((y for y in ok if not fam[family(y[0])]), None) \
+            or next((y for y in ok if fam[family(y[0])] < MAX_SAME), None)
+        if x is None or tot * x[2] > tmax:
+            continue
+        legs.append((x, b))
+        fam[family(x[0])] += 1
+        tot *= x[2]
+    if len(legs) < 2 or not tmin <= tot <= tmax:
+        return None
+    sig = tuple(sorted((b["id"], x[0]) for x, b in legs))
+    if sig in seen:
+        return None
+    return legs
+
+
+def build(bundles, date):
+    """bundles: o günün başlamamış, oranı olan maç paketleri. Her temada en fazla 3 kupon (veri yetmezse daha az)."""
+    pool = [(b, _cands(b)) for b in bundles]
+    pool = [(b, [x for x in cs if x[2] >= MIN_LEG_ODDS]) for b, cs in pool]
+    pool = [(b, cs) for b, cs in pool if cs]
+    coupons, seen, use = [], set(), Counter()
+    for theme in THEMES:
+        tk, name, icon, desc = theme[:4]
+        theme_use, n = Counter(), 0
+        for relax in (0.0, 0.04, 0.08, 0.12):  # yeterli kupon çıkmazsa olasılık eşiği biraz gevşer
+            while n < PER_THEME:
+                legs = _one(pool, theme, relax, use, theme_use, seen)
+                if not legs:
+                    break
+                seen.add(tuple(sorted((b["id"], x[0]) for x, b in legs)))
+                for x, b in legs:
+                    use[(b["id"], x[0])] += 1
+                    theme_use[(b["id"], x[0])] += 1
+                legs.sort(key=lambda t: t[1].get("utc") or "")
+                lg = [_leg(b, *x) for x, b in legs]
+                odds, prob = 1.0, 1.0
+                for l in lg:
+                    odds *= l["odds"]
+                    prob *= l["p"]
+                n += 1
+                coupons.append({"id": f"{date}-{tk}-{n}", "date": date, "theme": tk, "name": f"{name} {n}", "icon": icon,
+                                "desc": desc, "legs": lg, "odds": round(odds, 2), "p": round(prob, 3),
+                                "stake": STAKE, "state": "pending"})
+            if n >= PER_THEME:
+                break
     return coupons
 
 

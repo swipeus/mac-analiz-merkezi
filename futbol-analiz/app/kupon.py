@@ -1,8 +1,9 @@
 """Günün kombineleri: model her gün beş temada (Banko, En garantiler, Gol şöleni, Kornerler, Değerli oranlar)
 üçer kupon hazırlar; her kupon 2-5 maç.
 
-Bir kupon içinde her maçtan tek tercih olur. Aynı tercih (aynı maçta aynı seçenek) günün en fazla iki kuponunda
-kullanılır. Her temanın toplam oran aralığı sabittir. Tercih başına risk düşük tutulur (model olasılığı temaya göre
+Bir kupon içinde her maçtan tek tercih olur. Banko ve En garantiler'deki bir tercih başka hiçbir kupona girmez
+(tek kötü sonuç birden çok kuponu yakmasın); diğer temalarda aynı tercih en fazla iki kuponda olur. Karnede zayıf
+çıkan çifte şans 12 ve en çok korner güvenli kuponlara alınmaz. Az maçlı günlerde tema başına daha az kupon çıkar. Her temanın toplam oran aralığı sabittir. Tercih başına risk düşük tutulur (model olasılığı temaya göre
 en az %52-75). Kuponlar maçlar başlayana kadar en güncel verilerle yeniden hazırlanır; kupondaki ilk maç başladığında
 o günün kuponları kilitlenir ve karneye yazılır.
 """
@@ -19,18 +20,32 @@ MAX_LEGS = 5
 MAX_USE = 2            # aynı tercih günün en fazla kaç kuponunda yer alır
 
 GOALISH = re.compile(r"^(o1\.5|o2\.5|o3\.5|btts_yes|[ha]o[01]\.5)$")
-CORNER = re.compile(r"^(c[ou]\d+(\.\d+)?|cm[12X])$")
+CORNER_TOTAL = re.compile(r"^c[ou]\d+(\.\d+)?$")
+SAFE_THEMES = {"banko", "garanti"}
+# kuponun en az tutma ihtimali: altındaki kupon hiç kurulmaz
+MIN_COUPON_P = {"banko": 0.35, "garanti": 0.35}
+MIN_COUPON_P_OTHER = 0.15
+
+
+def _weak(code):
+    """Karnede modelin sandığından zayıf çıkan tercihler (çifte şans 12, en çok korner) güvenli kuponlara girmez."""
+    return any(x == "12" or x.startswith("cm") for x in code.split("&"))
+
+
+def per_theme(n_matches):
+    """Az maçlı günlerde tema başına daha az kupon: tercih havuzu dar olunca kuponlar birbirine benzer."""
+    return 3 if n_matches >= 8 else 2 if n_matches >= 5 else 1
 
 # (anahtar, ad, simge, açıklama, seçici, en az olasılık, tek tercih oran aralığı, toplam oran aralığı)
 THEMES = [
     ("banko", "Banko", "🔒", "Modelin en emin olduğu tercihler; düşük oran, yüksek isabet.",
-     lambda c: True, 0.75, (1.25, 1.60), (2.0, 3.5)),
+     lambda c: not _weak(c), 0.75, (1.25, 1.60), (2.0, 3.5)),
     ("garanti", "En garantiler", "✅", "Farklı pazarlardan, her biri yüksek olasılıklı ve oranı makul tercihler.",
-     lambda c: True, 0.68, (1.25, 1.90), (2.0, 3.5)),
+     lambda c: not _weak(c), 0.68, (1.25, 1.90), (2.0, 3.5)),
     ("gol", "Gol şöleni", "⚽", "Gol beklentisi yüksek maçlardan üst, karşılıklı gol ve takım golü tercihleri.",
      lambda c: bool(GOALISH.match(c)) or c == "btts_yes&o2.5", 0.58, (1.25, 2.30), (2.5, 6.0)),
-    ("korner", "Kornerler", "🚩", "Toplam korner alt/üst ve en çok korner tercihleri.",
-     lambda c: bool(CORNER.match(c)), 0.57, (1.25, 2.30), (2.5, 6.0)),
+    ("korner", "Kornerler", "🚩", "Toplam korner alt/üst tercihleri.",
+     lambda c: bool(CORNER_TOTAL.match(c)), 0.57, (1.25, 2.30), (2.5, 6.0)),
     ("deger", "Değerli oranlar", "💎", "Oranı 1.45 üstü olup modelin piyasa kadar ya da daha olası gördüğü tercihler.",
      lambda c: True, 0.52, (1.45, 2.60), (3.0, 10.0)),
 ]
@@ -54,8 +69,8 @@ def family(c):
         return "altust"
     if c[0] in "ha":
         return "takim"
-    if c.startswith(("co", "cu")):
-        return "korner"
+    if c.startswith(("co", "cu")):  # korner üst ve alt ayrı pazar sayılır (Kornerler kuponu 3-4 maç olabilsin)
+        return "korner_" + c[1]
     if c.startswith("cm"):
         return "kornerms"
     return c
@@ -107,8 +122,10 @@ def _one(pool, theme, relax, use, theme_use, seen):
     edge = lambda x: x[1] * x[2] - 1
     best = []
     for b, cs in pool:
+        # güvenli temalarda tercih başka hiçbir kupona girmemiş olmalı (ve sonra da girmez)
+        limit = 1 if tk in SAFE_THEMES else MAX_USE
         ok = [x for x in cs if sel(x[0]) and x[1] >= pmin - relax and omin <= x[2] <= omax
-              and use[(b["id"], x[0])] < MAX_USE and (tk != "deger" or edge(x) >= -0.01 - relax / 4)]
+              and use[(b["id"], x[0])] < limit and (tk != "deger" or edge(x) >= -0.01 - relax / 4)]
         if ok:
             # bu temada henüz kullanılmamış tercihler önce: temanın üç kuponu birbirinin kopyası olmasın
             ok.sort(key=lambda x: (theme_use[(b["id"], x[0])] == 0, key(x)), reverse=True)
@@ -116,13 +133,13 @@ def _one(pool, theme, relax, use, theme_use, seen):
     best.sort(key=lambda t: (theme_use[(t[1]["id"], t[0][0][0])] == 0, key(t[0][0])), reverse=True)
     # aynı kupon başka temada zaten varsa en üstteki maçı atlayarak farklı bir kombinasyon dene
     for skip in range(max(1, len(best) - 1)):
-        legs = _fill(best[skip:], tmin, tmax)
+        legs = _fill(best[skip:], tmin, tmax, MIN_COUPON_P.get(tk, MIN_COUPON_P_OTHER))
         if legs and tuple(sorted((b["id"], x[0]) for x, b in legs)) not in seen:
             return legs
     return None
 
 
-def _fill(best, tmin, tmax):
+def _fill(best, tmin, tmax, min_p):
     legs, tot, fam = [], 1.0, Counter()
     for ok, b in best:
         if len(legs) >= MAX_LEGS or (len(legs) >= 2 and tot >= tmin):
@@ -137,7 +154,10 @@ def _fill(best, tmin, tmax):
         tot *= x[2]
     if len(legs) < 2 or not tmin <= tot <= tmax:
         return None
-    return legs
+    prob = 1.0
+    for x, _ in legs:
+        prob *= x[1]
+    return legs if prob >= min_p else None
 
 
 def build(bundles, date):
@@ -149,7 +169,7 @@ def build(bundles, date):
     theme_use = {t[0]: Counter() for t in THEMES}
     count = Counter()
     # temalar sırayla birer kupon alır (önce herkesin 1. kuponu): güçlü tercihler tek temada tükenmesin
-    for _round in range(PER_THEME):
+    for _round in range(per_theme(len(pool))):
         for theme in THEMES:
             tk, name, icon, desc = theme[:4]
             legs = None
@@ -161,7 +181,8 @@ def build(bundles, date):
                 continue
             seen.add(tuple(sorted((b["id"], x[0]) for x, b in legs)))
             for x, b in legs:
-                use[(b["id"], x[0])] += 1
+                # güvenli kupona giren tercih başka kupona girmesin
+                use[(b["id"], x[0])] += MAX_USE if tk in SAFE_THEMES else 1
                 theme_use[tk][(b["id"], x[0])] += 1
             legs.sort(key=lambda t: t[1].get("utc") or "")
             lg = [_leg(b, *x) for x, b in legs]

@@ -840,6 +840,7 @@ function extrasHtml(b) {
 
 /* ---------- günün kombineleri ---------- */
 const COUPON_STAKE = 1000;
+const WA_ICON = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2c-1.5 0-3-.4-4.3-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.9c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2c0 1.3.9 2.5 1 2.7.1.2 1.8 2.8 4.4 3.9 1.6.7 2.3.8 3.1.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.3-.2-.5-.3z"/></svg>`;
 // kâr/zarar her zaman güncel tutarla hesaplanır (eski kayıtlarda saklanan tutar farklı olabilir)
 const couponProfit = (c) => c.won ? COUPON_STAKE * ((c.paid_odds || c.odds) - 1) : -COUPON_STAKE;
 const COUPON_THEMES = [["banko", "🔒", "Banko"], ["garanti", "✅", "En garantiler"], ["gol", "⚽", "Gol şöleni"], ["korner", "🚩", "Kornerler"], ["deger", "💎", "Değerli oranlar"]];
@@ -848,7 +849,36 @@ const themeOf = (c) => c.theme || OLD_THEME[c.name] || "diger";
 let couponTab = "banko";
 const legStatus = (l) => l.void ? `<span class="kst wait">↩ İade</span>` : l.hit === true ? `<span class="kst ok">✓</span>`
   : l.hit === false ? `<span class="kst no">✗</span>` : `<span class="kst wait">${esc(timeOf(l.utc))}</span>`;
+// paylaşım için kuponlar id ile saklanır
+const COUPON_BY_ID = new Map();
+function couponText(c) {
+  const day = new Date(c.date + "T12:00:00").toLocaleDateString("tr-TR", { day: "numeric", month: "long", weekday: "long" });
+  const legs = c.legs.map((l) => `• ${l.home.name} – ${l.away.name} (${timeOf(l.utc)})\n   ${l.label} @${nf(l.odds, 2)}`).join("\n");
+  return `${c.icon || "🧩"} ${c.name} · ${day}\n\n${legs}\n\nToplam oran: ${nf(c.odds, 2)} · Tutma ihtimali: ${pc(c.p)}\n— Maç Analiz Merkezi`;
+}
+async function shareCoupon(id, how, btn) {
+  const c = COUPON_BY_ID.get(id);
+  if (!c) return;
+  const text = couponText(c);
+  if (how === "wa") {
+    // telefonda paylaşım menüsü (WhatsApp dahil), yoksa doğrudan WhatsApp
+    if (navigator.share && /Android|iPhone|iPad/i.test(navigator.userAgent)) {
+      try { await navigator.share({ text }); return; } catch (e) { if (e.name === "AbortError") return; }
+    }
+    window.open("https://wa.me/?text=" + encodeURIComponent(text), "_blank", "noopener");
+    return;
+  }
+  try { await navigator.clipboard.writeText(text); }
+  catch {  // eski tarayıcılar: gizli metin kutusuyla kopyala
+    const ta = Object.assign(document.createElement("textarea"), { value: text });
+    document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove();
+  }
+  const old = btn.innerHTML;
+  btn.innerHTML = "✓ Kopyalandı"; btn.classList.add("ok");
+  setTimeout(() => { btn.innerHTML = old; btn.classList.remove("ok"); }, 1800);
+}
 function couponCard(c, draft) {
+  COUPON_BY_ID.set(c.id, c);
   const done = c.state === "done";
   const ret = COUPON_STAKE * (done && c.won ? c.paid_odds || c.odds : c.odds);
   const color = done ? (c.won ? "#2ea043" : "#f85149") : "#e3b341";
@@ -864,6 +894,8 @@ function couponCard(c, draft) {
     </div>`).join("")}</div>
     <div class="kfoot ksum"><span>Tutma ihtimali <b>${pc(c.p)}</b></span>
       <span class="kstake ${done ? (c.won ? "pos" : "neg") : ""}">${tl(COUPON_STAKE)} → ${done ? (c.won ? tl(ret) + ` (${tl(couponProfit(c), true)})` : `0 ₺ (${tl(-COUPON_STAKE, true)})`) : tl(ret)}</span>${status}</div>
+    <div class="kshare"><button class="kbtn wa" data-share="wa" data-cid="${esc(c.id)}">${WA_ICON} WhatsApp'ta paylaş</button>
+      <button class="kbtn" data-share="copy" data-cid="${esc(c.id)}">📋 Kopyala</button></div>
   </div>`;
 }
 async function renderCoupons() {
@@ -1410,6 +1442,8 @@ $("#backBtn").onclick = () => {
 };
 // kadrodaki oyunculara tıklayınca oyuncu sayfası
 $("#view").addEventListener("click", (e) => {
+  const sh = e.target.closest("[data-share]");
+  if (sh) { e.stopPropagation(); shareCoupon(sh.dataset.cid, sh.dataset.share, sh); return; }
   const el = e.target.closest("[data-pid]");
   if (el && el.dataset.pid !== "0") { location.hash = "#/oyuncu/" + el.dataset.pid; return; }
   const km = e.target.closest("[data-mid]");

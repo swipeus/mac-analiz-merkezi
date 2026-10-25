@@ -677,3 +677,10 @@ body.chat-open { overflow: hidden; }
 @media (max-width: 520px) { .filter-summary { display: none; } }
 .hl.kombi .s { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hl.kombi .hlb { min-width: 0; }
+
+/* kupon paylaşımı */
+.kshare { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.kbtn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px; font-size: 13px; font-weight: 700;
+  background: var(--panel2); border: 1px solid var(--line); color: var(--text); cursor: pointer; }
+.kbtn.wa { background: rgba(37,211,102,.14); border-color: rgba(37,211,102,.5); color: #3ddc84; }
+.kbtn.ok { background: rgba(46,160,67,.2); border-color: rgba(46,160,67,.6); color: #56d364; }

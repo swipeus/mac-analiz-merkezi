@@ -16,7 +16,7 @@ const STOP = new Set(["bugun", "yarin", "dun", "mac", "maci", "macı", "ne", "ol
   "aksam", "gece", "sence", "senin", "bana", "bir", "the", "fc", "sk", "afc", "cf", "club", "korner", "kart", "gol", "golu", "atar",
   "oynanir", "oynar", "oynardin", "oynarsin", "oyna", "takim", "takimi", "takımı", "karsi", "karşı", "vs", "kac", "var", "yok"]);
 
-const chatState = { open: false, busy: false, days: null, bundles: new Map(), greeted: false };
+const chatState = { open: false, busy: false, days: null, bundles: new Map(), coupons: {}, greeted: false };
 
 function dayKeys() {
   if (STATIC && meta && meta.days) return meta.days;
@@ -27,7 +27,7 @@ async function loadDays() {
   if (chatState.days) return chatState.days;
   const out = {};
   for (const k of dayKeys()) {
-    try { out[k] = (await api("/api/day?date=" + k)).matches || []; } catch { out[k] = []; }
+    try { const d = await api("/api/day?date=" + k); out[k] = d.matches || []; chatState.coupons[k] = d.coupons || []; } catch { out[k] = []; }
   }
   chatState.days = out;
   return out;
@@ -167,6 +167,22 @@ async function answerBest(day, days, n) {
   return `<b>${cap(relDay(day))} modelin en güvendiği ${top.length} tercih:</b><br>${rows.join("<br>")}${coupon}<br><small class="muted">Oranı 1.30 altındaki tercihler zaten elenir. Kesinlik yok, riske dikkat.</small>`;
 }
 
+// günün kombineleri: sorulan temanın kuponları, tema yoksa her temanın en güvenilir kuponu
+const THEME_WORDS = [["banko", /banko/], ["garanti", /garanti/], ["gol", /gol/], ["korner", /korner/], ["deger", /deger|value|yuksek oran/]];
+function answerCoupons(q, day) {
+  const cs = chatState.coupons[day] || [];
+  if (!cs.length) return `${cap(relDay(day))} için henüz kombine yok. Kombineler oranları açıklanmış maçlardan hazırlanır. <a href="#/kombine" class="chat-link">Kombineler sayfası ›</a>`;
+  const th = (THEME_WORDS.find(([, re]) => re.test(q)) || [])[0];
+  const themeOf = (c) => c.theme || "diger";
+  const pick = th ? cs.filter((c) => themeOf(c) === th)
+    : [...new Set(cs.map(themeOf))].map((t) => cs.filter((c) => themeOf(c) === t).sort((a, b) => b.p - a.p)[0]);
+  if (!pick.length) return `${cap(relDay(day))} bu temada kupon çıkmadı. <a href="#/kombine" class="chat-link">Bütün kombineler ›</a>`;
+  const rows = pick.map((c) => `${c.icon} <b>${esc(c.name)}</b> · oran <b>${nf(c.odds, 2)}</b> · tutma ihtimali ${pc(c.p)}<br>` +
+    c.legs.map((l) => `&nbsp;&nbsp;• <a href="#/mac/${l.mid}" class="chat-link">${esc(l.home.name)} – ${esc(l.away.name)}</a>: ${esc(l.label)} @${nf(l.odds, 2)}`).join("<br>"));
+  return `<b>${cap(relDay(day))} ${th ? "bu temanın kuponları" : "her temanın en güvenilir kuponu"}:</b><br>${rows.join("<br>")}` +
+    `<br><a href="#/kombine" class="chat-link">Bütün kombineler ›</a><br><small class="muted">Kombine kuponda her maç riski katlar; kesinlik yok.</small>`;
+}
+
 async function answerSurprise(day, days) {
   const ms = (days[day] || []).filter((m) => !m.started && !m.finished);
   const list = [];
@@ -225,7 +241,7 @@ async function answerPlayer(q, days) {
   return null;
 }
 
-const HELP = `Bana şunları sorabilirsin:<br>• <i>Bugün Fenerbahçe maçı ne olur?</i><br>• <i>Barcelona maçında korner / kart / gol beklentisi</i><br>• <i>Bugün hangi maçlar var?</i> · <i>Yarın ne oynayayım?</i><br>• <i>Günün en garanti tercihleri</i> · <i>Sürpriz tahmin ver</i><br>• <i>Model karnesi nasıl?</i> · <i>Salah kaç gol attı?</i>`;
+const HELP = `Bana şunları sorabilirsin:<br>• <i>Bugün Fenerbahçe maçı ne olur?</i><br>• <i>Barcelona maçında korner / kart / gol beklentisi</i><br>• <i>Bugün hangi maçlar var?</i> · <i>Yarın ne oynayayım?</i><br>• <i>Günün en garanti tercihleri</i> · <i>Sürpriz tahmin ver</i><br>• <i>Günün kombineleri</i> · <i>Banko kupon</i> · <i>Korner kuponu</i><br>• <i>Model karnesi nasıl?</i> · <i>Salah kaç gol attı?</i>`;
 
 async function answer(text) {
   const q = norm(text);
@@ -245,7 +261,8 @@ async function answer(text) {
     if (!sameDay.length && /bugun/.test(q)) pre = `Bu takımın ${relDay(day)} maçı yok; ${relDay(best.day)} oynayacağı maça bakıyorum.<br>`;
     return pre + await answerMatch(q, best);
   }
-  if (/garanti|banko|ne oyna|kupon|oynayayim|oynanir|tercih|tavsiye|oneri/.test(q)) return answerBest(day, days, /kupon/.test(q) ? 3 : 4);
+  if (/kupon|kombine/.test(q)) return answerCoupons(q, day);
+  if (/garanti|banko|ne oyna|oynayayim|oynanir|tercih|tavsiye|oneri/.test(q)) return answerBest(day, days, 4);
   if (/hangi mac|maclar|mac var|fikstur|program/.test(q)) return answerDayList(day, days);
   if (/gol|asist|kurtaris|kac/.test(q)) {
     const p = await answerPlayer(q, days);
@@ -293,7 +310,7 @@ function openChat(open) {
     setTimeout(() => $("#chatInput").focus(), 50);
   }
 }
-const CHIPS = ["Bugün hangi maçlar var?", "Günün en garanti tercihleri", "Sürpriz tahmin ver", "Model karnesi nasıl?", "Yarın ne oynayayım?"];
+const CHIPS = ["Bugün hangi maçlar var?", "Günün en garanti tercihleri", "Sürpriz tahmin ver", "Günün kombineleri", "Model karnesi nasıl?", "Yarın ne oynayayım?"];
 $("#chatChips").innerHTML = CHIPS.map((c) => `<button type="button" class="chip-q">${esc(c)}</button>`).join("");
 $("#chatChips").querySelectorAll(".chip-q").forEach((b) => b.onclick = () => chatAsk(b.textContent));
 $("#botBtn").onclick = () => openChat(!chatState.open);

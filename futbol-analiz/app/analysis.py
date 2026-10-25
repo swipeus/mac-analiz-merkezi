@@ -833,10 +833,13 @@ def commentary(b, pr, prof_h, prof_a):
     # 3) eksikler ve rekabet geçmişi
     ab = []
     lu = b.get("lineup") or {}
+    miss = []
     for team, side in ((H, "home"), (A, "away")):
         imp = [p["name"] for p in (lu.get(side) or {}).get("unavailable", []) if (p.get("rating") or 0) >= 6.9 or (p.get("value") or 0) >= 15_000_000]
         if imp:
-            ab.append(f"{team} cephesinde {', '.join(imp[:3])} {'gibi önemli isimler' if len(imp) > 1 else 'önemli bir eksik olarak'} forma giyemeyecek; bu durum plan ve kadro derinliğini etkileyecek.")
+            miss.append(f"{team} cephesinde {', '.join(imp[:3])} {'gibi önemli isimler' if len(imp) > 1 else 'önemli bir eksik olarak'}")
+    if miss:  # iki takımın eksikleri tek cümlede, yorum cümlesi bir kez
+        ab.append(f"{'; '.join(miss)} forma giyemeyecek; bu eksikler planı ve kadro derinliğini etkileyecek.")
     h2h = (b.get("h2h") or {}).get("summary")
     if h2h and sum(h2h) >= 3:
         if h2h[0] - h2h[2] >= 3:
@@ -903,6 +906,8 @@ def build(b):
             out_ids = {p["id"] for p in side.get("unavailable", [])}
             gone = [p["name"] for p in side.get("starters", []) if p["id"] in out_ids]
             if gone:
+                # aynı takım için genel "önemli eksik" senaryosu varsa bu daha somut cümle yerine geçer
+                sc = [x for x in sc if not x.startswith(f"{team} ") or "önemli eksikle oynayacak" not in x]
                 sc.insert(0, f"{team} son maçtaki ilk 11'inden {', '.join(gone)} bu maçta yok; kadroda zorunlu değişiklik olacak.")
     pick_txt = {"1": f"{H} kazanır", "X": "beraberlik", "2": f"{A} kazanır"}[pr["pick"]]
     src = "istatistikler ve bahis oranları birlikte" if pr.get("uses_odds") else "istatistikler"

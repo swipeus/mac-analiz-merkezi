@@ -672,3 +672,8 @@ body.chat-open { overflow: hidden; }
 /* karnede canlı maçlar */
 .krow .sc.live, .kres.live { color: #ff7b72; }
 .krow .sub.live { color: #ff7b72; font-weight: 700; }
+
+/* küçük düzeltmeler: dar ekranda filtre özeti gizlenir (sayı rozeti zaten görünür), kombine kutusu tek satır */
+@media (max-width: 520px) { .filter-summary { display: none; } }
+.hl.kombi .s { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hl.kombi .hlb { min-width: 0; }

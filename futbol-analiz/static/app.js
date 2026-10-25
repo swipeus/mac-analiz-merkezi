@@ -206,6 +206,8 @@ async function renderDay(silent) {
   if (typeof liveTick === "function") setTimeout(liveTick, 50);  // kartlara anlık skorları uygula
 }
 
+// lig adı: sitenin Türkçe lig listesinden (FotMob'un adı "Super Lig" gibi İngilizce gelebiliyor)
+const lgName = (id, fallback) => ((state.leagues || []).find((l) => l.id === id) || {}).name || fallback || "";
 const teamLogo = (id) => `https://images.fotmob.com/image_resources/logo/teamlogo/${id}.png`;
 const leagueLogo = (id) => `https://images.fotmob.com/image_resources/logo/leaguelogo/dark/${id}.png`;
 // Favori: kazanma olasılığı daha yüksek olan taraf (gösterilen yüzdeler eşitse favori yok)
@@ -385,7 +387,7 @@ function matchHtml(b) {
   const conf = { "Yüksek": "#3fb950", "Orta": "#d29922", "Düşük": "#f85149" }[P.confidence] || "#8b98a8";
   return `
   <div class="hero">
-    <div class="hero-league"><img src="${leagueLogo(b.league_id)}" alt="" onerror="this.remove()"><b>${esc(b.league_name)}</b></div>
+    <div class="hero-league"><img src="${leagueLogo(b.league_id)}" alt="" onerror="this.remove()"><b>${esc(lgName(b.league_id, b.league_name))}</b></div>
     <div class="teams">
       <div class="team">${crestHtml(b.home, fav === "home", P.p_home, 84)}<span>${esc(H)}</span>${formDots(b.recent.home.rows)}</div>
       <div class="score ${live ? "live" : ""}">${esc(scoreTxt)}<small>${esc(stTxt)}</small></div>
@@ -979,7 +981,7 @@ function drawKarne() {
       ${Object.entries(KARNE_TABS).map(([k, [ic, name, stake, unit]]) => k === "score"
         ? kpi(ic, "#a371f7", name, `${S[k].h}/${S[k].n}`, S[k].n ? `${rate(S[k].h, S[k].n)} tam isabet` : "Henüz sonuç yok")
         : kpi(ic, S[k].pl >= 0 ? "#2ea043" : "#f85149", name,
-        S[k].nOdds ? tl(S[k].pl, true) : "—", `${S[k].h}/${S[k].n} tuttu${S[k].n ? " · " + rate(S[k].h, S[k].n) : ""} · ${unit} başına ${stake} ₺`)).join("")}
+        S[k].nOdds ? tl(S[k].pl, true) : "—", `${S[k].h}/${S[k].n} tuttu${S[k].n ? " · " + rate(S[k].h, S[k].n) : ""} · ${unit} başına ${stake.toLocaleString("tr-TR")} ₺`)).join("")}
     </div></div>`;
   const tabs = `<div class="ptabs">${Object.entries(KARNE_TABS).map(([k, [ic, name]]) =>
     `<button class="ptab ${karneTab === k ? "on" : ""}" data-kt="${k}">${ic} ${name} <small>${S[k].h}/${S[k].n}</small></button>`).join("")}</div>`;
@@ -997,7 +999,7 @@ function statKpis(s, stake, unit) {
   </div>`;
   return `<div class="pred">
     ${kpi("🎯", "#58a6ff", "İsabet", `${s.h}/${s.n}`, s.n ? `${rate(s.h, s.n)} tuttu` : "Henüz sonuç yok")}
-    ${kpi("💰", s.pl >= 0 ? "#2ea043" : "#f85149", "Kâr / zarar", s.nOdds ? tl(s.pl, true) : "—", s.nOdds ? `Her ${unit} için ${stake} ₺ · ${s.nOdds} ${unit}` : "Sonuçlandıkça hesaplanır")}
+    ${kpi("💰", s.pl >= 0 ? "#2ea043" : "#f85149", "Kâr / zarar", s.nOdds ? tl(s.pl, true) : "—", s.nOdds ? `Her ${unit} için ${stake.toLocaleString("tr-TR")} ₺ · ${s.nOdds} ${unit}` : "Sonuçlandıkça hesaplanır")}
     ${kpi("🏦", "#a371f7", "Yatırılan → dönen", s.nOdds ? `${tl(s.staked)} → ${tl(s.staked + s.pl)}` : "—", s.nOdds ? `Getiri (ROI) ${roi < 0 ? "−" : ""}%${nf(Math.abs(roi), 1)} · ort. oran ${nf(s.avgOdds, 2)}` : "Sonuçlandıkça hesaplanır")}
     ${kpi("⏳", "#8b98a8", "Bekleyen", String(s.pending), "Maçlar bittikçe sonuçlanır")}
   </div>`;
@@ -1016,7 +1018,7 @@ function singlesKarneHtml(s) {
       <div class="spct"><span style="width:${Math.max(3, v)}%;background:${pctColor(v)}"></span><b>${v}</b></div></div>`; }).join("")}` : "";
   }
   const note = pick
-    ? `Model her maç için başlama düdüğünden önceki son "en garanti tercihini" kaydeder. Tercihler maç sonucu, çifte şans, beraberlikte iade, karşılıklı gol, gol alt/üst, takım golleri, toplam korner, en çok korner, kırmızı kart ve kombine pazarlardan; oranı 1.30 ve üstü olanlar arasından seçilir. Her tercihe 250 ₺: tutarsa 250 × (oran − 1) kazanç, tutmazsa 250 ₺ kayıp; iade olanlar sayılmaz.`
+    ? `Model her maç için başlama düdüğünden önceki son "en garanti tercihini" kaydeder. Tercihler maç sonucu, çifte şans, karşılıklı gol, gol alt/üst, takım golleri, toplam korner, en çok korner, kırmızı kart ve kombine pazarlardan; oranı 1.30 ve üstü olanlar arasından seçilir. Her tercihe 250 ₺: tutarsa 250 × (oran − 1) kazanç, tutmazsa 250 ₺ kayıp; iade olanlar sayılmaz.`
     : `Skor tahmini, modelin skor dağılımı ile piyasanın skor oranları harmanlanarak beklenen sonuç ve gol sayısıyla tutarlı skorlar arasından seçilir. Skor tahminlerine bahis yapılmaz; yalnızca isabet takip edilir.`;
   const top = `<div class="card" style="--c:${pick ? "#2ea043" : "#a371f7"}">${statKpis(s, pick ? STAKE : 0, pick ? "tercih" : "skor tahmini")}${extra}<p class="muted">${note}</p></div>`;
   const groups = new Map();
@@ -1119,7 +1121,7 @@ function karneRow(r) {
       <div class="mid">${mid}</div>
       <span class="kt r">${esc(r.away.name)}<img src="${teamLogo(r.away.id)}" alt="" onerror="this.remove()"></span>
     </div>
-    <div class="kfoot"><span class="muted kl">${esc(r.league || "")}${pick ? cornerNote(r) : ""}</span>${tip}${odds ? `<span class="kstake ${prof != null ? (prof >= 0 ? "pos" : "neg") : ""}">${stake} ₺ → ${prof != null ? tl(prof, true) : "@" + nf(odds, 2)}</span>` : ""}${status}</div>
+    <div class="kfoot"><span class="muted kl">${esc(lgName(r.league_id, r.league))}${pick ? cornerNote(r) : ""}</span>${tip}${odds ? `<span class="kstake ${prof != null ? (prof >= 0 ? "pos" : "neg") : ""}">${stake} ₺ → ${prof != null ? tl(prof, true) : "@" + nf(odds, 2)}</span>` : ""}${status}</div>
   </div>`;
 }
 
@@ -1218,6 +1220,14 @@ const trComp = (n) => (n || "").replace("Super Lig", "Süper Lig").replace("Cham
   .replace("Europa League", "Avrupa Ligi").replace("Conference League", "Konferans Ligi").replace("World Cup", "Dünya Kupası")
   .replace(" Qualification qualification", " eleme").replace("qualification", "eleme").replace("Qualification", "Eleme");
 
+// "€13.5m" / "€800k" -> "13,5 milyon €" / "800 bin €"
+function moneyTr(v) {
+  const m = String(v).match(/^€?\s*([\d.,]+)\s*([mk])?$/i);
+  if (!m) return v;
+  const n = parseFloat(m[1].replace(",", "."));
+  const unit = (m[2] || "").toLowerCase();
+  return unit === "m" ? `${nf(n, n % 1 ? 1 : 0)} milyon €` : unit === "k" ? `${Math.round(n)} bin €` : `${nf(n, 0)} €`;
+}
 function playerHero(p) {
   const i = p.info || {};
   const color = p.team.color || "var(--accent)";
@@ -1228,7 +1238,7 @@ function playerHero(p) {
     i.height && chip("📏", esc(i.height)),
     i.foot && chip("🦶", esc(FOOT_TR[i.foot] || i.foot) + " ayak"),
     i.country && chip(flagHtml(i.country), `<span class="sr">${esc(countryTr(i.country))}</span>`),
-    i.value && chip("💶", esc(i.value)),
+    i.value && chip("💶", esc(moneyTr(i.value))),
     p.contract && chip("📝", "Sözleşme: " + esc(new Date(p.contract).toLocaleDateString("tr-TR", { month: "long", year: "numeric" }))),
   ].filter(Boolean).join("");
   const inj = p.injury ? `<div class="pinj">🚑 Sakat${p.injury.expectedReturn ? " · Dönüş: " + esc(p.injury.expectedReturn) : ""}</div>` : "";
@@ -1237,7 +1247,7 @@ function playerHero(p) {
     <div class="pmain">
       <h1>${esc(p.name)}</h1>
       <div class="pteam"><img src="${teamLogo(p.team.id)}" alt="" onerror="this.remove()"><b>${esc(p.team.name || "")}</b>${p.team.loan ? `<span class="tag warn">Kiralık</span>` : ""}
-        <span class="ppos">${esc(pos || "")}</span>${p.keeper ? `<span class="ppos gk">🧤 Kaleci</span>` : ""}</div>
+        ${p.keeper ? `<span class="ppos gk">🧤 Kaleci</span>` : `<span class="ppos">${esc(pos || "")}</span>`}</div>
       <div class="chips left">${chips}</div>${inj}
     </div></div>`;
 }

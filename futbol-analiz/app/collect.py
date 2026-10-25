@@ -1,5 +1,6 @@
 """FotMob ham verisinden maç paketi (bundle) oluşturur."""
 import asyncio
+import re
 import hashlib
 import json
 import logging
@@ -55,7 +56,7 @@ STAT_KEYS = {
 _season_memo = {}
 
 # Analiz/paket biçimi değişince artırılır; eski sürümle üretilmiş paketler yeniden oluşturulur
-BUNDLE_VERSION = 8
+BUNDLE_VERSION = 9
 
 
 def _num(v):
@@ -356,11 +357,25 @@ async def team_streaks(src, team_id, before_utc):
     }
 
 
+OTHER_SPORTS = re.compile(r"basketbol|basket|voleybol|hentbol|euroleague|eurocup|potada|file[nl]|smaç|ribaund|"
+                          r"kadın (futbol|voleybol|basketbol)|e-?spor|futsal|plaj futbolu", re.I)
+
+
+def _about(title, name):
+    """Başlık takımla ilgili mi: takım adı ya da adın ayırt edici bir parçası geçmeli."""
+    t = (title or "").lower()
+    parts = [w for w in re.split(r"[\s.\-]+", (name or "").lower()) if len(w) >= 4 and w not in ("united", "city", "club")]
+    return (name or "").lower() in t or any(w in t for w in parts)
+
+
 async def team_news(src, team_id, name):
     fm, tr = await asyncio.gather(
         src.fotmob_team_news(team_id, NEWS_TTL),
-        src.google_news(f'"{name}"', NEWS_TTL),
+        src.google_news(f'"{name}" -basketbol -voleybol -hentbol', NEWS_TTL),
     )
+    # başka branşların (basketbol, voleybol...) haberleri ve takımla ilgisi olmayan genel FotMob haberleri ayıklanır
+    tr = [n for n in tr if not OTHER_SPORTS.search(n.get("title") or "")]
+    fm = [n for n in fm if _about(n.get("title"), name) and not OTHER_SPORTS.search(n.get("title") or "")]
     return {"tr": tr, "fotmob": fm}
 
 

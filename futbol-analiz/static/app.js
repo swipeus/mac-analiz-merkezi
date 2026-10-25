@@ -1590,8 +1590,11 @@ const RELEASES = [
 ];
 function showWhatsNew() {
   const seen = +(safeGet("seenRelease") || 0);
-  const fresh = RELEASES.filter((r) => r.id > seen);
+  // sıralı ve en büyük id ile: dizideki sıra karışsa da bir kez görülen not tekrar çıkmasın
+  const fresh = RELEASES.filter((r) => r.id > seen).sort((a, b) => a.id - b.id);
   if (!fresh.length) return;
+  const maxId = Math.max(...RELEASES.map((r) => r.id));
+  safeSet("seenRelease", String(maxId));  // gösterildiği an görüldü sayılır (Tamam'a basılmadan kapansa da)
   const latest = fresh[fresh.length - 1];
   $("#wnTitle").textContent = fresh.length === 1 ? latest.title : "Yenilikler";
   $("#wnSub").textContent = fresh.length === 1 ? `${latest.sub} · ${latest.date}` : `${fresh.length} güncelleme`;
@@ -1601,7 +1604,6 @@ function showWhatsNew() {
   document.body.classList.add("modal-open");
   $("#wnOk").focus();
   $("#wnOk").onclick = () => {
-    safeSet("seenRelease", String(RELEASES[RELEASES.length - 1].id));
     $("#newsModal").classList.add("hidden");
     document.body.classList.remove("modal-open");
   };

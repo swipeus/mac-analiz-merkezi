@@ -35,9 +35,9 @@
         <path d="M8.5 18v2.2h7V18" fill="#8957e5"/>
       </svg>
     </button>
-    <button id="bell" class="bell" aria-label="Bildirimler" title="Bildirimler">
-      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="#f5c518" d="M12 2a1.5 1.5 0 0 0-1.5 1.5v.7A6.5 6.5 0 0 0 5.5 10.5v4.2l-1.6 2.4A1 1 0 0 0 4.7 18.6h14.6a1 1 0 0 0 .8-1.5l-1.6-2.4v-4.2a6.5 6.5 0 0 0-5-6.3v-.7A1.5 1.5 0 0 0 12 2zm-2.6 17.6a2.7 2.7 0 0 0 5.2 0z"/></svg>
-    </button>
+    <a id="movesBtn" class="bot-btn" href="#/oranlar" aria-label="Oran hareketleri" title="Oran hareketleri">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M3 17l5-5 4 3 7-8" fill="none" stroke="#39c5cf" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 7h4v4" fill="none" stroke="#39c5cf" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 21h18" stroke="#8b98a8" stroke-width="1.6" stroke-linecap="round"/></svg>
+    </a>
   </div>
 </header>
 <div id="feed" class="feed hidden"><div class="feed-head">Son gelişmeler</div><ul id="feedList"></ul></div>
@@ -46,6 +46,15 @@
     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4-2v-4z"/></svg>
     Filtre <b id="filterCount"></b>
   </button>
+  <div class="calwrap searchwrap">
+    <button id="searchBtn" class="cal-btn" aria-haspopup="dialog" aria-controls="searchPop" title="Takım ara" aria-label="Takım ara">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l5 5"/></svg>
+    </button>
+    <div id="searchPop" class="calpop searchpop hidden" role="dialog" aria-label="Takım ara">
+      <input id="searchInput" type="search" placeholder="Takım ara (ör. Galatasaray)" autocomplete="off">
+      <div id="searchRes"></div>
+    </div>
+  </div>
   <div class="calwrap sortwrap">
     <button id="sortBtn" class="cal-btn sort-btn" aria-haspopup="menu" aria-controls="sortPop" title="Sırala">
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4v16M3 16l4 4 4-4M17 20V4M13 8l4-4 4 4"/></svg>

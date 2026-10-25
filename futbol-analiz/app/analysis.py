@@ -661,6 +661,28 @@ def pick_hit(code, hs, as_, final=None):
     return None
 
 
+def lineup_warnings(b):
+    """Resmi ilk 11'de olmayan önemli oyuncular (sezonun en yüksek reytingli ve en golcü oyuncuları; sakat/cezalılar hariç)."""
+    lu = b.get("lineup") or {}
+    if not lu.get("confirmed"):
+        return []
+    out = []
+    for side, key in (("home", "players_home"), ("away", "players_away")):
+        team = b[side]["name"]
+        sl = lu.get(side) or {}
+        starters = {p.get("id") for p in sl.get("starters") or []}
+        out_ids = {p.get("id") for p in sl.get("unavailable") or []}
+        stars = {}
+        for stat in ("rating", "goals"):
+            for p in (((b.get("season") or {}).get(key) or {}).get(stat) or {}).get("list") or []:
+                if p.get("id"):
+                    stars.setdefault(p["id"], p.get("name"))
+        missing = [n for pid, n in stars.items() if pid not in starters and pid not in out_ids and n]
+        if missing and starters:
+            out.append(f"⚠️ {team} resmi ilk 11'inde {', '.join(missing[:3])} yok; sezonun en etkili oyuncularından {'biri' if len(missing) == 1 else 'bazıları'} kenarda başlıyor.")
+    return out
+
+
 def early_hit(code, hs, as_, live=None):
     """Maç sürerken sonucu kesinleşmiş tercihler: KG Var iki takım da gol atınca, üstler çizgi aşılınca tutar;
     altlar ve KG Yok aynı durumda kaybeder. Maç sonucu, çifte şans, en çok korner gibi tercihler bitişi bekler (None)."""
@@ -909,6 +931,17 @@ def build(b):
                 # aynı takım için genel "önemli eksik" senaryosu varsa bu daha somut cümle yerine geçer
                 sc = [x for x in sc if not x.startswith(f"{team} ") or "önemli eksikle oynayacak" not in x]
                 sc.insert(0, f"{team} son maçtaki ilk 11'inden {', '.join(gone)} bu maçta yok; kadroda zorunlu değişiklik olacak.")
+    # resmi ilk 11 açıklandıysa: sezonun en iyi (reyting/gol) oyuncularından ilk 11'de olmayanlar
+    warn = lineup_warnings(b)
+    for w_ in reversed(warn):
+        sc.insert(0, w_)
+    rs = b.get("referee_stats") or {}
+    if rs.get("matches", 0) >= 4 and rs.get("yellow_pm") and rs.get("yellow_avg"):
+        ratio = rs["yellow_pm"] / rs["yellow_avg"]
+        if ratio >= 1.15:
+            sc.append(f"Hakem {b.get('referee')} kartı bol kullanıyor: maç başı {f(rs['yellow_pm'], 1)} sarı kart (lig ortalaması {f(rs['yellow_avg'], 1)}).")
+        elif ratio <= 0.85:
+            sc.append(f"Hakem {b.get('referee')} az kart gösteriyor: maç başı {f(rs['yellow_pm'], 1)} sarı kart (lig ortalaması {f(rs['yellow_avg'], 1)}).")
     pick_txt = {"1": f"{H} kazanır", "X": "beraberlik", "2": f"{A} kazanır"}[pr["pick"]]
     src = "istatistikler ve bahis oranları birlikte" if pr.get("uses_odds") else "istatistikler"
     bp, sp = pr.get("best_pick"), pr.get("surprise")

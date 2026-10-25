@@ -56,7 +56,7 @@ STAT_KEYS = {
 _season_memo = {}
 
 # Analiz/paket biçimi değişince artırılır; eski sürümle üretilmiş paketler yeniden oluşturulur
-BUNDLE_VERSION = 9
+BUNDLE_VERSION = 10
 
 
 def _num(v):
@@ -379,6 +379,40 @@ async def team_news(src, team_id, name):
     return {"tr": tr, "fotmob": fm}
 
 
+def referee_stats(ref):
+    """Hakemin bu ligdeki sezon istatistikleri (FotMob): maç, maç başı sarı kart (lig ortalamasıyla), kırmızı, penaltı, faul."""
+    out = {}
+    for s in (ref or {}).get("stats") or []:
+        t = s.get("type")
+        if t == "matches":
+            out["matches"] = s.get("value")
+        elif t == "yellowCards":
+            out["yellow_pm"], out["yellow_avg"] = s.get("value"), s.get("average")
+        elif t == "redCards":
+            out["red"] = s.get("value")
+        elif t == "penalties":
+            out["pens"] = s.get("value")
+        elif t == "fouls":
+            out["fouls_pm"], out["fouls_avg"] = s.get("value"), s.get("average")
+    if out.get("matches") and out.get("pens") is not None:
+        out["pens_pm"] = round(out["pens"] / out["matches"], 2)
+    return out or None
+
+
+def carry_open_odds(new, prev):
+    """Oran hareketi için her seçeneğin ilk görülen (açılış) oranı "o0" olarak taşınır."""
+    if not new:
+        return new
+    old = {}
+    for m in (prev or {}).get("markets") or []:
+        for s in m["selections"]:
+            old[(m["key"], m.get("line"), s["label"])] = s.get("o0") or s["odds"]
+    for m in new.get("markets") or []:
+        for s in m["selections"]:
+            s["o0"] = old.get((m["key"], m.get("line"), s["label"]), s["odds"])
+    return new
+
+
 async def build_bundle(src, match_id, prev_odds=None):
     md = await src.match_details(match_id, 30)
     gen = md.get("general") or {}
@@ -405,7 +439,7 @@ async def build_bundle(src, match_id, prev_odds=None):
         if started:
             return prev_odds
         try:
-            return await odds_mod.fetch(src, match_id, home.get("name"), away.get("name"), league_id, kickoff)
+            return carry_open_odds(await odds_mod.fetch(src, match_id, home.get("name"), away.get("name"), league_id, kickoff), prev_odds)
         except Exception as e:  # noqa: BLE001
             log.warning("oranlar alınamadı %s: %s", match_id, e)
             return prev_odds
@@ -452,6 +486,7 @@ async def build_bundle(src, match_id, prev_odds=None):
         "away": {"id": aid, "name": away.get("name"), "score": away.get("score"), "logo": away.get("imageUrl")},
         "venue": ", ".join(x for x in [stadium.get("name"), stadium.get("city")] if x),
         "referee": (info.get("Referee") or {}).get("text"),
+        "referee_stats": referee_stats(info.get("Referee")),
         "weather": content.get("weather"),
         "lineup": parse_lineup(content.get("lineup")),
         "recent": {"home": rec_h, "away": rec_a},

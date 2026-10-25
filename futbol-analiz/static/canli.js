@@ -33,7 +33,7 @@ function noteScore(id, hs, as, home, away, minute) {
 /* --- liste sayfası: kartlardaki skor/dakika --- */
 async function liveDay() {
   const d = await liveGet(`/day?date=${state.date.replace(/-/g, "")}`);
-  if (!d || state.current || state.player || state.karne || state.kombine) return;
+  if (!d || state.current || state.player || state.karne || state.kombine || state.lig || state.oranlar) return;
   for (const m of d.matches) {
     const card = document.querySelector(`.mcard[data-id="${m.id}"]`);
     if (!card) continue;
@@ -104,7 +104,7 @@ async function liveTick() {
   LIVE.busy = true;
   try {
     if (state.current) await liveMatch(state.current);
-    else if (!state.player && !state.karne && !state.kombine) await liveDay();
+    else if (!state.player && !state.karne && !state.kombine && !state.lig && !state.oranlar) await liveDay();
   } catch (e) {
     const box = document.getElementById("liveBox");
     if (box && !box.querySelector(".live-card")) box.innerHTML = `<div class="card"><p class="muted">Canlı verilere şu an ulaşılamıyor; 30 saniye içinde tekrar denenecek.</p></div>`;

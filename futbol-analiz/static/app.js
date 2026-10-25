@@ -176,11 +176,20 @@ $("#sortBtn").onclick = (e) => { e.stopPropagation(); openCal(false); openSort($
 document.addEventListener("click", (e) => { if (!e.target.closest(".sortwrap")) openSort(false); });
 renderSortMenu();
 
+/* ---------- iskelet yükleme ekranı ---------- */
+function skel(kind) {
+  const line = (w) => `<span class="sk" style="width:${w}"></span>`;
+  if (kind === "cards") return `<div class="skwrap"><div class="highlights">${`<div class="hl skc">${line("60%")}${line("85%")}</div>`.repeat(4)}</div>
+    <div class="mgrid">${`<div class="mcard skc"><div class="skrow">${line("30%")}${line("20%")}</div><div class="skteams"><span class="skb"></span>${line("18%")}<span class="skb"></span></div>${line("100%")}${line("70%")}</div>`.repeat(6)}</div></div>`;
+  if (kind === "list") return `<div class="skwrap">${`<div class="card skc">${line("40%")}${line("90%")}${line("75%")}</div>`.repeat(4)}</div>`;
+  return `<div class="skwrap"><div class="card skc skhero"><span class="skb"></span>${line("25%")}<span class="skb"></span></div>${`<div class="card skc">${line("35%")}${line("95%")}${line("80%")}${line("60%")}</div>`.repeat(3)}</div>`;
+}
+
 /* ---------- gün listesi ---------- */
 let dayCache = null;
 async function renderDay(silent) {
   const v = $("#view");
-  if (!silent) v.innerHTML = `<div class="loading">Maçlar yükleniyor…</div>`;
+  if (!silent) v.innerHTML = skel("cards");
   try {
     dayCache = await api("/api/day?date=" + state.date);
   } catch (e) {
@@ -242,8 +251,8 @@ function cardHtml(m, sorted) {
   const fav = favoriteSide(p);
   let top = m.cancelled ? `<span class="when">İptal</span>`
     : live ? `<span class="badge-live">CANLI ${esc(m.live || "")}</span>`
-    : m.finished ? `<span class="when">Maç sonu</span>` : `<span class="when">${esc(dateOf(m.utc))}</span>`;
-  const tags = p ? [lineupTag(m.lineup_type, false),
+    : m.finished ? `<span class="when">Maç sonu</span>` : `<span></span>`;
+  const tags = p ? [m.lineup_type && !["predicted", "lastStarting11"].includes(m.lineup_type) ? lineupTag(m.lineup_type, false) : "",
     m.absent && (m.absent[0] + m.absent[1]) ? `<span class="tag warn">${m.absent[0]}+${m.absent[1]} eksik</span>` : ""].join("") : "";
   const mid = (m.started || m.finished)
     ? `<div class="sc">${m.home.score ?? 0} - ${m.away.score ?? 0}</div><div class="sub">${live ? "devam ediyor" : "skor"}</div>`
@@ -324,7 +333,7 @@ const trWeather = (d) => WEATHER[(d || "").toLowerCase()] || d || "";
 /* ---------- maç detayı ---------- */
 async function renderMatch(id, silent, refresh) {
   const v = $("#view");
-  if (!silent) v.innerHTML = `<div class="loading">Maç verileri toplanıyor ve analiz ediliyor… (ilk açılışta 10-20 sn sürebilir)</div>`;
+  if (!silent) v.innerHTML = skel("page");
   let b;
   try { b = await api(`/api/match/${id}${refresh ? "?refresh=true" : ""}`); }
   catch (e) { v.innerHTML = `<div class="loading">Hata: ${esc(e.message)}</div>`; return; }
@@ -398,7 +407,7 @@ function matchHtml(b) {
   ].filter(Boolean).join("");
   const conf = { "Yüksek": "#3fb950", "Orta": "#d29922", "Düşük": "#f85149" }[P.confidence] || "#8b98a8";
   return `
-  <div class="hero">
+  <div class="hero" ${b.colors ? `style="--home:${esc(b.colors.home)};--away:${esc(b.colors.away)}"` : ""}>
     <a class="hero-league" href="#/lig/${b.league_id}" title="Puan durumu"><img src="${leagueLogo(b.league_id)}" alt="" onerror="this.remove()"><b>${esc(lgName(b.league_id, b.league_name))}</b><small>· puan durumu ›</small></a>
     <div class="teams">
       <div class="team">${crestHtml(b.home, fav === "home", P.p_home, 84)}<span>${esc(H)} ${starBtn(b.home.id, H)}</span>${formDots(b.recent.home.rows)}</div>
@@ -422,9 +431,9 @@ function matchTabList(b) {
   const nNews = ((b.news.home.tr || []).length + (b.news.away.tr || []).length);
   const t = [];
   if (st.started || st.finished) t.push(["live", live ? "🔴 Canlı" : "🏁 Maç", live ? (st.live || "") : ""]);
-  t.push(["ozet", "📊 Özet", ""], ["kadro", "👥 Kadrolar", b.lineup ? lineupTypeShort(b.lineup.type) : ""],
-    ["analiz", "🧠 Takım analizi", ""], ["istat", "📈 İstatistikler", ""],
-    ["odds", "💰 Oranlar", nOdds ? nOdds + " pazar" : ""], ["haber", "📰 Haberler", nNews ? String(nNews) : ""]);
+  t.push(["ozet", ico("📊") + " Özet", ""], ["kadro", ico("👥") + " Kadrolar", b.lineup ? lineupTypeShort(b.lineup.type) : ""],
+    ["analiz", ico("🧠") + " Takım analizi", ""], ["istat", ico("📈") + " İstatistikler", ""],
+    ["odds", ico("💰") + " Oranlar", nOdds ? nOdds + " pazar" : ""], ["haber", ico("📰") + " Haberler", nNews ? String(nNews) : ""]);
   return t;
 }
 const lineupTypeShort = (t) => ({ predicted: "olası", lastStarting11: "son 11" }[t] || (t ? "resmi" : ""));
@@ -572,8 +581,56 @@ function marketHtml(m, probs, safe, sur, b) {
     <div class="${many ? "oscroll" : ""}">${rows}</div></div>`;
 }
 
-const kpi = (ic, color, l, v, s) => `<div class="kpi" style="--k:${color}"><div class="l"><span class="ki">${ic}</span>${esc(l)}</div><div class="v">${esc(v)}</div><div class="s">${esc(s || "")}</div></div>`;
-const head = (ic, title, extra = "") => `<h2 class="ch"><span class="ci">${ic}</span><span class="ct">${title}</span>${extra}</h2>`;
+const ICON_PATHS = {
+  "📊": `<path d="M3 3v18h18"/><path d="M7 15v3M12 10v8M17 6v12"/>`,
+  "📈": `<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>`,
+  "📉": `<path d="M3 7l6 6 4-4 8 8"/><path d="M15 17h6v-6"/>`,
+  "🧠": `<path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/>`,
+  "💰": `<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M16 13.5h2"/><path d="M6 7l3-4h6l3 4"/>`,
+  "📰": `<path d="M4 4h13v16H6a2 2 0 0 1-2-2z"/><path d="M17 8h3v10a2 2 0 0 1-2 2"/><path d="M8 8h5M8 12h5M8 16h3"/>`,
+  "🎯": `<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>`,
+  "📒": `<path d="M5 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5z"/><path d="M9 3v18M12 8h4M12 12h4"/>`,
+  "🧩": `<path d="M12 2l9 5-9 5-9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/>`,
+  "🏆": `<path d="M8 21h8M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4"/>`,
+  "🗓️": `<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>`,
+  "📅": `<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>`,
+  "📆": `<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>`,
+  "🚩": `<path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/>`,
+  "🟨": `<rect x="7" y="3" width="10" height="18" rx="2"/>`,
+  "🟥": `<rect x="7" y="3" width="10" height="18" rx="2"/>`,
+  "⚽": `<circle cx="12" cy="12" r="9"/><path d="M12 7l4 3-1.5 4.5h-5L8 10z"/>`,
+  "🧭": `<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>`,
+  "🗣️": `<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>`,
+  "👥": `<circle cx="9" cy="8" r="3.5"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M21 20a6 6 0 0 0-4-5.6"/>`,
+  "📋": `<path d="M9 3h6v3H9z"/><path d="M7 5H5v16h14V5h-2"/><path d="M9 11h6M9 15h6"/>`,
+  "✅": `<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/>`,
+  "⚡": `<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>`,
+  "🔒": `<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>`,
+  "💎": `<path d="M6 3h12l3 6-9 12L3 9z"/><path d="M3 9h18M9 3l3 6 3-6"/>`,
+  "🏃": `<path d="M3 12h4l3-8 4 16 3-8h4"/>`,
+  "🛡️": `<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>`,
+  "⏳": `<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>`,
+  "⏱️": `<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M10 2h4"/>`,
+  "🏦": `<path d="M3 10l9-6 9 6"/><path d="M5 10v8M10 10v8M14 10v8M19 10v8M3 21h18"/>`,
+  "⭐": `<path d="M12 3l2.8 5.8 6.2.9-4.5 4.4 1 6.3L12 17.5 6.5 20.4l1-6.3L3 9.7l6.2-.9z"/>`,
+  "🔥": `<path d="M12 3c1 4 5 5 5 10a5 5 0 0 1-10 0c0-3 2-4 2-7 1.5 1 2.5 2 3-3z"/>`,
+  "🚑": `<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M12 8v8M8 12h8"/>`,
+  "🥅": `<path d="M3 20V6h18v14"/><path d="M3 6l3 3h12l3-3M7 9v11M12 9v11M17 9v11"/>`,
+  "👟": `<path d="M3 16h18v3H3z"/><path d="M3 16l2-7 5 2 3-4 4 4 4 1v4"/>`,
+  "🤝": `<path d="M3 11l4-4 5 2 5-2 4 4-9 9z"/><path d="M8 12l3 3 2-2"/>`,
+  "📐": `<path d="M3 21L21 3v18z"/><path d="M8 21v-3M12 21v-5M16 21v-7"/>`,
+  "🔁": `<path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/>`,
+  "🧤": `<path d="M7 21V10l-2-3 1-1 3 2V4a1.5 1.5 0 0 1 3 0v5-6a1.5 1.5 0 0 1 3 0v6-4a1.5 1.5 0 0 1 3 0v9c0 4-2 7-6 7z"/>`,
+  "📏": `<rect x="3" y="8" width="18" height="8" rx="1"/><path d="M7 8v3M11 8v4M15 8v3M19 8v4"/>`,
+  "🦶": `<path d="M7 3c2 0 3 2 3 5s-1 5 1 8 2 5-1 5-6-3-6-8 1-10 3-10z"/>`,
+  "💶": `<circle cx="12" cy="12" r="9"/><path d="M15 8.5a4 4 0 1 0 0 7M7 11h6M7 13h6"/>`,
+  "🎲": `<rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8" cy="8" r="1"/><circle cx="16" cy="16" r="1"/><circle cx="12" cy="12" r="1"/>`,
+  "🔍": `<circle cx="11" cy="11" r="6.5"/><path d="M16 16l5 5"/>`,
+};
+// başlık ve özet kartlarındaki emojiler tek tip çizgi simgelere çevrilir (her telefonda aynı görünsün)
+const ico = (ic) => ICON_PATHS[ic] ? `<svg class="svgi" viewBox="0 0 24 24" aria-hidden="true">${ICON_PATHS[ic]}</svg>` : ic;
+const kpi = (ic, color, l, v, s) => `<div class="kpi" style="--k:${color}"><div class="l"><span class="ki">${ico(ic)}</span>${esc(l)}</div><div class="v">${esc(v)}</div><div class="s">${esc(s || "")}</div></div>`;
+const head = (ic, title, extra = "") => `<h2 class="ch"><span class="ci">${ico(ic)}</span><span class="ct">${title}</span>${extra}</h2>`;
 // hakem düdüğü (emoji setinde düdük yok)
 const WHISTLE = `<svg class="whistle" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M3 10.5a5.5 5.5 0 0 0 9.9 3.3H21V9.5h-8.4l-1.8-1.6A5.5 5.5 0 0 0 3 10.5z" fill="#c9d1d9"/><circle cx="8.5" cy="10.5" r="2.2" fill="#0d1117"/><rect x="14.5" y="7.2" width="3" height="2.6" rx=".8" fill="#c9d1d9"/><path d="M8.5 5V2.8" stroke="#e3b341" stroke-width="1.6" stroke-linecap="round"/></svg>`;
 const chip = (ic, html) => `<span class="mchip"><span>${ic}</span>${html}</span>`;
@@ -855,6 +912,7 @@ const COUPON_STAKE = 1000;
 const MOVES_ICON = `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M3 17l5-5 4 3 7-8" fill="none" stroke="#39c5cf" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 7h4v4" fill="none" stroke="#39c5cf" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 21h18" stroke="#8b98a8" stroke-width="1.6" stroke-linecap="round"/></svg>`;
 // kâr/zarar her zaman güncel tutarla hesaplanır (eski kayıtlarda saklanan tutar farklı olabilir)
 const couponProfit = (c) => c.won ? COUPON_STAKE * ((c.paid_odds || c.odds) - 1) : -COUPON_STAKE;
+const THEME_COLOR = { banko: "#f0b429", garanti: "#2ea043", gol: "#f85149", korner: "#58a6ff", deger: "#a371f7", diger: "#8b98a8" };
 const COUPON_THEMES = [["banko", "🔒", "Banko"], ["garanti", "✅", "En garantiler"], ["gol", "⚽", "Gol şöleni"], ["korner", "🚩", "Kornerler"], ["deger", "💎", "Değerli oranlar"]];
 const OLD_THEME = { "Banko": "banko", "En garantiler": "garanti", "Gol şöleni": "gol", "Korner kombinesi": "korner", "Değerli oranlar": "deger" };
 const themeOf = (c) => c.theme || OLD_THEME[c.name] || "diger";
@@ -886,7 +944,7 @@ function couponCard(c, draft, open = true, kd = "") {
   COUPON_BY_ID.set(c.id, c);
   const done = c.state === "done";
   const ret = COUPON_STAKE * (done && c.won ? c.paid_odds || c.odds : c.odds);
-  const color = done ? (c.won ? "#2ea043" : "#f85149") : "#e3b341";
+  const color = THEME_COLOR[themeOf(c)] || "#e3b341";
   const status = done ? (c.won ? `<span class="kst ok">✓ Kazandı</span>` : `<span class="kst no">✗ Kaybetti</span>`)
     : `<span class="kst wait">⏳ ${draft ? "İlk maça kadar güncellenebilir" : "Bekliyor"}</span>`;
   const mini = done ? `<span class="kpl ${c.won ? "pos" : "neg"}">${c.won ? "✓" : "✗"} ${tl(couponProfit(c), true)}</span>` : `<span class="kmini">⏳</span>`;
@@ -897,6 +955,7 @@ function couponCard(c, draft, open = true, kd = "") {
       <div class="klt"><img src="${teamLogo(l.home.id)}" alt="" onerror="this.remove()"><span>${esc(l.home.name)} – ${esc(l.away.name)}</span>
         ${l.result ? `<b class="kres">${l.result[0]}-${l.result[1]}</b>` : l.live ? `<b class="kres live">● ${esc(l.live.min || "")} ${l.live.score[0]}-${l.live.score[1]}</b>` : ""}</div>
       <div class="klp"><span class="kpick">${esc(l.label)}</span><small>${pc(l.p)}</small><b>${nf(l.odds, 2)}</b>${legStatus(l)}</div>
+      <div class="kpbar"><span style="width:${Math.round(l.p * 100)}%"></span></div>
     </div>`).join("")}</div>
     <div class="kfoot ksum"><span>Tutma ihtimali <b>${pc(c.p)}</b></span>
       <span class="kstake ${done ? (c.won ? "pos" : "neg") : ""}">${tl(COUPON_STAKE)} → ${done ? (c.won ? tl(ret) + ` (${tl(couponProfit(c), true)})` : `0 ₺ (${tl(-COUPON_STAKE, true)})`) : tl(ret)}</span>${status}</div>
@@ -905,7 +964,7 @@ function couponCard(c, draft, open = true, kd = "") {
 }
 async function renderCoupons() {
   const v = $("#view");
-  v.innerHTML = `<div class="loading">Kombineler yükleniyor…</div>`;
+  v.innerHTML = skel("list");
   try { if (!dayCache || dayCache.date !== state.date) dayCache = await api("/api/day?date=" + state.date); }
   catch (e) { v.innerHTML = `<div class="card"><p>${esc(e.message)}</p></div>`; return; }
   if (!state.kombine) return;
@@ -919,14 +978,14 @@ function drawCoupons() {
   const cs = dayCache.coupons || [];
   const title = new Date(state.date + "T12:00:00").toLocaleDateString("tr-TR", { weekday: "long", day: "numeric", month: "long" });
   const intro = `<div class="card" style="--c:#a371f7">${head("🧩", `Günün kombineleri <span class="muted">· ${cap(title)}</span>`)}
-    <p class="muted">Model her gün beş temada üçer kupon hazırlar; her kupon 2-5 maçtan oluşur ve her maçtan tek tercih içerir. Banko ve En garantiler'deki bir tercih başka hiçbir kupona girmez; diğer temalarda aynı tercih en fazla iki kuponda olur. Çifte şans 12 ve en çok korner güvenli kuponlara alınmaz. Az maçlı günlerde tema başına daha az kupon çıkar; tutma ihtimali %20'nin altındaki kupon kurulmaz (Banko ve En garantiler'de %35). Toplam oranlar: Banko ve En garantiler 2-3.5, Gol şöleni ve Kornerler 2.5-6, Değerli oranlar 3-10. Kuponlar ilk maç başlayana kadar en güncel verilerle yenilenir, sonra kilitlenir ve karneye kupon başına 1.000 ₺ ile yazılır.</p></div>`;
+    <details class="kinfo"><summary>Kuponlar nasıl hazırlanıyor? ›</summary><p class="muted">Model her gün beş temada üçer kupon hazırlar; her kupon 2-5 maçtan oluşur ve her maçtan tek tercih içerir. Banko ve En garantiler'deki bir tercih başka hiçbir kupona girmez; diğer temalarda aynı tercih en fazla iki kuponda olur. Çifte şans 12 ve en çok korner güvenli kuponlara alınmaz. Az maçlı günlerde tema başına daha az kupon çıkar; tutma ihtimali %20'nin altındaki kupon kurulmaz (Banko ve En garantiler'de %35). Toplam oranlar: Banko ve En garantiler 2-3.5, Gol şöleni ve Kornerler 2.5-6, Değerli oranlar 3-10. Kuponlar ilk maç başlayana kadar en güncel verilerle yenilenir, sonra kilitlenir ve karneye kupon başına 1.000 ₺ ile yazılır.</p></details></div>`;
   const tabs = COUPON_THEMES.concat(cs.some((c) => themeOf(c) === "diger") ? [["diger", "📋", "Diğer"]] : []);
   const hot = hotTheme();
   if (!tabs.some(([k]) => k === couponTab)) couponTab = "banko";
   const list = cs.filter((c) => themeOf(c) === couponTab);
   const bar = `<div class="ptabs ctabs">${tabs.map(([k, ic, name]) => {
     const n = cs.filter((c) => themeOf(c) === k).length;
-    return `<button class="ptab ${couponTab === k ? "on" : ""}" data-ct="${k}">${ic} ${name}${hot && hot.k === k ? " 🔥" : ""}${n ? ` <small>${n}</small>` : ""}</button>`; }).join("")}</div>
+    return `<button class="ptab ${couponTab === k ? "on" : ""}" style="--tc:${THEME_COLOR[k] || "var(--accent)"}" data-ct="${k}">${ic} ${name}${hot && hot.k === k ? " 🔥" : ""}${n ? ` <small>${n}</small>` : ""}</button>`; }).join("")}</div>
   ${hot ? `<div class="hotnote">🔥 Son 14 günde en çok kazandıran tema: <b>${hot.ic} ${esc(hot.name)}</b> · ${hot.h}/${hot.n} kupon tuttu, <span class="kpl ${hot.pl >= 0 ? "pos" : "neg"}">${tl(hot.pl, true)}</span></div>` : ""}`;
   const empty = cs.length ? `<div class="card"><p class="muted">Bu temada bugün kupon çıkmadı: kurallara (oran aralığı, tercih başına yüksek olasılık, aynı tercihin en fazla iki kuponda olması) uyan yeterli maç yok.</p></div>`
     : `<div class="card"><p class="muted">Bu gün için henüz kombine yok. Kombineler, oranları açıklanmış ve başlamamış en az 2 maç olduğunda hazırlanır.</p></div>`;
@@ -962,7 +1021,7 @@ let karneRows = [], karneCoupons = [], karneStart = null, karneTab = "pick", cal
 const karneOpen = new Set();  // açılan gün kartları (yenilemede kapanmasın)
 async function renderKarne(silent) {
   const v = $("#view");
-  if (!silent) v.innerHTML = `<div class="loading">Model karnesi yükleniyor…</div>`;
+  if (!silent) v.innerHTML = skel("page");
   let k;
   try { k = await api("/api/karne"); }
   catch (e) { v.innerHTML = `<div class="card"><p>${esc(e.message)}</p></div>`; return; }
@@ -1033,7 +1092,7 @@ function drawKarne() {
       ${Object.entries(KARNE_TABS).map(([k, [ic, name, stake, unit]]) => k === "score"
         ? kpi(ic, "#a371f7", name, `${S[k].h}/${S[k].n}`, S[k].n ? `${rate(S[k].h, S[k].n)} tam isabet` : "Henüz sonuç yok")
         : kpi(ic, S[k].pl >= 0 ? "#2ea043" : "#f85149", name,
-        S[k].nOdds ? tl(S[k].pl, true) : "—", `${S[k].h}/${S[k].n} tuttu${S[k].n ? " · " + rate(S[k].h, S[k].n) : ""} · ${unit} başına ${stake.toLocaleString("tr-TR")} ₺`)).join("")}
+        S[k].nOdds ? tl(S[k].pl, true) : "—", `${S[k].h}/${S[k].n} tuttu${S[k].n ? " · " + rate(S[k].h, S[k].n) : ""} · ${stake.toLocaleString("tr-TR")} ₺/${unit}`)).join("")}
     </div>${weeklySummary()}</div>`;
   const tabs = `<div class="ptabs">${Object.entries(KARNE_TABS).map(([k, [ic, name]]) =>
     `<button class="ptab ${karneTab === k ? "on" : ""}" data-kt="${k}">${ic} ${name} <small>${S[k].h}/${S[k].n}</small></button>`).join("")}</div>`;
@@ -1322,7 +1381,7 @@ let playerData = null, playerComp = 0;
 
 async function renderPlayer(id, silent) {
   const v = $("#view");
-  if (!silent) v.innerHTML = `<div class="loading">Oyuncu istatistikleri yükleniyor…</div>`;
+  if (!silent) v.innerHTML = skel("page");
   let p;
   try { p = await api(`/api/player/${id}`); }
   catch (e) { v.innerHTML = `<div class="card"><p>${esc(e.message)}</p></div>`; return; }
@@ -1575,7 +1634,7 @@ $("#searchInput").oninput = async () => {
 let ligTab = "table";
 async function renderLeague(id) {
   const v = $("#view");
-  v.innerHTML = `<div class="loading">Lig yükleniyor…</div>`;
+  v.innerHTML = skel("list");
   let L;
   try { L = await api("/api/league/" + id); }
   catch (e) { v.innerHTML = `<div class="card"><p>${esc(e.message)}</p></div>`; return; }
@@ -1620,7 +1679,7 @@ let movesSort = "drop", movesDay = "all", movesGroup = "all";
 const MOVE_GROUPS = [["all", "Hepsi"], ["Maç", "Maç sonucu"], ["Goller", "Gol"], ["Korner", "Korner"], ["Kombine", "Kombine"], ["other", "Diğer"]];
 async function renderMoves() {
   const v = $("#view");
-  v.innerHTML = `<div class="loading">Oran hareketleri yükleniyor…</div>`;
+  v.innerHTML = skel("list");
   let D;
   try { D = await api("/api/oddsmoves"); }
   catch (e) { v.innerHTML = `<div class="card"><p>${esc(e.message)}</p></div>`; return; }
@@ -1640,12 +1699,16 @@ function drawMoves(D) {
     <div class="ptabs"><button class="ptab ${movesSort === "drop" ? "on" : ""}" data-ms="drop">📉 En çok düşen</button><button class="ptab ${movesSort === "rise" ? "on" : ""}" data-ms="rise">📈 En çok yükselen</button></div>
     <div class="chiprow">${chips([["all", "Bugün + yarın"], ["today", "Bugün"], ["tomorrow", "Yarın"]], movesDay, "md")}</div>
     <div class="chiprow">${chips(MOVE_GROUPS, movesGroup, "mg")}</div></div>`;
-  const rows = ms.slice(0, 80).map((x) => {
-    const pctTxt = (x.chg > 0 ? "+" : "−") + nf(Math.abs(x.chg) * 100, 1) + "%";
-    return `<div class="mvrow" data-mid="${x.mid}">
-      <div class="mvt"><img src="${teamLogo(x.home.id)}" alt="" onerror="this.remove()"><span>${esc(x.home.name)} – ${esc(x.away.name)}</span><small class="muted">${esc(trDay(x.utc) === t ? "Bugün" : "Yarın")} ${esc(timeOf(x.utc))} · ${esc(lgName(x.league_id, ""))}</small></div>
-      <div class="mvp"><span class="mvl">${esc(x.market)}: <b>${esc(x.label)}</b></span>
-        <span class="mvo"><s>${nf(x.open, 2)}</s> → <b>${nf(x.now, 2)}</b></span><span class="mvc ${x.chg < 0 ? "down" : "up"}">${x.chg < 0 ? "▼" : "▲"} ${pctTxt}</span></div></div>`;
+  // aynı maçın hareketleri tek başlık altında; maçlar en büyük hareketlerine göre sıralı
+  const groups = new Map();
+  ms.slice(0, 120).forEach((x) => { if (!groups.has(x.mid)) groups.set(x.mid, []); groups.get(x.mid).push(x); });
+  const rows = [...groups.values()].slice(0, 40).map((g) => {
+    const x = g[0];
+    return `<div class="mvgrp" data-mid="${x.mid}">
+      <div class="mvt"><img src="${teamLogo(x.home.id)}" alt="" onerror="this.remove()"><span>${esc(x.home.name)} – ${esc(x.away.name)}</span><img src="${teamLogo(x.away.id)}" alt="" onerror="this.remove()"><small class="muted">${esc(trDay(x.utc) === t ? "Bugün" : "Yarın")} ${esc(timeOf(x.utc))} · ${esc(lgName(x.league_id, ""))}</small></div>
+      ${g.slice(0, 5).map((y) => `<div class="mvp"><span class="mvl">${esc(y.market)}: <b>${esc(y.label)}</b></span>
+        <span class="mvo"><s>${nf(y.open, 2)}</s> → <b>${nf(y.now, 2)}</b></span><span class="mvc ${y.chg < 0 ? "down" : "up"}">${y.chg < 0 ? "▼" : "▲"} ${(y.chg > 0 ? "+" : "−") + nf(Math.abs(y.chg) * 100, 1)}%</span></div>`).join("")}
+      ${g.length > 5 ? `<small class="muted mvmore">+${g.length - 5} hareket daha · maça dokun</small>` : ""}</div>`;
   }).join("");
   const empty = `<div class="card"><p class="muted">${(D.moves || []).length ? "Bu filtrede hareket yok." : "Henüz oran hareketi yok. Takip yeni başladı; oranlar değiştikçe burada listelenecek."}</p></div>`;
   v.innerHTML = top + (ms.length ? `<div class="card mvlist" style="--c:${movesSort === "drop" ? "#3fb950" : "#f85149"}">${rows}</div>` : empty);
@@ -1688,6 +1751,8 @@ function route() {
   state.kombine = cm;
   state.lig = lm ? +lm[1] : null;
   state.oranlar = om;
+  const navKey = om ? "oranlar" : km ? "karne" : cm ? "kombine" : (mm || pm || lm) ? "" : "home";
+  document.querySelectorAll("#bottomNav [data-nav]").forEach((a) => a.classList.toggle("on", a.dataset.nav === navKey));
   if (lm) { state.current = null; window.scrollTo(0, 0); renderLeague(state.lig); }
   else if (om) { state.current = null; window.scrollTo(0, 0); renderMoves(); }
   else if (cm) { state.current = null; window.scrollTo(0, 0); renderCoupons(); }
@@ -1957,6 +2022,7 @@ $("#prevDay").onclick = () => shiftDay(-1);
 $("#nextDay").onclick = () => shiftDay(1);
 $("#today").onclick = () => setDate(todayStr());
 // bildirim zili kaldırıldı (yerine oran hareketleri); olay akışı arka planda tutulur
+document.querySelector('#bottomNav [data-nav="bot"]').onclick = () => $("#botBtn").click();
 window.addEventListener("hashchange", () => { if (ready) route(); });
 // liste görünümünü 60 sn'de bir sessizce tazele (canlı skorlar için)
 if (!STATIC) setInterval(() => { if (ready && !state.current) renderDay(true); }, 60000);

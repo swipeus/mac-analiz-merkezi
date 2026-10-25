@@ -27,6 +27,11 @@ function noteScore(id, hs, as, home, away, minute) {
   if (prev && prev !== k && home) {
     const ev = { id: Date.now(), ts: Date.now() / 1000, match_id: id, kind: "goal", text: `⚽ GOL! ${home} ${hs}-${as} ${away}${minute ? ` (${minute})` : ""}` };
     addFeed(ev, true);
+    // gol olan maçın kartı / skoru birkaç saniye parlar
+    setTimeout(() => {
+      const els = [document.querySelector(`.mcard[data-id="${id}"]`), state.current === id && document.querySelector(".hero .score")].filter(Boolean);
+      els.forEach((el) => { el.classList.remove("goalflash"); void el.offsetWidth; el.classList.add("goalflash"); setTimeout(() => el.classList.remove("goalflash"), 3500); });
+    }, 50);
   }
 }
 

@@ -56,7 +56,7 @@ STAT_KEYS = {
 _season_memo = {}
 
 # Analiz/paket biçimi değişince artırılır; eski sürümle üretilmiş paketler yeniden oluşturulur
-BUNDLE_VERSION = 10
+BUNDLE_VERSION = 11
 
 
 def _num(v):
@@ -487,6 +487,8 @@ async def build_bundle(src, match_id, prev_odds=None):
         "venue": ", ".join(x for x in [stadium.get("name"), stadium.get("city")] if x),
         "referee": (info.get("Referee") or {}).get("text"),
         "referee_stats": referee_stats(info.get("Referee")),
+        # maç sayfası üst bölümünün arka planı için takım renkleri (karanlık tema)
+        "colors": ((gen.get("teamColors") or {}).get("darkMode") or None),
         "weather": content.get("weather"),
         "lineup": parse_lineup(content.get("lineup")),
         "recent": {"home": rec_h, "away": rec_a},

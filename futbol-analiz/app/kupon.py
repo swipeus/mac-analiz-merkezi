@@ -24,7 +24,7 @@ CORNER_TOTAL = re.compile(r"^c[ou]\d+(\.\d+)?$")
 SAFE_THEMES = {"banko", "garanti"}
 # kuponun en az tutma ihtimali: altındaki kupon hiç kurulmaz
 MIN_COUPON_P = {"banko": 0.35, "garanti": 0.35}
-MIN_COUPON_P_OTHER = 0.15
+MIN_COUPON_P_OTHER = 0.20
 
 
 def _weak(code):

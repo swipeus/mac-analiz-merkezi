@@ -853,3 +853,21 @@ a#movesBtn { display: inline-flex; align-items: center; justify-content: center;
 /* öne çıkanlarda iki takım alt alta (tek satıra sığmayınca kesiliyordu) */
 .hl .t { flex-direction: column; align-items: flex-start !important; gap: 2px !important; }
 .hl .t .hlv { display: none; }
+
+/* paylaşım sepeti */
+.share-btn { position: relative; }
+.share-btn b { position: absolute; top: -5px; right: -5px; min-width: 17px; height: 17px; line-height: 17px; padding: 0 4px; border-radius: 9px;
+  background: #39c5cf; color: #0d1117; font-size: 11px; font-weight: 800; text-align: center; }
+.share-btn b:empty { display: none; }
+.kbtn.sadd { background: rgba(57,197,207,.12); border-color: rgba(57,197,207,.45); color: #56d4dd; }
+.kbtn.big { padding: 10px 18px; font-size: 15px; }
+.mvp .kbtn.sadd { padding: 3px 9px; font-size: 12px; }
+.shlab { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+#shareNote { width: 100%; background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; font: inherit; resize: vertical; }
+.shitem { padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,.06); }
+.shitem:last-child { border-bottom: 0; }
+.shhead { display: flex; align-items: center; gap: 8px; }
+.shhead b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shbtns { display: flex; gap: 4px; }
+.shtext { white-space: pre-wrap; font: inherit; font-size: 13px; margin: 6px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--panel2); color: var(--text); }
+.shprev { font-size: 14px; line-height: 1.5; }

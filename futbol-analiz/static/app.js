@@ -461,7 +461,7 @@ function matchTabBody(b) {
     case "haber":
       return `<div class="grid2">${newsHtml(b.news.home, H, "home-c")}${newsHtml(b.news.away, W, "away-c")}</div>${extrasHtml(b)}`;
     default:
-      return `${commentaryHtml(A)}${predictionHtml(b)}${refereeHtml(b)}`;
+      return `${commentaryHtml(A, b)}${predictionHtml(b)}${refereeHtml(b)}`;
   }
 }
 function predictionHtml(b) {
@@ -471,6 +471,7 @@ function predictionHtml(b) {
   <div class="card" style="--c:#a371f7">
     ${head("🎯", `Tahmin ve model özeti${A.frozen ? ` <span class="muted">· maç öncesi tahmin, başlama düdüğünde donduruldu 🔒</span>` : ""}`)}
     <div class="summary">${esc(A.summary)}</div>
+    <div class="kshare">${shareBtn("m:" + b.id, `⚽ Maç özeti · ${H} – ${W}`, matchShareText(b))}</div>
     <div class="bigbar">
       <div style="flex:${P.p_home};background:var(--home)" title="${esc(H)} kazanır">1 ${pc(P.p_home)}</div>
       <div style="flex:${P.p_draw};background:var(--draw)" title="Beraberlik">X ${pc(P.p_draw)}</div>
@@ -493,13 +494,14 @@ function predictionHtml(b) {
   </div>`;
 }
 /* ---------- maç yorumu ---------- */
-function commentaryHtml(A) {
+function commentaryHtml(A, b) {
   const c = A.commentary;
   if (!c || !c.paragraphs || !c.paragraphs.length) return "";
   const last = c.paragraphs.length - 1;
   return `<div class="card comm" style="--c:#39c5cf">${head("🗣️", `Maç yorumu <span class="muted">· kaynaklar, seriler, puan durumu ve oranlara göre</span>`)}
     ${c.tags && c.tags.length ? `<div class="ctags">${c.tags.map((t) => `<span class="ctag">${esc(t)}</span>`).join("")}</div>` : ""}
     ${c.paragraphs.map((p, i) => `<p class="${i === last ? "cconcl" : ""}">${esc(p)}</p>`).join("")}
+    ${b ? `<div class="kshare">${shareBtn("y:" + b.id, `🗣️ Yorum · ${b.home.name} – ${b.away.name}`, `🗣️ ${matchLine(b.home.name, b.away.name, b.utc)}\n\n${c.paragraphs[last]}`)}</div>` : ""}
   </div>`;
 }
 
@@ -626,6 +628,8 @@ const ICON_PATHS = {
   "💶": `<circle cx="12" cy="12" r="9"/><path d="M15 8.5a4 4 0 1 0 0 7M7 11h6M7 13h6"/>`,
   "🎲": `<rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8" cy="8" r="1"/><circle cx="16" cy="16" r="1"/><circle cx="12" cy="12" r="1"/>`,
   "🔍": `<circle cx="11" cy="11" r="6.5"/><path d="M16 16l5 5"/>`,
+  "📤": `<path d="M21 3L3 10.5l7 2.5 2.5 7z"/><path d="M21 3L10 13"/>`,
+  "👁️": `<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>`,
 };
 // başlık ve özet kartlarındaki emojiler tek tip çizgi simgelere çevrilir (her telefonda aynı görünsün)
 const ico = (ic) => ICON_PATHS[ic] ? `<svg class="svgi" viewBox="0 0 24 24" aria-hidden="true">${ICON_PATHS[ic]}</svg>` : ic;
@@ -924,12 +928,12 @@ const COUPON_BY_ID = new Map();
 function couponText(c) {
   const day = new Date(c.date + "T12:00:00").toLocaleDateString("tr-TR", { day: "numeric", month: "long", weekday: "long" });
   const legs = c.legs.map((l) => `• ${l.home.name} – ${l.away.name} (${timeOf(l.utc)})\n   ${l.label} @${nf(l.odds, 2)}`).join("\n");
-  return `${c.icon || "🧩"} ${c.name} · ${day}\n\n${legs}\n\nToplam oran: ${nf(c.odds, 2)} · Tutma ihtimali: ${pc(c.p)}\n— Maç Analiz Merkezi`;
+  return `${c.icon || "🧩"} ${c.name} · ${day}\n\n${legs}\n\nToplam oran: ${nf(c.odds, 2)} · Tutma ihtimali: ${pc(c.p)}`;
 }
 async function copyCoupon(id, btn) {
   const c = COUPON_BY_ID.get(id);
   if (!c) return;
-  const text = couponText(c);
+  const text = couponText(c) + "\n\n" + SHARE_SIGN;
   try { await navigator.clipboard.writeText(text); }
   catch {  // eski tarayıcılar: gizli metin kutusuyla kopyala
     const ta = Object.assign(document.createElement("textarea"), { value: text });
@@ -959,7 +963,7 @@ function couponCard(c, draft, open = true, kd = "") {
     </div>`).join("")}</div>
     <div class="kfoot ksum"><span>Tutma ihtimali <b>${pc(c.p)}</b></span>
       <span class="kstake ${done ? (c.won ? "pos" : "neg") : ""}">${tl(COUPON_STAKE)} → ${done ? (c.won ? tl(ret) + ` (${tl(couponProfit(c), true)})` : `0 ₺ (${tl(-COUPON_STAKE, true)})`) : tl(ret)}</span>${status}</div>
-    <div class="kshare"><button class="kbtn" data-share="copy" data-cid="${esc(c.id)}">📋 Kopyala</button></div>
+    <div class="kshare"><button class="kbtn" data-share="copy" data-cid="${esc(c.id)}">📋 Kopyala</button>${shareBtn("k:" + c.id, `${c.icon || "🧩"} ${c.name} · ${nf(c.odds, 2)}`, couponText(c))}</div>
   </details>`;
 }
 async function renderCoupons() {
@@ -1707,7 +1711,8 @@ function drawMoves(D) {
     return `<div class="mvgrp" data-mid="${x.mid}">
       <div class="mvt"><img src="${teamLogo(x.home.id)}" alt="" onerror="this.remove()"><span>${esc(x.home.name)} – ${esc(x.away.name)}</span><img src="${teamLogo(x.away.id)}" alt="" onerror="this.remove()"><small class="muted">${esc(trDay(x.utc) === t ? "Bugün" : "Yarın")} ${esc(timeOf(x.utc))} · ${esc(lgName(x.league_id, ""))}</small></div>
       ${g.slice(0, 5).map((y) => `<div class="mvp"><span class="mvl">${esc(y.market)}: <b>${esc(y.label)}</b></span>
-        <span class="mvo"><s>${nf(y.open, 2)}</s> → <b>${nf(y.now, 2)}</b></span><span class="mvc ${y.chg < 0 ? "down" : "up"}">${y.chg < 0 ? "▼" : "▲"} ${(y.chg > 0 ? "+" : "−") + nf(Math.abs(y.chg) * 100, 1)}%</span></div>`).join("")}
+        <span class="mvo"><s>${nf(y.open, 2)}</s> → <b>${nf(y.now, 2)}</b></span><span class="mvc ${y.chg < 0 ? "down" : "up"}">${y.chg < 0 ? "▼" : "▲"} ${(y.chg > 0 ? "+" : "−") + nf(Math.abs(y.chg) * 100, 1)}%</span>
+        ${shareBtn(`o:${y.mid}:${y.code}`, `${y.chg < 0 ? "📉" : "📈"} ${y.home.name} – ${y.away.name} · ${y.label}`, `${y.chg < 0 ? "📉 Oran düşüyor" : "📈 Oran yükseliyor"}: ${matchLine(y.home.name, y.away.name, y.utc)}\n${y.market}: ${y.label} · ${nf(y.open, 2)} → ${nf(y.now, 2)} (${(y.chg > 0 ? "+" : "−") + nf(Math.abs(y.chg) * 100, 1)}%)`)}</div>`).join("")}
       ${g.length > 5 ? `<small class="muted mvmore">+${g.length - 5} hareket daha · maça dokun</small>` : ""}</div>`;
   }).join("");
   const empty = `<div class="card"><p class="muted">${(D.moves || []).length ? "Bu filtrede hareket yok." : "Henüz oran hareketi yok. Takip yeni başladı; oranlar değiştikçe burada listelenecek."}</p></div>`;
@@ -1731,6 +1736,77 @@ function refereeHtml(b) {
     </div>${r.yellow_pm && r.yellow_avg ? `<p class="muted">Kart sıklığı ${cmp(r.yellow_pm, r.yellow_avg)}. Kart ve penaltı tercihlerinde dikkate alınabilir.</p>` : ""}</div>`;
 }
 
+
+/* ---------- paylaşım sepeti (Telegram için elle seçilen analizler) ----------
+   Metinlerde site adı, linki ve veri/oran kaynağı geçmez; sonuna sadece kanal imzası eklenir. */
+const SHARE_SIGN = "📊 Analizciler";
+let shareItems = JSON.parse(safeGet("shareItems") || "[]");
+let shareNote = safeGet("shareNote") || "";
+const SHARE_SRC = new Map();  // ekrandaki "Paylaşıma ekle" butonlarının içeriği: anahtar -> {title, text}
+const saveShare = () => { safeSet("shareItems", JSON.stringify(shareItems)); updateShareCount(); };
+function updateShareCount() { const b = $("#shareCount"); if (b) b.textContent = shareItems.length || ""; }
+const inShare = (key) => shareItems.some((x) => x.key === key);
+// key: tekrar eklenmesin diye benzersiz anahtar; title: listede görünen kısa ad; text: paylaşılacak metin
+function shareBtn(key, title, text) {
+  SHARE_SRC.set(key, { title, text });
+  return `<button class="kbtn sadd ${inShare(key) ? "ok" : ""}" data-sadd="${esc(key)}">${inShare(key) ? "✓ Paylaşımda" : "➕ Paylaşıma ekle"}</button>`;
+}
+function toggleShare(key, btn) {
+  if (inShare(key)) shareItems = shareItems.filter((x) => x.key !== key);
+  else { const s = SHARE_SRC.get(key); if (!s) return; shareItems.push({ key, ...s, added: Date.now() }); }
+  saveShare();
+  const on = inShare(key);
+  document.querySelectorAll(`[data-sadd="${CSS.escape(key)}"]`).forEach((b) => { b.classList.toggle("ok", on); b.textContent = on ? "✓ Paylaşımda" : "➕ Paylaşıma ekle"; });
+}
+const matchLine = (home, away, utc) => `${home} – ${away}${utc ? ` (${new Date(utc).toLocaleDateString("tr-TR", { day: "numeric", month: "long", timeZone: TZ })} ${timeOf(utc)})` : ""}`;
+// maç özeti: olasılıklar, skor, gol beklentisi ve en garanti tercih
+function matchShareText(b) {
+  const P = b.analysis.prediction;
+  const bp = P.best_pick, sp = P.score_pick || {};
+  return [`⚽ ${matchLine(b.home.name, b.away.name, b.utc)}`,
+    `1: ${pc(P.p_home)} · X: ${pc(P.p_draw)} · 2: ${pc(P.p_away)}`,
+    `🎯 Skor tahmini: ${sp.score || (P.scores[0] || {}).score || "—"}`,
+    `📈 2.5 Üst: ${pc(P.over25)} · KG Var: ${pc(P.btts)}`,
+    bp ? `✅ En garanti: ${bp.label}${bp.odds ? ` · ${nf(bp.odds, 2)}` : ""} (%${Math.round(bp.p * 100)})` : ""].filter(Boolean).join("\n");
+}
+function shareText() {
+  const parts = [];
+  if (shareNote.trim()) parts.push(shareNote.trim());
+  shareItems.forEach((x) => parts.push(x.text));
+  parts.push(SHARE_SIGN);
+  return parts.join("\n\n");
+}
+function renderShare() {
+  const v = $("#view");
+  const items = shareItems.map((x, i) => `<div class="shitem">
+      <div class="shhead"><b>${esc(x.title)}</b>
+        <span class="shbtns"><button class="calbtn" data-smv="${i}:-1" ${i === 0 ? "disabled" : ""} aria-label="Yukarı">↑</button><button class="calbtn" data-smv="${i}:1" ${i === shareItems.length - 1 ? "disabled" : ""} aria-label="Aşağı">↓</button><button class="calbtn" data-sdel="${i}" aria-label="Çıkar">✕</button></span></div>
+      <pre class="shtext">${esc(x.text)}</pre></div>`).join("");
+  v.innerHTML = `<div class="card" style="--c:#39c5cf">${head("📤", `Paylaşım <span class="muted">· ${shareItems.length} öğe</span>`)}
+    <p class="muted">Sitede kuponların, maç özetlerinin, maç yorumlarının ve oran hareketlerinin yanındaki <b>➕ Paylaşıma ekle</b> ile seçtiklerin burada toplanır. Metinde site adı, linki ya da veri kaynağı geçmez; sonuna kanal imzası eklenir.</p>
+    <label class="shlab">Başa eklenecek not (isteğe bağlı)</label>
+    <textarea id="shareNote" rows="2" placeholder="Örn: Bugünün seçmeleri 👇">${esc(shareNote)}</textarea></div>
+    ${shareItems.length ? `<div class="card" style="--c:#58a6ff">${items}</div>` : `<div class="card"><p class="muted">Henüz bir şey eklenmedi.</p></div>`}
+    ${shareItems.length ? `<div class="card" style="--c:#2ea043">${head("👁️", "Önizleme")}<pre class="shtext shprev">${esc(shareText())}</pre>
+      <div class="kshare"><button class="kbtn big" id="shareCopy">📋 Kopyala</button><button class="kbtn" id="shareClear">🗑️ Listeyi temizle</button></div>
+      <p class="muted">Kopyaladıktan sonra Telegram kanalına yapıştır. Liste sen temizleyene kadar kalır.</p></div>` : ""}`;
+  $("#shareNote").oninput = (e) => { shareNote = e.target.value; safeSet("shareNote", shareNote); const p = $(".shprev"); if (p) p.textContent = shareText(); };
+  v.querySelectorAll("[data-smv]").forEach((b) => b.onclick = () => {
+    const [i, d] = b.dataset.smv.split(":").map(Number);
+    [shareItems[i], shareItems[i + d]] = [shareItems[i + d], shareItems[i]]; saveShare(); renderShare();
+  });
+  v.querySelectorAll("[data-sdel]").forEach((b) => b.onclick = () => { shareItems.splice(+b.dataset.sdel, 1); saveShare(); renderShare(); });
+  const cp = $("#shareCopy");
+  if (cp) cp.onclick = async () => {
+    const text = shareText();
+    try { await navigator.clipboard.writeText(text); }
+    catch { const ta = Object.assign(document.createElement("textarea"), { value: text }); document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); }
+    cp.textContent = "✓ Kopyalandı"; cp.classList.add("ok"); setTimeout(() => { cp.textContent = "📋 Kopyala"; cp.classList.remove("ok"); }, 1800);
+  };
+  const cl = $("#shareClear");
+  if (cl) cl.onclick = () => { if (confirm("Paylaşım listesi temizlensin mi?")) { shareItems = []; shareNote = ""; safeSet("shareNote", ""); saveShare(); renderShare(); } };
+}
+
 /* ---------- yönlendirme ---------- */
 // uygulama içi gezinme yığını: Geri butonu sitenin dışına çıkmadan bir önceki sayfaya döner
 const navStack = [];
@@ -1741,19 +1817,21 @@ function route() {
   const cm = location.hash.startsWith("#/kombine");
   const lm = location.hash.match(/^#\/lig\/(\d+)/);
   const om = location.hash.startsWith("#/oranlar");
+  const shm = location.hash.startsWith("#/paylas");
   const h = location.hash || "#/";
   if (navStack.length > 1 && navStack[navStack.length - 2] === h) navStack.pop();
   else if (navStack[navStack.length - 1] !== h) navStack.push(h);
   // maç, oyuncu ve karne sayfalarında üst barda yalnızca Geri butonu görünür
-  document.body.classList.toggle("in-match", !!(mm || pm || km || cm || lm || om));
+  document.body.classList.toggle("in-match", !!(mm || pm || km || cm || lm || om || shm));
   state.player = pm ? +pm[1] : null;
   state.karne = km;
   state.kombine = cm;
   state.lig = lm ? +lm[1] : null;
-  state.oranlar = om;
+  state.oranlar = om || shm;  // paylaşım sayfasında da gün listesi arka planda çizilmesin
   const navKey = om ? "oranlar" : km ? "karne" : cm ? "kombine" : (mm || pm || lm) ? "" : "home";
   document.querySelectorAll("#bottomNav [data-nav]").forEach((a) => a.classList.toggle("on", a.dataset.nav === navKey));
-  if (lm) { state.current = null; window.scrollTo(0, 0); renderLeague(state.lig); }
+  if (shm) { state.current = null; window.scrollTo(0, 0); renderShare(); }
+  else if (lm) { state.current = null; window.scrollTo(0, 0); renderLeague(state.lig); }
   else if (om) { state.current = null; window.scrollTo(0, 0); renderMoves(); }
   else if (cm) { state.current = null; window.scrollTo(0, 0); renderCoupons(); }
   else if (km) { state.current = null; window.scrollTo(0, 0); renderKarne(); }
@@ -1767,6 +1845,8 @@ $("#backBtn").onclick = () => {
 };
 // kadrodaki oyunculara tıklayınca oyuncu sayfası
 $("#view").addEventListener("click", (e) => {
+  const sa = e.target.closest("[data-sadd]");
+  if (sa) { e.stopPropagation(); e.preventDefault(); toggleShare(sa.dataset.sadd, sa); return; }
   const sh = e.target.closest("[data-share]");
   if (sh) { e.stopPropagation(); e.preventDefault(); copyCoupon(sh.dataset.cid, sh); return; }
   const el = e.target.closest("[data-pid]");
@@ -1835,7 +1915,7 @@ function startPolling() {
       const evs = await getData("events.json");
       evs.filter((e) => e.id > lastEv).reverse().forEach((ev) => addFeed(ev, true));
       if (evs.length) { lastEv = Math.max(lastEv, evs[0].id); safeSet("lastEventId", String(lastEv)); }
-      state.lig ? renderLeague(state.lig) : state.oranlar ? renderMoves() : state.kombine ? (dayCache = null, renderCoupons()) : state.karne ? renderKarne(true) : state.player ? renderPlayer(state.player, true) : state.current ? renderMatch(state.current, true) : renderDay(true);
+      location.hash.startsWith("#/paylas") ? null : state.lig ? renderLeague(state.lig) : state.oranlar ? renderMoves() : state.kombine ? (dayCache = null, renderCoupons()) : state.karne ? renderKarne(true) : state.player ? renderPlayer(state.player, true) : state.current ? renderMatch(state.current, true) : renderDay(true);
     } catch { /* bir sonraki turda tekrar dener */ }
   };
 
@@ -2023,6 +2103,7 @@ $("#nextDay").onclick = () => shiftDay(1);
 $("#today").onclick = () => setDate(todayStr());
 // bildirim zili kaldırıldı (yerine oran hareketleri); olay akışı arka planda tutulur
 document.querySelector('#bottomNav [data-nav="bot"]').onclick = () => $("#botBtn").click();
+updateShareCount();
 window.addEventListener("hashchange", () => { if (ready) route(); });
 // liste görünümünü 60 sn'de bir sessizce tazele (canlı skorlar için)
 if (!STATIC) setInterval(() => { if (ready && !state.current) renderDay(true); }, 60000);

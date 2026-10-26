@@ -501,7 +501,7 @@ function commentaryHtml(A, b) {
   return `<div class="card comm" style="--c:#39c5cf">${head("🗣️", `Maç yorumu <span class="muted">· kaynaklar, seriler, puan durumu ve oranlara göre</span>`)}
     ${c.tags && c.tags.length ? `<div class="ctags">${c.tags.map((t) => `<span class="ctag">${esc(t)}</span>`).join("")}</div>` : ""}
     ${c.paragraphs.map((p, i) => `<p class="${i === last ? "cconcl" : ""}">${esc(p)}</p>`).join("")}
-    ${b ? `<div class="kshare">${shareBtn("y:" + b.id, `🗣️ Yorum · ${b.home.name} – ${b.away.name}`, `🗣️ ${matchLine(b.home.name, b.away.name, b.utc)}\n\n${c.paragraphs[last]}`)}</div>` : ""}
+    ${b ? `<div class="kshare">${shareBtn("y:" + b.id, `🗣️ Yorum · ${b.home.name} – ${b.away.name}`, `🗣️ MAÇ YORUMU\n${matchLine(b.home.name, b.away.name, b.utc)}\n${SH_LINE}\n💬 ${c.paragraphs[last]}`)}</div>` : ""}
   </div>`;
 }
 
@@ -925,15 +925,17 @@ const legStatus = (l) => l.void ? `<span class="kst wait">↩ İade</span>` : l.
   : l.hit === false ? `<span class="kst no">✗</span>` : `<span class="kst wait">${esc(timeOf(l.utc))}</span>`;
 // paylaşım için kuponlar id ile saklanır
 const COUPON_BY_ID = new Map();
+const SH_LINE = "━━━━━━━━━━━━━━";
+const NUM_EMO = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣"];
 function couponText(c) {
   const day = new Date(c.date + "T12:00:00").toLocaleDateString("tr-TR", { day: "numeric", month: "long", weekday: "long" });
-  const legs = c.legs.map((l) => `• ${l.home.name} – ${l.away.name} (${timeOf(l.utc)})\n   ${l.label} @${nf(l.odds, 2)}`).join("\n");
-  return `${c.icon || "🧩"} ${c.name} · ${day}\n\n${legs}\n\nToplam oran: ${nf(c.odds, 2)} · Tutma ihtimali: ${pc(c.p)}`;
+  const legs = c.legs.map((l, i) => `${NUM_EMO[i] || "▪️"} ${l.home.name} 🆚 ${l.away.name}\n🕘 ${timeOf(l.utc)} · 👉 ${l.label} · 💰 ${nf(l.odds, 2)}`).join("\n\n");
+  return `${c.icon || "🧩"} ${c.name.toLocaleUpperCase("tr")} 🧾\n📅 ${day}\n${SH_LINE}\n${legs}\n${SH_LINE}\n🎯 Toplam oran: ${nf(c.odds, 2)}\n📊 Tutma ihtimali: ${pc(c.p)}`;
 }
 async function copyCoupon(id, btn) {
   const c = COUPON_BY_ID.get(id);
   if (!c) return;
-  const text = couponText(c) + "\n\n" + SHARE_SIGN;
+  const text = couponText(c) + `\n\n${SH_LINE}\n${SHARE_SIGN} · ⚠️ Tahminler kesinlik içermez`;
   try { await navigator.clipboard.writeText(text); }
   catch {  // eski tarayıcılar: gizli metin kutusuyla kopyala
     const ta = Object.assign(document.createElement("textarea"), { value: text });
@@ -1712,7 +1714,7 @@ function drawMoves(D) {
       <div class="mvt"><img src="${teamLogo(x.home.id)}" alt="" onerror="this.remove()"><span>${esc(x.home.name)} – ${esc(x.away.name)}</span><img src="${teamLogo(x.away.id)}" alt="" onerror="this.remove()"><small class="muted">${esc(trDay(x.utc) === t ? "Bugün" : "Yarın")} ${esc(timeOf(x.utc))} · ${esc(lgName(x.league_id, ""))}</small></div>
       ${g.slice(0, 5).map((y) => `<div class="mvp"><span class="mvl">${esc(y.market)}: <b>${esc(y.label)}</b></span>
         <span class="mvo"><s>${nf(y.open, 2)}</s> → <b>${nf(y.now, 2)}</b></span><span class="mvc ${y.chg < 0 ? "down" : "up"}">${y.chg < 0 ? "▼" : "▲"} ${(y.chg > 0 ? "+" : "−") + nf(Math.abs(y.chg) * 100, 1)}%</span>
-        ${shareBtn(`o:${y.mid}:${y.code}`, `${y.chg < 0 ? "📉" : "📈"} ${y.home.name} – ${y.away.name} · ${y.label}`, `${y.chg < 0 ? "📉 Oran düşüyor" : "📈 Oran yükseliyor"}: ${matchLine(y.home.name, y.away.name, y.utc)}\n${y.market}: ${y.label} · ${nf(y.open, 2)} → ${nf(y.now, 2)} (${(y.chg > 0 ? "+" : "−") + nf(Math.abs(y.chg) * 100, 1)}%)`)}</div>`).join("")}
+        ${shareBtn(`o:${y.mid}:${y.code}`, `${y.chg < 0 ? "📉" : "📈"} ${y.home.name} – ${y.away.name} · ${y.label}`, `${y.chg < 0 ? "📉 ORAN DÜŞÜYOR 🚨" : "📈 ORAN YÜKSELİYOR"}\n${matchLine(y.home.name, y.away.name, y.utc)}\n${SH_LINE}\n👉 ${y.market}: ${y.label}\n💰 ${nf(y.open, 2)} ➜ ${nf(y.now, 2)} (${y.chg < 0 ? "🔻" : "🔺"} ${(y.chg > 0 ? "+" : "−") + nf(Math.abs(y.chg) * 100, 1)}%)`)}</div>`).join("")}
       ${g.length > 5 ? `<small class="muted mvmore">+${g.length - 5} hareket daha · maça dokun</small>` : ""}</div>`;
   }).join("");
   const empty = `<div class="card"><p class="muted">${(D.moves || []).length ? "Bu filtrede hareket yok." : "Henüz oran hareketi yok. Takip yeni başladı; oranlar değiştikçe burada listelenecek."}</p></div>`;
@@ -1758,23 +1760,27 @@ function toggleShare(key, btn) {
   const on = inShare(key);
   document.querySelectorAll(`[data-sadd="${CSS.escape(key)}"]`).forEach((b) => { b.classList.toggle("ok", on); b.textContent = on ? "✓ Paylaşımda" : "➕ Paylaşıma ekle"; });
 }
-const matchLine = (home, away, utc) => `${home} – ${away}${utc ? ` (${new Date(utc).toLocaleDateString("tr-TR", { day: "numeric", month: "long", timeZone: TZ })} ${timeOf(utc)})` : ""}`;
+const matchLine = (home, away, utc) => `⚽ ${home} 🆚 ${away}${utc ? `\n🗓️ ${new Date(utc).toLocaleDateString("tr-TR", { day: "numeric", month: "long", weekday: "long", timeZone: TZ })} · 🕘 ${timeOf(utc)}` : ""}`;
 // maç özeti: olasılıklar, skor, gol beklentisi ve en garanti tercih
 function matchShareText(b) {
   const P = b.analysis.prediction;
   const bp = P.best_pick, sp = P.score_pick || {};
-  return [`⚽ ${matchLine(b.home.name, b.away.name, b.utc)}`,
-    `1: ${pc(P.p_home)} · X: ${pc(P.p_draw)} · 2: ${pc(P.p_away)}`,
+  const fav = P.p_home >= P.p_away ? b.home.name : b.away.name;
+  return [`📋 MAÇ ANALİZİ`, matchLine(b.home.name, b.away.name, b.utc), SH_LINE,
+    `🏠 1: ${pc(P.p_home)} · 🤝 X: ${pc(P.p_draw)} · ✈️ 2: ${pc(P.p_away)}`,
+    `⭐ Favori: ${fav}`,
     `🎯 Skor tahmini: ${sp.score || (P.scores[0] || {}).score || "—"}`,
-    `📈 2.5 Üst: ${pc(P.over25)} · KG Var: ${pc(P.btts)}`,
-    bp ? `✅ En garanti: ${bp.label}${bp.odds ? ` · ${nf(bp.odds, 2)}` : ""} (%${Math.round(bp.p * 100)})` : ""].filter(Boolean).join("\n");
+    `🔥 2.5 Üst: ${pc(P.over25)} · ⚡ KG Var: ${pc(P.btts)}`,
+    P.corners ? `🚩 Korner beklentisi: ${nf(P.corners.total, 1)}` : "",
+    SH_LINE,
+    bp ? `✅ En garanti: ${bp.label}${bp.odds ? ` · 💰 ${nf(bp.odds, 2)}` : ""} (📊 %${Math.round(bp.p * 100)})` : ""].filter(Boolean).join("\n");
 }
 function shareText() {
   const parts = [];
-  if (shareNote.trim()) parts.push(shareNote.trim());
+  if (shareNote.trim()) parts.push(`📣 ${shareNote.trim()}`);
   shareItems.forEach((x) => parts.push(x.text));
-  parts.push(SHARE_SIGN);
-  return parts.join("\n\n");
+  // öğeler arasında belirgin ayraç, sonda imza
+  return parts.join("\n\n〰️〰️〰️〰️〰️〰️〰️\n\n") + `\n\n${SH_LINE}\n${SHARE_SIGN} · ⚠️ Tahminler kesinlik içermez`;
 }
 function renderShare() {
   const v = $("#view");

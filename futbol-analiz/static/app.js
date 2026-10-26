@@ -1739,7 +1739,7 @@ function refereeHtml(b) {
 
 /* ---------- paylaşım sepeti (Telegram için elle seçilen analizler) ----------
    Metinlerde site adı, linki ve veri/oran kaynağı geçmez; sonuna sadece kanal imzası eklenir. */
-const SHARE_SIGN = "📊 Analizciler";
+const SHARE_SIGN = "📊 Timy Analiz";
 let shareItems = JSON.parse(safeGet("shareItems") || "[]");
 let shareNote = safeGet("shareNote") || "";
 const SHARE_SRC = new Map();  // ekrandaki "Paylaşıma ekle" butonlarının içeriği: anahtar -> {title, text}

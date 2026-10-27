@@ -914,3 +914,7 @@ body.on-moves footer.foot { display: block; }
 
 .pbox .pbl .bxi { width: 13px; height: 13px; stroke: none; vertical-align: -2px; }
 .pbox .pbo { display: block; margin: -3px 0 3px; font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* haber konu filtresi */
+.newsbar { margin: 0 0 12px; }
+.nwrap[hidden], .nempty[hidden] { display: none; }

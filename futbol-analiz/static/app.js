@@ -465,7 +465,7 @@ function defaultMatchTab(b) { return b.status && (b.status.started || b.status.f
 function matchTabList(b) {
   const st = b.status || {}, live = st.started && !st.finished;
   const nOdds = (b.odds && b.odds.markets || []).length;
-  const nNews = ((b.news.home.tr || []).length + (b.news.away.tr || []).length);
+  const nNews = cleanNews(b.news.home.tr, b.home.name).length + cleanNews(b.news.away.tr, b.away.name).length;
   const t = [];
   if (st.started || st.finished) t.push(["live", live ? "🔴 Canlı" : "🏁 Maç", live ? (st.live || "") : ""]);
   t.push(["ozet", ico("📊") + " Özet", ""], ["kadro", ico("👥") + " Kadrolar", b.lineup ? lineupTypeShort(b.lineup.type) : ""],
@@ -496,7 +496,7 @@ function matchTabBody(b) {
     case "odds":
       return oddsHtml(b);
     case "haber":
-      return `<div class="grid2">${newsHtml(b.news.home, H, "home-c")}${newsHtml(b.news.away, W, "away-c")}</div>${extrasHtml(b)}`;
+      return `${newsFilterBar()}<div class="grid2">${newsHtml(b.news.home, H, "home-c")}${newsHtml(b.news.away, W, "away-c")}</div>${extrasHtml(b)}`;
     default:
       return `${commentaryHtml(A, b)}${predictionHtml(b)}${refereeHtml(b)}`;
   }
@@ -922,12 +922,59 @@ function newsItem(x) {
   return `<a class="nitem" href="${esc(x.link)}" target="_blank" rel="noopener">${thumb}
     <div><b>${esc(x.title)}</b><small><span class="ntag" style="color:${sourceColor(x.source)}">${esc(x.source)}</span> · ${ago(x.time)}${x.lang === "en" ? " · EN" : ""}</small></div></a>`;
 }
+// ---- haber filtresi: alakasız, tekrar eden ve canlı skor haberleri ayıklanır; kalanlar konuya göre ayrılır ----
+const NEWS_CATS = [["all", "Tümü"], ["kadro", "🩹 Kadro & sakatlık"], ["mac", "🗣️ Maç önü"], ["transfer", "🔁 Transfer"], ["diger", "📰 Diğer"]];
+// başlıklar Türkçe küçük harfe çevrilip aranır (CANLI -> canlı)
+const NEWS_RX = {
+  kadro: /sakat|yaralan|kadro|ilk 11|muhtemel 11|ceza|forma giy|yetiş|ameliyat|kas yırt|eksik|sahalara dön|injur|absence|lineup|line-up|team news|doubt|suspen|fitness|ruled out|ban /,
+  mac: /maç öncesi|maçı öncesi|önizleme|basın toplantı|açıklama|derbi|karşı karşıya|preview|press conference|predict|ahead of|clash/,
+  transfer: /transfer|sözleşme|imza|teklif|takipte|ilgileniyor|kiralık|bonservis|ayrılık|ocak ayında|devre arası|sign|contract|loan|bid|target|deal|move for|january|searching|in hunt|race to/,
+};
+const NEWS_JUNK = /(^|[\s|])canlı([\s:|]|$)|canlı anlatım|canlı gol|skor\s*:|sona erdi|maç sonucu:|dakika tamamlandı|maçında gol:|podcast|le pagelle|player ratings|kimdir\?|burç|hava durumu|(^|\s)live(\s|:|$)|as it happened|primavera|u1[79]|u2[013]|kadın takım|women|turist|kruvaziyer|iddaa programı|saat kaçta|hangi kanalda|canlı izle|borsa|kardashian|kırmızı halı|fahişe|ihanet|aldat|sevgilisi|partneri|magazin|elbise|bikini|düğün|boşan|ünlü oyuncu|dizi /;
+let newsCat = (() => { try { return localStorage.getItem("newsCat") || "all"; } catch { return "all"; } })();
+const newsWords = (t) => new Set((t || "").toLocaleLowerCase("tr").replace(/[^\p{L}\p{N} ]/gu, " ").split(/\s+/).filter((w) => w.length > 2));
+function newsAbout(t, name) {
+  const s_ = (t || "").toLocaleLowerCase("tr"), n = (name || "").toLocaleLowerCase("tr");
+  return s_.includes(n) || n.split(/[\s.\-]+/).some((w) => w.length >= 4 && !["united", "city", "club"].includes(w) && s_.includes(w));
+}
+function cleanNews(list, name) {
+  const out = [], seen = [];
+  for (const x of list || []) {
+    const lt = (x.title || "").toLocaleLowerCase("tr");
+    if (!newsAbout(x.title, name) || NEWS_JUNK.test(lt)) continue;
+    const w = newsWords(x.title);
+    // başlıkların kelimelerinin %60'ı ortaksa aynı haberin kopyası sayılır
+    if (seen.some((v) => { let c = 0; w.forEach((k) => { if (v.has(k)) c++; }); return c / Math.max(1, Math.min(w.size, v.size)) >= 0.6; })) continue;
+    seen.push(w);
+    out.push({ ...x, cat: ["kadro", "mac", "transfer"].find((k) => NEWS_RX[k].test(lt)) || "diger" });
+  }
+  return out;
+}
 function newsHtml(n, name, cls) {
   const color = cls === "home-c" ? "var(--home)" : "var(--away)";
+  const tr = cleanNews(n.tr, name), fm = cleanNews(n.fotmob, name);
+  const item = (x) => `<div class="nwrap" data-ncat="${x.cat}" ${newsCat !== "all" && x.cat !== newsCat ? "hidden" : ""}>${newsItem(x)}</div>`;
+  const empty = `<p class="muted nempty" ${tr.some((x) => newsCat === "all" || x.cat === newsCat) ? "hidden" : ""}>${tr.length ? "Bu konuda haber yok" : "Son 3 günde haber bulunamadı"}</p>`;
   return `<div class="card news" style="--c:${color}">${head("📰", `${esc(name)}: haberler`)}
-    <h3>Türkçe basın (Google News)</h3><div class="nlist">${n.tr.length ? n.tr.map(newsItem).join("") : `<p class="muted">Son 3 günde haber bulunamadı</p>`}</div>
-    ${n.fotmob.length ? `<h3>FotMob haber akışı</h3><div class="nlist">${n.fotmob.map(newsItem).join("")}</div>` : ""}</div>`;
+    <h3>Türkçe basın (Google News)</h3><div class="nlist">${tr.map(item).join("")}${empty}</div>
+    ${fm.length ? `<h3>FotMob haber akışı</h3><div class="nlist">${fm.map(item).join("")}<p class="muted nempty" ${fm.some((x) => newsCat === "all" || x.cat === newsCat) ? "hidden" : ""}>Bu konuda haber yok</p></div>` : ""}</div>`;
 }
+function newsFilterBar() {
+  return `<div class="chiprow newsbar">${NEWS_CATS.map(([k, l]) => `<button class="chipbtn ${newsCat === k ? "on" : ""}" data-ncf="${k}">${l}</button>`).join("")}</div>`;
+}
+document.addEventListener("click", (e) => {
+  const c = e.target.closest("[data-ncf]");
+  if (!c) return;
+  newsCat = c.dataset.ncf;
+  try { localStorage.setItem("newsCat", newsCat); } catch { /* yok say */ }
+  document.querySelectorAll("[data-ncf]").forEach((x) => x.classList.toggle("on", x.dataset.ncf === newsCat));
+  document.querySelectorAll(".news .nlist").forEach((l) => {
+    let vis = 0;
+    l.querySelectorAll("[data-ncat]").forEach((x) => { const on = newsCat === "all" || x.dataset.ncat === newsCat; x.hidden = !on; if (on) vis++; });
+    const em = l.querySelector(".nempty");
+    if (em) { em.hidden = vis > 0; if (l.querySelector("[data-ncat]")) em.textContent = "Bu konuda haber yok"; }
+  });
+});
 
 function extrasHtml(b) {
   let h2h = "";
@@ -2066,6 +2113,14 @@ const RELEASES = [
       ["📊", "Daha fazla pazar", "Yarılar, handikaplar, korner/kart/şut/ofsayt/faul toplamları, takım bazlı alt/üst ve dakika aralıkları."],
       ["🔍", "Oranlarda arama", "Oranlar sekmesinde oyuncu veya pazar adı yaz, sadece o seçenekler kalsın; gruplar açılıp kapanır."],
       ["🔕", "Sessiz bildirimler", "Bildirimler artık ekranı kaplamaz; yalnızca sarı çana dokununca görünür."],
+    ],
+  },
+  {
+    id: 12, date: "27 Ekim 2026", title: "Yeni: Haber filtresi ve daha isabetli model", sub: "Bu güncellemede gelenler",
+    items: [
+      ["📰", "Haber filtresi", "Haberler sekmesinde konu seçimi: Kadro & sakatlık, Maç önü, Transfer, Diğer. Alakasız, tekrar eden, canlı skor ve magazin haberleri otomatik ayıklanıyor."],
+      ["📦", "Sabit kutular", "Maç kartındaki korner kutusu her maçta 8.5 Üst, kart kutusu 3.5 Üst olasılığını gösteriyor (oranıyla); tercihleri etkilemez."],
+      ["🧠", "Model güncellemesi", "761 maçlık testle ayarlandı: maç sonucunda piyasa payı %90, gollerde %60; rakip gücüne göre xG düzeltmesi; korner ve kartta son 10 maç."],
     ],
   },
   {

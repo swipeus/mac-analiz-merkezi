@@ -4,8 +4,8 @@
 Bir kupon içinde her maçtan tek tercih olur. Banko ve En garantiler'deki bir tercih başka hiçbir kupona girmez
 (tek kötü sonuç birden çok kuponu yakmasın); diğer temalarda aynı tercih en fazla iki kuponda olur. Karnede zayıf
 çıkan çifte şans 12 ve en çok korner güvenli kuponlara alınmaz. Az maçlı günlerde tema başına daha az kupon çıkar. Her temanın toplam oran aralığı sabittir. Tercih başına risk düşük tutulur (model olasılığı temaya göre
-en az %52-75). Kuponlar maçlar başlayana kadar en güncel verilerle yeniden hazırlanır; kupondaki ilk maç başladığında
-o günün kuponları kilitlenir ve karneye yazılır.
+en az %52-75). Kuponlar en güncel verilerle yeniden hazırlanır; kuponlardaki maçlardan birinin resmi ilk 11'i açıklanınca
+son kontrol yapılır ve o günün kuponları kilitlenir (en geç ilk maç başlayınca), karneye bu hâliyle yazılır.
 """
 import re
 import time
@@ -212,7 +212,8 @@ def _started(leg, now):
 
 def update_day(store, date, bundles):
     """O günün kuponlarını hazırlar: hiçbir kupon maçı başlamadıysa güncel verilerle yeniden kurar,
-    biri başladıysa mevcut kuponları kilitler (karnede maç öncesi hâl kalır)."""
+    biri başladıysa mevcut kuponları kilitler (karnede maç öncesi hâl kalır). Kuponlardaki bir maçın resmi
+    ilk 11'i açıklandıysa bu kurulum son kontroldür: kuponlar kilitlenir ve artık değişmez."""
     now = datetime.now(timezone.utc)
     doc = store.coupon_get(date)
     if doc and not any(c.get("theme") for c in doc["coupons"]):
@@ -227,7 +228,11 @@ def update_day(store, date, bundles):
     coupons = build(fresh, date)
     if not coupons:
         return doc
-    doc = {"date": date, "locked": False, "coupons": coupons}
+    by_id = {b["id"]: b for b in fresh}
+    final = any((by_id.get(l["mid"], {}).get("lineup") or {}).get("confirmed") for c in coupons for l in c["legs"])
+    doc = {"date": date, "locked": final, "coupons": coupons}
+    if final:
+        doc["final_at"] = time.time()
     store.coupon_put(date, doc)
     return doc
 

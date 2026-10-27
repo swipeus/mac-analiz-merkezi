@@ -1046,7 +1046,8 @@ function couponCard(c, draft, open = true, kd = "") {
   const ret = COUPON_STAKE * (done && c.won ? c.paid_odds || c.odds : c.odds);
   const color = THEME_COLOR[themeOf(c)] || "#e3b341";
   const status = done ? (c.won ? `<span class="kst ok">✓ Kazandı</span>` : `<span class="kst no">✗ Kaybetti</span>`)
-    : `<span class="kst wait">⏳ ${draft ? "İlk maça kadar güncellenebilir" : "Bekliyor"}</span>`;
+    : draft ? `<span class="kst wait tbd" title="Kupondaki maçlardan ilkinin resmi 11'i açıklanınca son kontrol yapılır ve kupon kesinleşir.">! Değişebilir</span>`
+    : `<span class="kst wait fin" title="Resmi 11'ler açıklandıktan sonra son kontrol yapıldı; kupon artık değişmez.">✓ Son hali · ⏳ Bekliyor</span>`;
   const mini = done ? `<span class="kpl ${c.won ? "pos" : "neg"}">${c.won ? "✓" : "✗"} ${tl(couponProfit(c), true)}</span>` : `<span class="kmini">⏳</span>`;
   return `<details class="card kupon ogrp ${done ? (c.won ? "won" : "lost") : ""}" style="--c:${color}" ${kd ? `data-kd="${esc(kd)}"` : ""} ${open ? "open" : ""}>
     <summary>${head(c.icon || "🧩", `${esc(c.name)} <span class="muted">· ${c.legs.length} maç</span><span class="kodds">${nf(c.odds, 2)}</span>${mini}`)}</summary>
@@ -1078,7 +1079,7 @@ function drawCoupons() {
   const cs = dayCache.coupons || [];
   const title = new Date(state.date + "T12:00:00").toLocaleDateString("tr-TR", { weekday: "long", day: "numeric", month: "long" });
   const intro = `<div class="card" style="--c:#a371f7">${head("🧩", `Günün kombineleri <span class="muted">· ${cap(title)}</span>`)}
-    <details class="kinfo"><summary>Kuponlar nasıl hazırlanıyor? ›</summary><p class="muted">Model her gün beş temada üçer kupon hazırlar; her kupon 2-5 maçtan oluşur ve her maçtan tek tercih içerir. Banko ve En garantiler'deki bir tercih başka hiçbir kupona girmez; diğer temalarda aynı tercih en fazla iki kuponda olur. Çifte şans 12 ve en çok korner güvenli kuponlara alınmaz. Az maçlı günlerde tema başına daha az kupon çıkar; tutma ihtimali %20'nin altındaki kupon kurulmaz (Banko ve En garantiler'de %35). Toplam oranlar: Banko ve En garantiler 2-3.5, Gol şöleni ve Kornerler 2.5-6, Değerli oranlar 3-6 (tercih başına en az %58, kupon en az %25). Kuponlar ilk maç başlayana kadar en güncel verilerle yenilenir, sonra kilitlenir ve karneye kupon başına 1.000 ₺ ile yazılır.</p></details></div>`;
+    <details class="kinfo"><summary>Kuponlar nasıl hazırlanıyor? ›</summary><p class="muted">Model her gün beş temada üçer kupon hazırlar; her kupon 2-5 maçtan oluşur ve her maçtan tek tercih içerir. Banko ve En garantiler'deki bir tercih başka hiçbir kupona girmez; diğer temalarda aynı tercih en fazla iki kuponda olur. Çifte şans 12 ve en çok korner güvenli kuponlara alınmaz. Az maçlı günlerde tema başına daha az kupon çıkar; tutma ihtimali %20'nin altındaki kupon kurulmaz (Banko ve En garantiler'de %35). Toplam oranlar: Banko ve En garantiler 2-3.5, Gol şöleni ve Kornerler 2.5-6, Değerli oranlar 3-6 (tercih başına en az %58, kupon en az %25). Kuponlar en güncel verilerle yenilenir; bu sürede kuponda <b>! Değişebilir</b> yazar. Kuponlardaki maçlardan ilkinin resmi ilk 11'i açıklanınca model son kontrolü yapar ve kuponları kilitler (<b>✓ Son hali</b>); karneye bu hâliyle kupon başına 1.000 ₺ ile yazılır.</p></details></div>`;
   const tabs = COUPON_THEMES.concat(cs.some((c) => themeOf(c) === "diger") ? [["diger", "📋", "Diğer"]] : []);
   const hot = hotTheme();
   if (!tabs.some(([k]) => k === couponTab)) couponTab = "banko";
@@ -2137,6 +2138,7 @@ const RELEASES = [
     items: [
       ["❗", "Değişebilir", "En garanti tercih, resmi ilk 11'ler açıklanana kadar yeni bilgilerle (oran, eksik, kadro) değişebilir; bu sürede kutuda ünlem ve 'Değişebilir' yazar."],
       ["✅", "Son tercih", "Resmi 11'ler açıklanınca model son bir kontrol yapar ve tercihini kilitler; kutuda tik ve 'Son tercih' yazar, maç başlayana kadar değişmez."],
+      ["🧩", "Kombineler de", "Kuponlar, içlerindeki maçlardan ilkinin resmi 11'i açıklanınca son kontrolle kilitlenir; öncesinde 'Değişebilir', sonrasında 'Son hali' yazar."],
     ],
   },
   {

@@ -926,3 +926,5 @@ body.on-moves footer.foot { display: block; }
 .kpi .fbadge { display: inline-block; margin: 2px 0 4px; }
 .opick .k .fbadge { margin-left: 6px; vertical-align: 1px; }
 .pill.safe.tbd i { color: #e3b341; font-weight: 800; }
+.kst.wait.tbd { color: #e3b341; background: rgba(227,179,65,.12); border: 1px solid rgba(227,179,65,.45); cursor: help; }
+.kst.wait.fin { color: #7ee2a8; background: rgba(46,160,67,.14); border: 1px solid rgba(46,160,67,.5); cursor: help; }

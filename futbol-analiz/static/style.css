@@ -928,3 +928,97 @@ body.on-moves footer.foot { display: block; }
 .pill.safe.tbd i { color: #e3b341; font-weight: 800; }
 .kst.wait.tbd { color: #e3b341; background: rgba(227,179,65,.12); border: 1px solid rgba(227,179,65,.45); cursor: help; }
 .kst.wait.fin { color: #7ee2a8; background: rgba(46,160,67,.14); border: 1px solid rgba(46,160,67,.5); cursor: help; }
+
+/* ---------- maç sayfası: tahmin bölümü ---------- */
+.obars { display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 8px; row-gap: 4px; margin: 6px 0 12px; }
+.obars .bigbar { margin: 0; }
+.obl { font-size: 11px; color: var(--muted); font-weight: 600; }
+.bigbar.mkbar { height: 14px; font-size: 10px; opacity: .75; }
+.bigbar.mkbar div:first-child { border-radius: 5px 0 0 5px; } .bigbar.mkbar div:last-child { border-radius: 0 5px 5px 0; }
+
+.shero { background: color-mix(in srgb, #a371f7 8%, var(--panel2)); border: 1px solid color-mix(in srgb, #a371f7 35%, var(--line)); border-radius: 14px; padding: 12px 14px; margin-bottom: 10px; }
+.shk { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.shk svg, .shk .ki { color: #a371f7; }
+.shrow { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; margin: 6px 0 8px; }
+.shs { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; text-align: center; }
+.shs img { width: 40px; height: 40px; object-fit: contain; }
+.shs span { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.shsc { display: flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
+.shsc b { font-size: 40px; font-weight: 800; line-height: 1; min-width: 32px; text-align: center; }
+.shsc i { font-style: normal; color: var(--muted); font-size: 26px; }
+.shsub { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px; font-size: 12px; }
+.shalt { display: inline-flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.schip { padding: 1px 8px; border-radius: 999px; background: rgba(255,255,255,.07); border: 1px solid var(--line); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.bigpicks { display: grid; grid-template-columns: 1fr; gap: 8px; margin: 10px 0; }
+.bpick { border-radius: 14px; padding: 12px 14px; border: 1px solid var(--line); background: var(--panel2); }
+.bpick.safe { border-color: rgba(46,160,67,.6); background: color-mix(in srgb, #2ea043 10%, var(--panel2)); }
+.bpick.sur { border-color: rgba(227,179,65,.5); background: color-mix(in srgb, #e3b341 8%, var(--panel2)); }
+.bpt { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+.bpick.safe .bpi { color: #3fb950; } .bpick.sur .bpi { color: #e3b341; }
+.bpt .fbadge { margin-left: auto; }
+.bpm { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 4px 0 2px; }
+.bpl { font-size: 19px; font-weight: 800; line-height: 1.25; }
+.bpo { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; padding: 2px 10px; border-radius: 10px; background: rgba(255,255,255,.06); }
+.bpick.safe .bpo { color: #7ee2a8; } .bpick.sur .bpo { color: #e3b341; }
+.bps { font-size: 12px; color: var(--muted); }
+
+.gcard { grid-column: 1 / -1; }
+.gcard .v small { font-size: 12px; font-weight: 600; }
+.gcrs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 14px; margin: 6px 0 4px; }
+.gcr { display: grid; grid-template-columns: 56px 1fr 36px; align-items: center; gap: 6px; font-size: 12px; }
+.gcr span:first-child { color: var(--muted); }
+.gcr b { text-align: right; font-variant-numeric: tabular-nums; }
+.gcb { height: 6px; border-radius: 3px; background: rgba(255,255,255,.08); overflow: hidden; }
+.gcb span { display: block; height: 100%; border-radius: 3px; background: #3fb950; }
+@media (max-width: 420px) { .gcrs { grid-template-columns: 1fr; } }
+
+/* maç listesi: durum kenarı */
+.mcard { --st: transparent; box-shadow: inset 4px 0 0 var(--st); }
+.mcard:hover { box-shadow: inset 4px 0 0 var(--st), 0 10px 24px rgba(0,0,0,.35); }
+.st-live { --st: #f85149; } .st-final { --st: #3fb950; } .st-open { --st: #e3b341; }
+.st-wait { --st: #6e7681; } .st-done { --st: #30363d; } .st-off { --st: #30363d; }
+.mcard.st-done { opacity: .82; }
+.stlegend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 4px 2px 12px; font-size: 12px; color: var(--muted); }
+.stlegend span { display: inline-flex; align-items: center; gap: 6px; }
+.stlegend i { width: 4px; height: 14px; border-radius: 2px; background: var(--st); }
+.stlegend b { color: var(--text); font-weight: 700; }
+
+/* kupon: kapalı kart özeti ve maç saatleri zaman çizelgesi */
+.kmini.kp { font-size: 12px; font-weight: 700; color: var(--muted); margin-left: 6px; }
+.kmini.ks { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; font-size: 12px; font-weight: 800; margin-left: 6px; }
+.kmini.ks.tbd { color: #e3b341; background: rgba(227,179,65,.14); border: 1px solid rgba(227,179,65,.5); }
+.kmini.ks.fin { color: #7ee2a8; background: rgba(46,160,67,.14); border: 1px solid rgba(46,160,67,.5); }
+.klegs.ktl { gap: 0; position: relative; }
+.ktr { display: grid; grid-template-columns: 40px 14px 1fr; align-items: center; column-gap: 6px; position: relative; padding: 3px 0; }
+.ktr::before { content: ""; position: absolute; left: 52px; top: 0; bottom: 0; width: 2px; background: var(--line); }
+.ktr:first-child::before { top: 50%; } .ktr:last-child::before { bottom: 50%; }
+.ktr:only-child::before { display: none; }
+.ktime { font-size: 12px; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+.kdot { width: 12px; height: 12px; border-radius: 50%; background: var(--panel); border: 2px solid #6e7681; position: relative; z-index: 1; justify-self: center; }
+.ktr.hit .kdot { background: #2ea043; border-color: #2ea043; }
+.ktr.miss .kdot { background: #da3633; border-color: #da3633; }
+.ktr.live .kdot { background: #f85149; border-color: #f85149; animation: livepulse 1.6s ease-in-out infinite; }
+.ktr.void .kdot { border-style: dashed; }
+.ktr.hit .ktime { color: #56d364; } .ktr.miss .ktime { color: #ff7b72; } .ktr.live .ktime { color: #f85149; }
+
+/* karne: birikimli kâr/zarar grafiği ve isabet halkaları */
+.plc { margin: 12px 0 6px; }
+.plh { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; margin-bottom: 6px; }
+.plh small { flex-basis: 100%; font-size: 11px; }
+.plw { position: relative; height: 150px; }
+.plsvg { width: 100%; height: 100%; display: block; overflow: visible; }
+.plzero { stroke: var(--line); stroke-width: 1; stroke-dasharray: 4 4; vector-effect: non-scaling-stroke; }
+.plx { display: flex; justify-content: space-between; font-size: 11px; margin-top: 2px; }
+.pldot, .pltip { position: absolute; display: none; pointer-events: none; }
+.plw.hov .pldot, .plw.hov .pltip { display: block; }
+.pldot { width: 10px; height: 10px; border-radius: 50%; background: var(--c); border: 2px solid var(--panel); transform: translate(-50%, -50%); }
+.pltip { top: -6px; transform: translate(-50%, -100%); background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; font-size: 11px; white-space: nowrap; box-shadow: 0 6px 16px rgba(0,0,0,.4); }
+.pltip span, .pltip b { display: block; }
+.rings { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 10px 8px; margin: 6px 0 10px; }
+.ring { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px; }
+.ring text { fill: var(--text); font-size: 12px; font-weight: 800; font-family: inherit; }
+.ring .rl { font-size: 12px; font-weight: 600; line-height: 1.25; }
+.ring .rn { font-size: 11px; }
+.ring .pos { color: #56d364; } .ring .neg { color: #ff7b72; }
+@media (min-width: 700px) { .bigpicks { grid-template-columns: 1fr 1fr; } }

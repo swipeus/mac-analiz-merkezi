@@ -247,13 +247,35 @@ function crestHtml(team, isFav, pct, size) {
 }
 // en garanti tercihin altındaki 4 olasılık kutusu; en yüksek olasılıklı kutunun etrafı parlar
 // korner ve kart kutusunda yazı yerine en olası tahmin (simge zaten neyin kutusu olduğunu söylüyor)
-const boxItems = (o25, btts, cpick, kpick) => [["⚽", "2.5 Üst", o25], ["🔁", "KG Var", btts],
-  ["🚩", cpick ? cpick.label : "Korner", cpick ? cpick.p : null], ["🟨", kpick ? kpick.label : "Kart", kpick ? kpick.p : null]];
-function probBoxes(items) {
+// "7.5 Üst" -> co7.5, "4.5 Alt" -> ku4.5 (oranlar sekmesindeki seçeneğin iç kodu)
+const pickCode = (pref, pk) => { const m = pk && pk.label.match(/^([\d.]+) (Üst|Alt)$/); return m ? `${pref}${m[2] === "Üst" ? "o" : "u"}${m[1]}` : null; };
+const boxItems = (o25, btts, cpick, kpick) => [["⚽", "2.5 Üst", o25, "o2.5"], ["🔁", "KG Var", btts, "btts_yes"],
+  ["🚩", cpick ? cpick.label : "Korner", cpick ? cpick.p : null, pickCode("c", cpick)], ["🟨", kpick ? kpick.label : "Kart", kpick ? kpick.p : null, pickCode("k", kpick)]];
+const boxCodes = (P) => new Set(boxItems(0, 0, P.corner_pick, P.card_pick).map((x) => x[3]).filter(Boolean));
+// kutuya dokununca o maçın Oranlar sekmesi açılır ve ilgili seçenek vurgulanır
+let oddsFocus = null, pendingTab = null;
+function openOddsAt(mid, code) {
+  oddsFocus = code;
+  if (state.current === mid) {
+    const t = document.querySelector('[data-mt="odds"]');
+    if (t) t.click();
+  } else { pendingTab = "odds"; location.hash = "#/mac/" + mid; }
+}
+function focusOdds() {
+  if (!oddsFocus) return;
+  const row = document.querySelector(".orow.focus");
+  oddsFocus = null;
+  if (!row) return;
+  const g = row.closest("details"); if (g) g.open = true;
+  // sayfa çizimi ve başa kaydırma bittikten sonra seçeneğe in
+  const go = () => { const r = document.querySelector(".orow.focus"); if (r) window.scrollTo(0, r.getBoundingClientRect().top + window.scrollY - window.innerHeight / 3); };
+  setTimeout(go, 250); setTimeout(go, 700);
+}
+function probBoxes(items, mid) {
   const vals = items.filter((x) => x[2] != null);
   if (!vals.length) return "";
   const top = Math.max(...vals.map((x) => x[2]));
-  return `<div class="pboxes">${items.map(([ic, l, v]) => `<div class="pbox ${v != null && v === top ? "best" : ""} ${v != null && v >= 0.6 ? "hi" : ""}">
+  return `<div class="pboxes">${items.map(([ic, l, v, code]) => `<div class="pbox ${v != null && v === top ? "best" : ""} ${v != null && v >= 0.6 ? "hi" : ""}" ${mid && code ? `data-ocode="${code}" data-omid="${mid}" title="Oranlarda göster"` : ""}>
     <span class="pbl">${ico(ic)} ${esc(l)}</span><b>${v != null ? pc(v) : "—"}</b>
     <span class="pbb"><span style="width:${v != null ? Math.round(v * 100) : 0}%"></span></span></div>`).join("")}</div>`;
 }
@@ -276,7 +298,7 @@ function cardHtml(m, sorted) {
     <div class="pills">
       ${p.safe ? `<span class="pill safe"><i>✅</i>${esc(p.safe.label.replace(/ \(.*\)$/, ""))}${p.safe.odds ? ` @${nf(p.safe.odds, 2)}` : ""}</span>` : ""}
     </div>
-    ${probBoxes(boxItems(p.over25, p.btts, p.cpick, p.kpick))}` : `<div class="pending">Analiz hazırlanıyor…</div>`;
+    ${probBoxes(boxItems(p.over25, p.btts, p.cpick, p.kpick), m.id)}` : `<div class="pending">Analiz hazırlanıyor…</div>`;
   return `<div class="mcard ${live ? "is-live" : ""}" data-id="${m.id}">
     <div class="mtop">${top}<div class="mtags">${sorted ? `<span class="tag lgt"><img src="${leagueLogo(m.league_id)}" alt="" onerror="this.remove()">${esc(m.league)}</span>${sortBadge(m)}` : tags}</div></div>
     <div class="mteams">
@@ -349,7 +371,8 @@ async function renderMatch(id, silent, refresh) {
   if (state.current !== id) return;
   const y = window.scrollY;
   lastB = b;
-  if (matchTabId !== id) { matchTab = defaultMatchTab(b); matchTabId = id; }  // yeni maç: varsayılan sekme
+  if (matchTabId !== id) { matchTab = pendingTab || defaultMatchTab(b); matchTabId = id; }
+  pendingTab = null;  // yeni maç: varsayılan sekme
   v.innerHTML = matchHtml(b);
   bindMatch();
   if (silent) window.scrollTo(0, y);
@@ -488,7 +511,7 @@ function predictionHtml(b) {
     </div>
     <div class="pred">
       ${P.best_pick ? kpi("✅", "#2ea043", "En garanti tercih", P.best_pick.label, `${P.best_pick.odds ? "Oran " + nf(P.best_pick.odds, 2) + " · " : ""}model ${pc(P.best_pick.p)}`) : ""}
-      <div class="pbwide">${probBoxes(boxItems(P.over25, P.btts, P.corner_pick, P.card_pick))}</div>
+      <div class="pbwide">${probBoxes(boxItems(P.over25, P.btts, P.corner_pick, P.card_pick), b.id)}</div>
       ${P.surprise ? kpi("⚡", "#e3b341", "Olası sürpriz", P.surprise.label, `${P.surprise.odds ? "Oran " + nf(P.surprise.odds, 2) + " · " : ""}model ${pc(P.surprise.p)}`) : ""}
       ${kpi("🎲", "#a371f7", "Skor tahmini", (P.score_pick || P.scores[0]).score, "Diğer olasılar: " + P.scores.filter((s) => s.score !== (P.score_pick || {}).score).slice(0, 3).map((s) => s.score).join(" · "))}
       ${kpi("⚽", "#f85149", "Beklenen gol (xG)", `${nf(P.lam_home, 2)} – ${nf(P.lam_away, 2)}`, P.uses_odds ? "İstatistik + bahis oranları" : "İstatistik modeli")}
@@ -528,6 +551,7 @@ function oddsHtml(b) {
   if (!o || !o.markets || !o.markets.length) return `<div class="card"><p class="muted">Bu maç için henüz bahis oranı bulunamadı. Oranlar genelde maçtan 1-3 gün önce açılır.</p></div>`;
   const probs = P.probs || {};
   const safe = P.best_pick && P.best_pick.code, sur = P.surprise && P.surprise.code;
+  BOX = boxCodes(P);
   const nSel = o.markets.reduce((a, m) => a + m.selections.length, 0);
   const pickCard = (cls, ic, title, x, note) => x ? `<div class="opick ${cls}"><div class="oi">${ic}</div><div>
       <div class="k">${title}</div><b>${esc(x.label)}</b>
@@ -549,6 +573,7 @@ function oddsHtml(b) {
   return top + groups;
 }
 function bindOdds() {
+  focusOdds();
   const q = $("#oddsSearch");
   if (!q) return;
   q.oninput = () => {
@@ -569,6 +594,7 @@ function bindOdds() {
     });
   };
 }
+let BOX = new Set();  // o an açık maçın kutu tercihleri (oranlar sekmesinde kalın yazılır)
 function marketHtml(m, probs, safe, sur, b) {
   // "1" / "2" seçeneklerinin yanına takım adı
   const lab = (l) => l === "1" ? `1 · ${b.home.name}` : l === "2" ? `2 · ${b.away.name}` : l;
@@ -581,7 +607,8 @@ function marketHtml(m, probs, safe, sur, b) {
     const ip = s.ip != null ? s.ip : old && !many && tot ? inv[i] / tot : null;
     const val = mp != null ? mp * s.odds - 1 : null;
     const cls = s.code && s.code === safe ? "safe" : s.code && s.code === sur ? "sur" : "";
-    return `<div class="orow ${cls} ${s.odds < 1.3 ? "low" : ""}">
+    const bx = s.code && BOX.has(s.code) ? "bx" : "", fc = s.code && s.code === oddsFocus ? "focus" : "";
+    return `<div class="orow ${cls} ${bx} ${fc} ${s.odds < 1.3 ? "low" : ""}">
       <span class="ol">${esc(lab(s.label))}${cls === "safe" ? ` <i class="otag safe">Garanti</i>` : cls === "sur" ? ` <i class="otag sur">Sürpriz</i>` : ""}</span>
       <span class="oo">${s.o0 && s.o0 !== s.odds ? `<i class="omv ${s.odds < s.o0 ? "down" : "up"}" title="Açılış ${nf(s.o0, 2)}">${s.odds < s.o0 ? "▼" : "▲"}</i>` : ""}${nf(s.odds, 2)}</span>
       <span class="op">${ip != null ? pc(ip) : ""}</span>
@@ -1862,6 +1889,8 @@ $("#backBtn").onclick = () => {
 };
 // kadrodaki oyunculara tıklayınca oyuncu sayfası
 $("#view").addEventListener("click", (e) => {
+  const ob = e.target.closest("[data-ocode]");
+  if (ob) { e.stopPropagation(); e.preventDefault(); openOddsAt(+ob.dataset.omid, ob.dataset.ocode); return; }
   const sa = e.target.closest("[data-sadd]");
   if (sa) { e.stopPropagation(); e.preventDefault(); toggleShare(sa.dataset.sadd, sa); return; }
   const sh = e.target.closest("[data-share]");

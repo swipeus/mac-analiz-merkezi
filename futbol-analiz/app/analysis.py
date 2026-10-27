@@ -472,13 +472,18 @@ def fit_market_lambdas(odds):
 
 
 DRAW_GAP = 0.12  # ev ve deplasman galibiyet olasılıkları bu kadar yakınsa maç dengeli sayılır, skor beraberlik
+TOTAL_SHIFT = 0.2  # toplam gol: beklenen toplam + 0.2 yuvarlanır (gerçek gol dağılımına en yakın sonuç bununla çıktı)
 
 
 def coherent_score(mat, pr, lh, la):
-    """Skor tahmini. Sonuç: maç dengeliyse (1 ile 2 arasında %12'den az fark) beraberlik, değilse favorinin
-    galibiyeti. Toplam gol: skor dağılımının ortancası (maçların yarısı bundan az, yarısı fazla gollü biter).
-    Bu sonuç ve toplam golle uyuşan skorlardan en olası olanı seçilir. 761 maçlık testte tam isabet eskisiyle
-    aynı düzeyde (%10), ama tahminlerin %85'i 2-1 / 1-2 iken artık 1-1, 2-0, 3-0, 3-1, 0-2 de çıkıyor."""
+    """Skor tahmini, iki takımın beklenen gollerinden (Elo, rakibe göre düzeltilmiş xG, rakibin yediği goller ve
+    oranlar zaten bunların içinde) kurulur:
+    1) Sonuç: maç dengeliyse (1 ile 2 arasında %12'den az fark) beraberlik, değilse favorinin galibiyeti.
+    2) Toplam gol: beklenen toplam golün yuvarlanmışı; alt/üst olasılıklarıyla tutarlı olmak zorunda
+       (3.5 Üst olasılığı %50'yi geçiyorsa en az 4 gol, 2.5 Üst %50'nin altındaysa en fazla 2 gol).
+    3) Gol farkı: beklenen gol farkına en yakın skor.
+    761 maçlık testte tam isabet önceki kurallarla aynı (%10.4); 4+ gollü skor tahmini %9'dan %28'e çıktı
+    (gerçekte %38), 2-1 / 1-2 yığılması kalktı."""
     n = len(mat)
     if abs(pr["1"] - pr["2"]) < DRAW_GAP:
         ok = lambda i, j: i == j
@@ -486,16 +491,19 @@ def coherent_score(mat, pr, lh, la):
         ok = lambda i, j: i > j
     else:
         ok = lambda i, j: i < j
-    cum, tot = 0.0, 2
-    for t in range(2 * n - 1):
-        cum += sum(mat[i][t - i] for i in range(max(0, t - n + 1), min(t, n - 1) + 1))
-        if cum >= 0.5:
-            tot = t
-            break
-    cands = [(mat[i][j], i, j) for i in range(n) for j in range(n) if ok(i, j)]
-    pref = [c for c in cands if c[1] + c[2] == tot] or [c for c in cands if abs(c[1] + c[2] - tot) == 1] or cands
-    p, i, j = max(pref)
-    return {"score": f"{i}-{j}", "p": round(p, 3)}
+    tot = int(lh + la + 0.5 + TOTAL_SHIFT)
+    p25 = sum(mat[i][j] for i in range(n) for j in range(n) if i + j > 2)
+    p35 = sum(mat[i][j] for i in range(n) for j in range(n) if i + j > 3)
+    if p35 >= 0.5:
+        tot = max(tot, 4)
+    elif p25 >= 0.5:
+        tot = max(tot, 3)
+    else:
+        tot = min(tot, 2)
+    cands = [(i, j) for i in range(n) for j in range(n) if ok(i, j)]
+    pref = [c for c in cands if c[0] + c[1] == tot] or [c for c in cands if abs(c[0] + c[1] - tot) == 1] or cands
+    i, j = min(pref, key=lambda c: (abs((c[0] - c[1]) - (lh - la)), -mat[c[0]][c[1]]))
+    return {"score": f"{i}-{j}", "p": round(mat[i][j], 3)}
 
 # garanti tercih adayları: maç sonucu, çifte şans, iade, KG, alt/üst, korner ve kart pazarları
 SAFE_CODES = {"1", "X", "2", "1X", "12", "X2", "btts_yes", "btts_no", "o1.5", "u1.5", "o2.5", "u2.5",
@@ -810,9 +818,11 @@ def predict(b, prof_h, prof_a):
         lam_a *= imp["away"][0] * imp["home"][1]
     # takım gücü puanı (Elo): beklenen gol farkı kısmen Elo'dan gelir, toplam gol beklentisi değişmez
     elo_r = b.get("elo")
+    elo_sup = None
     if ELO_W and elo_r and None not in elo_r:
         tot = lam_h + lam_a
         sup = (1 - ELO_W) * (lam_h - lam_a) + ELO_W * (elo_r[0] + 60 - elo_r[1]) / 100 * ELO_SLOPE
+        elo_sup = (elo_r[0] + 60 - elo_r[1]) / 100 * ELO_SLOPE
         lam_h, lam_a = (tot + sup) / 2, (tot - sup) / 2
     lam_h, lam_a = max(0.2, lam_h), max(0.2, lam_a)
     model_lam = (round(lam_h, 2), round(lam_a, 2))
@@ -928,6 +938,10 @@ def predict(b, prof_h, prof_a):
         "lam_home": round(lam_h, 2), "lam_away": round(lam_a, 2),
         "lam_model": model_lam, "lam_market": mk, "uses_odds": bool(mk),
         "factors": factors, "rest": rest,
+        # beklenen gollerin kaynağı (skor tahmininin açıklaması için)
+        "lam_parts": {"att": [ah and round(ah, 2), aa_ and round(aa_, 2)], "conc": [da and round(da, 2), dh and round(dh, 2)],
+                      "elo": elo_r, "elo_sup": elo_sup and round(elo_sup, 2)},
+        "p_over35": round(pr["o3.5"], 3),
         "p_home": round(pr["1"], 3), "p_draw": round(pr["X"], 3), "p_away": round(pr["2"], 3),
         "over15": round(pr["o1.5"], 3), "over25": round(pr["o2.5"], 3), "over35": round(pr["o3.5"], 3),
         "btts": round(pr["btts_yes"], 3),
@@ -1259,6 +1273,24 @@ def commentary(b, pr, prof_h, prof_a):
     return {"paragraphs": paras, "tags": tags[:6]}
 
 
+def score_why(pr, H, A):
+    """Skor tahmininin nereden geldiği: iki takımın beklenen golleri ve bunları oluşturan parçalar."""
+    lp = pr.get("lam_parts") or {}
+    att, conc, elo_r = lp.get("att") or [None, None], lp.get("conc") or [None, None], lp.get("elo")
+    bits = []
+    if None not in att and None not in conc:
+        bits.append(f"{H} maç başı {f(att[0], 1)} xG üretiyor, {A} {f(conc[0], 1)} xG yiyor; "
+                    f"{A} {f(att[1], 1)} üretiyor, {H} {f(conc[1], 1)} yiyor (rakip gücüne göre düzeltilmiş)")
+    if elo_r and None not in elo_r and lp.get("elo_sup") is not None:
+        gap = round(elo_r[0] - elo_r[1])
+        bits.append(f"güç puanları {H} {round(elo_r[0])}, {A} {round(elo_r[1])}"
+                    + (f" ({H if gap > 0 else A} {abs(gap)} puan önde)" if abs(gap) >= 15 else " (denk)"))
+    if pr.get("uses_odds"):
+        bits.append("oranlar da hesaba katıldı")
+    head = f"Skorun dayanağı: beklenen goller {H} {f(pr['lam_home'], 1)}, {A} {f(pr['lam_away'], 1)} (toplam {f(pr['lam_home'] + pr['lam_away'], 1)}, 3.5 üst {pct(pr.get('p_over35') or 0)})"
+    return head + (": " + "; ".join(bits) if bits else "") + ". "
+
+
 def build(b):
     lu = b.get("lineup") or {}
     prof_h = team_profile(b["home"]["name"], b["recent"]["home"], b["season"]["home"], lu.get("home"),
@@ -1303,7 +1335,8 @@ def build(b):
         f"Model ({src}), {H} için {f(pr['lam_home'], 2)}, {A} için {f(pr['lam_away'], 2)} beklenen gol hesaplıyor. "
         f"Olasılıklar: 1 {pct(pr['p_home'])} · X {pct(pr['p_draw'])} · 2 {pct(pr['p_away'])}. "
         f"En olası sonuç {pick_txt}; skor tahmini {pr['score_pick']['score']}. "
-        f"2.5 üst {pct(pr['over25'])}, karşılıklı gol {pct(pr['btts'])}. "
+        + score_why(pr, H, A)
+        + f"2.5 üst {pct(pr['over25'])}, karşılıklı gol {pct(pr['btts'])}. "
         + (f"En garanti tercih: {bp['label']} ({pct(bp['p'])}{odds_txt(bp)}). " if bp else "")
         + (f"Olası sürpriz: {sp['label']} ({pct(sp['p'])}{odds_txt(sp)}). " if sp else "")
         + f"Güven: {pr['confidence']}."

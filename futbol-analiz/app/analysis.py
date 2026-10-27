@@ -272,23 +272,16 @@ def stat_ok(code):
     return lo <= float(m.group(4)) <= hi
 
 
-def line_pick(pr, pref, rng, oddsmap=None):
-    """Korner (c) ya da kart (k) için en olası alt/üst tahmini, ör. {"label": "8.5 Üst", "p": 0.72, "odds": 1.45}.
-    Maçın bu pazarda oranı varsa yalnızca gerçekten oynanabilen, oranı 1.30 ve üstü seçenekler arasından seçilir
-    (tek tercih kuralıyla aynı); oran yoksa modelin kendi tahmini. Çizgi aralığı sınırlı, %85 üstü bilgisiz sayılır."""
-    oddsmap = oddsmap or {}
-    has_market = any(re.fullmatch(pref + r"[ou]\d+(\.\d+)?", c) for c in oddsmap)
-    opts = []
-    for c, p in pr.items():
-        m = re.fullmatch(pref + r"([ou])(\d+(?:\.\d+)?)", c)
-        if not m or p is None or not rng[0] <= float(m.group(2)) <= rng[1]:
-            continue
-        if has_market and (oddsmap.get(c) or 0) < MIN_ODDS:
-            continue
-        opts.append((f"{m.group(2)} {'Üst' if m.group(1) == 'o' else 'Alt'}", p, oddsmap.get(c)))
-    pool = [o for o in opts if o[1] <= 0.85] or opts
-    best = max(pool, key=lambda o: o[1], default=None)
-    return {"label": best[0], "p": round(best[1], 3), "odds": best[2]} if best else None
+# kutularda gösterilen sabit çizgiler (sadece bilgi; tercihleri etkilemez). Kartta 3.5 Üst seçildi:
+# bitmiş maçlarda ortalama 4.1 kart, 3.5 Üst %55 tutuyor (4.5 Üst %38), olasılığı en bilgilendirici çizgi
+BOX_CORNER, BOX_CARD = "co8.5", "ko3.5"
+
+
+def fixed_box(code, p, oddsmap):
+    """Kutu için sabit çizginin olasılığı ve (varsa) oranı, ör. {"label": "8.5 Üst", "p": 0.58, "odds": 1.72}."""
+    if p is None:
+        return None
+    return {"label": f"{code[2:]} Üst", "p": round(p, 3), "odds": (oddsmap or {}).get(code)}
 
 
 def stat_prob(mm, stat_mu):
@@ -329,9 +322,40 @@ def _over(lam, line):
 
 
 RHO = -0.08          # Dixon-Coles düşük skor düzeltmesi
-MARKET_WEIGHT = 0.75  # oran varsa gol beklentisinde piyasanın ağırlığı (93 oranlı maçta 1X2 isabeti %75 civarında belirgin iyi, 2.5 hafif kötü; denge noktası)
+# oran varsa piyasanın ağırlığı: maç sonucunda (1X2) piyasa bizden belirgin bilgili, gol sayısında modelin xG'si işe yarıyor
+MARKET_WEIGHT = 0.6      # gol beklentisi / toplam gol dağılımı
+MARKET_WEIGHT_1X2 = 0.9  # maç sonucu olasılıkları
+MOVE_K = 1.0         # oran hareketi açılıştan bu yana bir o kadar daha devam eder sayılır (0 = sadece güncel oran)
 MIN_ODDS = 1.30      # en garanti tercih bu orandan düşük olamaz
 N_GOALS = 10
+
+
+def fit_outcome(mat, target):
+    """Skor matrisini, toplam gol dağılımı korunurken 1/X/2 olasılıkları hedef matrisinkine eşit olacak şekilde
+    yeniden ağırlıklar (iki kenar dağılıma dönüşümlü oranlama, birkaç tur yeter)."""
+    n = len(mat)
+    kind = lambda i, j: 0 if i > j else (1 if i == j else 2)
+    want_o = [0.0, 0.0, 0.0]
+    for i in range(n):
+        for j in range(n):
+            want_o[kind(i, j)] += target[i][j]
+    want_t = [0.0] * (2 * n)
+    for i in range(n):
+        for j in range(n):
+            want_t[i + j] += mat[i][j]
+    m = [r[:] for r in mat]
+    for _ in range(8):
+        have = [0.0, 0.0, 0.0]
+        for i in range(n):
+            for j in range(n):
+                have[kind(i, j)] += m[i][j]
+        m = [[m[i][j] * want_o[kind(i, j)] / have[kind(i, j)] if have[kind(i, j)] else 0 for j in range(n)] for i in range(n)]
+        have_t = [0.0] * (2 * n)
+        for i in range(n):
+            for j in range(n):
+                have_t[i + j] += m[i][j]
+        m = [[m[i][j] * want_t[i + j] / have_t[i + j] if have_t[i + j] else 0 for j in range(n)] for i in range(n)]
+    return m
 
 
 def score_matrix(lh, la):
@@ -408,6 +432,13 @@ def fit_market_lambdas(odds):
     imp = dict(zip([s.get("code") for s in mw["selections"]], implied(mw)))
     if not all(k in imp for k in ("1", "X", "2")):
         return None
+    if MOVE_K and all(s.get("o0") for s in mw["selections"]):
+        # oran hareketi: açılıştan bu yana olasılığı artan taraf biraz daha öne çekilir
+        op = dict(zip([s.get("code") for s in mw["selections"]],
+                      implied({**mw, "selections": [{**s, "odds": s["o0"]} for s in mw["selections"]]})))
+        imp = {k: max(0.01, v + MOVE_K * (v - op.get(k, v))) for k, v in imp.items()}
+        t = sum(imp.values())
+        imp = {k: v / t for k, v in imp.items()}
     ou = _odds_market(odds, "odds_goals_over_under", 2.5)
     if not ou:
         ous = [m for m in (odds.get("markets") or []) if m["key"] == "odds_goals_over_under" and m.get("line")]
@@ -577,11 +608,35 @@ def blend_scores(mat, cs_market, w=0.5):
 
 
 # model düzeltmeleri (geri test için kapatılabilir)
-# 128 bitmiş maçlık geri testte rakip gücü ve eksikler isabeti artırdı, ev/deplasman ağırlığı ılımlıyken (1.25) faydalı;
-# dinlenme günü düzeltmesi isabeti düşürdü (az dinlenenler çoğunlukla Avrupa'da oynayan güçlü takımlar), bu yüzden
-# beklentiye katılmıyor, sadece analizde bilgi olarak yazılıyor
-ADJ = {"opp": True, "venue": True, "rest": False, "absent": True}
+# 761 bitmiş maçlık geri test (1 Eylül - 26 Ekim): rakip gücü isabeti artırdı, ev/deplasman ağırlığı nötr.
+# Dinlenme günü ve eksik oyuncu düzeltmeleri isabeti düşürdü (az dinlenenler çoğunlukla Avrupa'da oynayan güçlü
+# takımlar; eksiklerin etkisi son maç verisinde ve oranlarda zaten var), bu yüzden beklentiye katılmıyor,
+# analizde sadece bilgi olarak yazılıyor
+ADJ = {"opp": True, "venue": True, "rest": False, "absent": False}
 VENUE_W = 1.25     # bu maçla aynı sahada (iç/dış) oynanan son maçların ağırlığı
+RECENT_N = 5       # gol beklentisi için bakılan son maç sayısı (en fazla 10)
+DECAY = 1.0        # her eski maçın ağırlığı bir öncekinin bu katı
+STAT_N = 10        # korner, şut, kart için bakılan son maç sayısı (bu istatistikler daha uzun geçmişle iyileşiyor)
+STAT_DECAY = 0.95
+ABSENT_SCALE = 1.0  # eksik etkisinin gücü
+CARD_PAIR = True   # kart beklentisinde rakibin karşısındakilere gördürdüğü kartlar da hesaba katılsın
+
+
+def recent_rows(rec, n=None, decay=None):
+    """Son maçlar (en yenisi önce) ve ağırlıkları: eski maçlar DECAY oranında daha az sayılır."""
+    rows = ((rec.get("rows") or []) + (rec.get("rows_more") or []))[:n or RECENT_N]
+    return [(r, (decay or DECAY) ** k) for k, r in enumerate(rows)]
+
+
+def stat_avg(rec, side, key):
+    """Son maçlarda bir istatistiğin (korner, şut, kart...) ağırlıklı maç başı ortalaması."""
+    num = den = 0.0
+    for r, w in recent_rows(rec, STAT_N, STAT_DECAY):
+        v = (r.get(side) or {}).get(key)
+        if v is not None:
+            num += w * v
+            den += w
+    return num / den if den else None
 TIRED_DAYS = 3     # bu kadar gün ya da daha az dinlenme yorgunluk sayılır
 
 
@@ -589,7 +644,7 @@ def recent_avg(rec, side, at_home):
     """Son maçlarda maç başı xG (yoksa gol). Rakip gücüne göre düzeltilir: zayıf savunmaya üretilen xG
     daha az, güçlü savunmaya üretilen daha çok değerlidir. Bu maçla aynı sahadaki (iç/dış) maçlar daha ağır basar."""
     num = den = 0.0
-    for r in rec.get("rows") or []:
+    for r, w0 in recent_rows(rec):
         v = (r.get(side) or {}).get("xg")
         if v is None:
             v = r.get("gf" if side == "for" else "ga")
@@ -598,7 +653,7 @@ def recent_avg(rec, side, at_home):
         if ADJ["opp"]:
             ratio = r.get("opp_def" if side == "for" else "opp_att") or 1.0
             v /= min(1.6, max(0.6, ratio))
-        w = VENUE_W if ADJ["venue"] and r.get("home") == at_home else 1.0
+        w = w0 * (VENUE_W if ADJ["venue"] and r.get("home") == at_home else 1.0)
         num += w * v
         den += w
     return num / den if den else None
@@ -649,6 +704,7 @@ def absence_impact(lu_side, players, season, rec=None):
         elif (p.get("rating") or 0) >= 7.0 or (p.get("value") or 0) >= 20_000_000:
             dfn += doubt * 0.025
             notes.append((p["name"], "kilit oyuncu", doubt < 1))
+    att, dfn = att * ABSENT_SCALE, dfn * ABSENT_SCALE
     return max(0.82, 1 - att), min(1.08, 1 + dfn), notes
 
 
@@ -688,6 +744,7 @@ def predict(b, prof_h, prof_a):
                     lam_h *= 1.03
     # eksik oyuncular
     lu = b.get("lineup") or {}
+    # eksik oyuncular (geri testte isabeti düşürdüğü için kapalı; açılırsa etkisi analizde de yazılır)
     if ADJ["absent"]:
         imp = {}
         for side, season, pl, team, rec in (("home", sh, b["season"].get("players_home"), H, rh), ("away", sa, b["season"].get("players_away"), A, ra)):
@@ -699,21 +756,20 @@ def predict(b, prof_h, prof_a):
                 factors.append(f"{team} eksikleri: {names}. Bu yüzden {' ve '.join(eff)}.")
         lam_h *= imp["home"][0] * imp["away"][1]
         lam_a *= imp["away"][0] * imp["home"][1]
-    else:
-        lam_h *= max(0.88, 1 - 0.03 * prof_h["important_absent"])
-        lam_a *= max(0.88, 1 - 0.03 * prof_a["important_absent"])
     lam_h, lam_a = max(0.2, lam_h), max(0.2, lam_a)
     model_lam = (round(lam_h, 2), round(lam_a, 2))
 
     odds = b.get("odds")
     mk = fit_market_lambdas(odds) if odds else None
     if mk:
+        lam_xh = MARKET_WEIGHT_1X2 * mk[0] + (1 - MARKET_WEIGHT_1X2) * lam_h
+        lam_xa = MARKET_WEIGHT_1X2 * mk[1] + (1 - MARKET_WEIGHT_1X2) * lam_a
         lam_h = MARKET_WEIGHT * mk[0] + (1 - MARKET_WEIGHT) * lam_h
         lam_a = MARKET_WEIGHT * mk[1] + (1 - MARKET_WEIGHT) * lam_a
 
     def exp_pair(k):
-        h = _wavg([(rh["avg_for"].get(k), 1), (ra["avg_against"].get(k), 1)])
-        a = _wavg([(ra["avg_for"].get(k), 1), (rh["avg_against"].get(k), 1)])
+        h = _wavg([(stat_avg(rh, "for", k), 1), (stat_avg(ra, "against", k), 1)])
+        a = _wavg([(stat_avg(ra, "for", k), 1), (stat_avg(rh, "against", k), 1)])
         return h, a
 
     c_h, c_a = exp_pair("corners")
@@ -735,6 +791,8 @@ def predict(b, prof_h, prof_a):
         return ((v.get("value") or 0) + 0.1 * 10) / (v["matches"] + 10)
     red_rate = red(sh) + red(sa)
     mat = score_matrix(lam_h, lam_a)
+    if mk:  # skor matrisi: toplam gol dağılımı %60 piyasalı, maç sonucu %90 piyasalı olacak şekilde uzlaştırılır
+        mat = fit_outcome(mat, score_matrix(lam_xh, lam_xa))
     pr = market_probs(mat, lam_h, lam_a, corners, max(0.05, red_rate))
     if odds:  # gol pazarları zaten λ üzerinden piyasaya kalibre; korner ve kart için doğrudan %50 harmanla
         from .odds import implied
@@ -768,7 +826,7 @@ def predict(b, prof_h, prof_a):
     scores = sorted(((mat[i][j], f"{i}-{j}") for i in range(n) for j in range(n)), reverse=True)[:6]
     s_h, s_a = exp_pair("shots")
     o_h, o_a = exp_pair("sot")
-    y_h, y_a = rh["avg_for"].get("yellow"), ra["avg_for"].get("yellow")
+    y_h, y_a = exp_pair("yellow") if CARD_PAIR else (stat_avg(rh, "for", "yellow"), stat_avg(ra, "for", "yellow"))
 
     n_min = min(rh.get("n_stats") or 0, ra.get("n_stats") or 0)
     has_season = bool(sh) and bool(sa)
@@ -815,12 +873,11 @@ def predict(b, prof_h, prof_a):
         "corners": corners,
         "cards": cards,
         "box_odds": {"o2.5": oddsmap.get("o2.5"), "btts_yes": oddsmap.get("btts_yes")},  # kutularda gösterilen oranlar
-        "corner_pick": line_pick(pr, "c", (7.5, 11.5), oddsmap),
-        "card_pick": line_pick({**{f"k{d}{l}": (p_ if d == "o" else 1 - p_) for l, p_ in ((float(x), v) for x, v in cards["over"].items()) for d in "ou"},
-                                **{c: v for c, v in pr.items() if re.match(r"^k[ou]\d", c)}}, "k", (2.5, 6.5), oddsmap),
+        "corner_pick": fixed_box(BOX_CORNER, pr.get(BOX_CORNER), oddsmap),
+        "card_pick": fixed_box(BOX_CARD, pr.get(BOX_CARD, cards["over"].get("3.5")), oddsmap),
         "shots": {"home": s_h and round(s_h, 1), "away": s_a and round(s_a, 1)},
         "sot": {"home": o_h and round(o_h, 1), "away": o_a and round(o_a, 1)},
-        "yellow": {"home": y_h, "away": y_a, "total": round(y_h + y_a, 1) if y_h is not None and y_a is not None else None},
+        "yellow": {"home": y_h and round(y_h, 2), "away": y_a and round(y_a, 2), "total": round(y_h + y_a, 1) if y_h is not None and y_a is not None else None},
         "confidence": conf,
         "pick": best[1],
         "best_pick": safe,

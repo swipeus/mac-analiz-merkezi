@@ -56,7 +56,8 @@ STAT_KEYS = {
 _season_memo = {}
 
 # Analiz/paket biçimi değişince artırılır; eski sürümle üretilmiş paketler yeniden oluşturulur
-BUNDLE_VERSION = 18
+BUNDLE_VERSION = 19
+RECENT_MORE = 5  # son 5 maça ek olarak çekilen eski maç sayısı
 
 
 def _num(v):
@@ -115,9 +116,9 @@ def match_usage(md, is_home):
     return out
 
 
-async def team_recent(src, team_id, form_items):
-    """Takımın son maçlarının (FotMob form listesi) detaylı istatistikleri."""
-    ids = []
+async def team_recent(src, team_id, form_items, ids=None):
+    """Takımın son maçlarının (FotMob form listesi ya da verilen maç id'leri) detaylı istatistikleri."""
+    ids = list(ids or [])
     for it in form_items or []:
         link = it.get("linkToMatch") or ""
         if "#" in link:
@@ -368,7 +369,7 @@ def parse_h2h(h2h):
 
 async def team_streaks(src, team_id, before_utc):
     """Takımın tüm kulvarlardaki son maçları (en yenisi önce) ve serileri. FotMob takım fikstürü kullanılır."""
-    key = f"teamfx:{team_id}"
+    key = f"teamfx2:{team_id}"
     hit = src.store.cache_get(key)
     if hit and time.time() - hit[0] < SEASON_TTL:
         allres = hit[1]
@@ -392,7 +393,7 @@ async def team_streaks(src, team_id, before_utc):
                 gf, ga = mine.get("score"), opp.get("score")
                 if gf is None or ga is None:
                     continue
-                allres.append({"date": st.get("utcTime"), "opp": opp.get("name"), "gf": gf, "ga": ga,
+                allres.append({"id": f.get("id"), "date": st.get("utcTime"), "opp": opp.get("name"), "gf": gf, "ga": ga,
                                "r": "G" if gf > ga else ("B" if gf == ga else "M"),
                                "comp": (f.get("tournament") or {}).get("name")})
             src.store.cache_put(key, allres)
@@ -517,9 +518,19 @@ async def build_bundle(src, match_id, prev_odds=None):
         team_streaks(src, hid, kickoff),
         team_streaks(src, aid, kickoff),
     )
+    # son 5'ten önceki 5 maç (tüm kulvarlar): modelin daha uzun geçmişe bakabilmesi için ("rows_more")
+    async def older(rec, streaks, tid):
+        have = {r["match_id"] for r in rec["rows"]}
+        ids = [r["id"] for r in (streaks or {}).get("last") or [] if r.get("id") and r["id"] not in have][:RECENT_MORE]
+        if not ids:
+            return []
+        return (await team_recent(src, tid, None, ids))["rows"]
+    more_h, more_a = await asyncio.gather(older(rec_h, str_h, hid), older(rec_a, str_a, aid))
+    rec_h["rows_more"], rec_a["rows_more"] = more_h, more_a
     strength = opp_strength(season)
-    tag_opponents(rec_h, strength)
-    tag_opponents(rec_a, strength)
+    for rec in (rec_h, rec_a):
+        tag_opponents(rec, strength)
+        tag_opponents({"rows": rec["rows_more"]}, strength)
     # maç bittiyse / sürüyorsa: karnedeki korner ve kart tercihlerini değerlendirmek için maç istatistikleri
     fin_h, fin_a = match_team_stats(md)
     hs_ = header.get("status") or {}

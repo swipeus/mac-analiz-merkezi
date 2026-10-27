@@ -51,8 +51,8 @@ def enrich_day(store, matches):
             m["pred"] = {k: pr[k] for k in ("p_home", "p_draw", "p_away", "over25", "btts", "pick")}
             m["pred"]["score"] = (pr.get("score_pick") or pr["scores"][0])["score"]
             probs = pr.get("probs") or {}
-            m["pred"]["cpick"] = pr.get("corner_pick")  # en olası korner tahmini, ör. 8.5 Üst
-            m["pred"]["kpick"] = pr.get("card_pick")    # en olası kart tahmini
+            m["pred"]["cpick"] = pr.get("corner_pick")  # kutudaki sabit korner çizgisi (8.5 Üst)
+            m["pred"]["kpick"] = pr.get("card_pick")    # kutudaki sabit kart çizgisi (3.5 Üst)
             m["pred"]["bodds"] = pr.get("box_odds")       # 2.5 Üst ve KG Var oranları
             bp = pr.get("best_pick")
             m["pred"]["safe"] = {"label": bp["label"], "odds": bp.get("odds")} if bp else None

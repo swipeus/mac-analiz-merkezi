@@ -66,11 +66,23 @@ def _wavg(pairs):
     return sum(v * w for v, w in pairs) / sum(w for _, w in pairs)
 
 
-def key_absentees(lineup_side):
+def is_regular(p, rec):
+    """Son maçlarda as kadroda mı: en az 2 kez ilk 11 ya da en az 150 dakika. Son maçların kadro verisi
+    yoksa None (bilinmiyor). Süre almayan / az oynayan oyuncunun yokluğu takımı etkilemez; uzun süredir
+    sakat olanın yokluğu da son maç verisinde zaten var."""
+    usage = (rec or {}).get("usage")
+    if not usage:
+        return None
+    u = usage.get(str(p.get("id"))) or [0, 0]
+    return u[0] >= 2 or u[1] >= 150
+
+
+def key_absentees(lineup_side, rec=None):
     out = []
     for p in (lineup_side or {}).get("unavailable", []):
-        important = (p.get("rating") or 0) >= 6.9 or (p.get("value") or 0) >= 15_000_000
-        out.append({**p, "important": important})
+        reg = is_regular(p, rec)
+        important = reg is not False and ((p.get("rating") or 0) >= 6.9 or (p.get("value") or 0) >= 15_000_000)
+        out.append({**p, "important": important, "regular": reg})
     return out
 
 
@@ -219,9 +231,10 @@ def team_profile(name, rec, season, lu_side, players, table):
         sec["form"].append(f"Puan durumu: {table['pos']}. sıra, {table['played']} maçta {table['pts']} puan ({table['w']}G {table['d']}B {table['l']}M, averaj {table['goals']}).")
 
     # --- Eksikler ---
-    absents = key_absentees(lu_side)
+    absents = key_absentees(lu_side, rec)
     for p in absents:
-        sec["absent"].append(("Önemli eksik: " if p["important"] else "") + absent_txt(p))
+        sec["absent"].append(("Önemli eksik: " if p["important"] else "") + absent_txt(p)
+                             + (" (son maçlarda süre almıyordu, eksik sayılmadı)" if p["regular"] is False else ""))
     if lu_side is not None and not absents:
         sec["absent"].append("Bilinen eksik yok.")
 
@@ -606,7 +619,7 @@ def rest_days(rec, utc):
     return round(d, 1) if 0 < d < 30 else None
 
 
-def absence_impact(lu_side, players, season):
+def absence_impact(lu_side, players, season, rec=None):
     """Eksik oyuncuların gerçek etkisi. Sezon xG'sinin ve asistlerinin (xA) ne kadarını bu oyuncular üretiyor:
     payın %60'ı kayıp sayılır (yerine oynayan kalanını telafi eder). Gol katkısı listelerinde olmayan
     önemli oyuncular (reyting 7.0+ ya da değer 20M+) savunmayı zayıflatır. "Şüpheli" olanlar yarım sayılır.
@@ -619,8 +632,8 @@ def absence_impact(lu_side, players, season):
     att = dfn = 0.0
     notes = []
     for p in lu_side.get("unavailable") or []:
-        if p["id"] in starters:
-            continue
+        if p["id"] in starters or is_regular(p, rec) is False:
+            continue  # ilk 11'de ya da son maçlarda süre almayan / az oynayan oyuncu: eksik sayılmaz
         doubt = 0.5 if "şüpheli" in (p.get("return") or "").lower() else 1.0
         share = 0.0
         if team_xg:
@@ -677,8 +690,8 @@ def predict(b, prof_h, prof_a):
     lu = b.get("lineup") or {}
     if ADJ["absent"]:
         imp = {}
-        for side, season, pl, team in (("home", sh, b["season"].get("players_home"), H), ("away", sa, b["season"].get("players_away"), A)):
-            a_f, d_f, notes = absence_impact(lu.get(side), pl, season or {})
+        for side, season, pl, team, rec in (("home", sh, b["season"].get("players_home"), H, rh), ("away", sa, b["season"].get("players_away"), A, ra)):
+            a_f, d_f, notes = absence_impact(lu.get(side), pl, season or {}, rec)
             imp[side] = (a_f, d_f)
             if notes and (a_f < 0.99 or d_f > 1.01):
                 names = ", ".join(f"{n}{' (şüpheli)' if dbt else ''}: {why}" for n, why, dbt in notes[:4])

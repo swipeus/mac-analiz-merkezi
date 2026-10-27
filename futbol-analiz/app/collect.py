@@ -56,7 +56,7 @@ STAT_KEYS = {
 _season_memo = {}
 
 # Analiz/paket biçimi değişince artırılır; eski sürümle üretilmiş paketler yeniden oluşturulur
-BUNDLE_VERSION = 17
+BUNDLE_VERSION = 18
 
 
 def _num(v):
@@ -96,6 +96,25 @@ def _mean(values):
     return round(sum(vals) / len(vals), 2) if vals else None
 
 
+def match_usage(md, is_home):
+    """Bir maçta takımın oyuncularının süresi: {oyuncu id: (ilk 11'de mi, dakika)}."""
+    lu = (md.get("content") or {}).get("lineup") or {}
+    if lu.get("lineupType") not in (None, "standard"):  # tahmini / son maçın 11'i gerçek süre değildir
+        return {}
+    t = lu.get("homeTeam" if is_home else "awayTeam") or {}
+    out = {}
+    for starter, group in ((True, t.get("starters") or []), (False, t.get("subs") or [])):
+        for p in group:
+            ev = (p.get("performance") or {}).get("substitutionEvents") or []
+            t_in = next((e.get("time") for e in ev if e.get("type") == "subIn"), None)
+            t_out = next((e.get("time") for e in ev if e.get("type") == "subOut"), None)
+            if not starter and t_in is None:
+                continue  # yedekte kalıp oynamadı
+            start = 0 if starter else (t_in or 0)
+            out[str(p.get("id"))] = (starter, max(1, min(t_out or 90, 90) - start))
+    return out
+
+
 async def team_recent(src, team_id, form_items):
     """Takımın son maçlarının (FotMob form listesi) detaylı istatistikleri."""
     ids = []
@@ -110,6 +129,7 @@ async def team_recent(src, team_id, form_items):
         *[src.match_details(i, None) for i in ids], return_exceptions=True
     )
     rows = []
+    usage = {}  # oyuncu id -> [ilk 11 sayısı, toplam dakika] (son maçlar)
     for mid, md in zip(ids, results):
         if isinstance(md, Exception) or not md:
             continue
@@ -120,6 +140,10 @@ async def team_recent(src, team_id, form_items):
         me, opp = (hs, as_) if is_home else (as_, hs)
         my_t, op_t = (teams[0], teams[1]) if is_home else (teams[1], teams[0])
         gf, ga = my_t.get("score"), op_t.get("score")
+        for pid, (st, mins) in match_usage(md, is_home).items():
+            u = usage.setdefault(pid, [0, 0])
+            u[0] += 1 if st else 0
+            u[1] += mins
         res = None
         if gf is not None and ga is not None:
             res = "G" if gf > ga else ("B" if gf == ga else "M")
@@ -145,6 +169,7 @@ async def team_recent(src, team_id, form_items):
         "rows": rows,
         "n": len(rows),
         "n_stats": sum(1 for r in rows if r["for"]),
+        "usage": usage,
         "avg_for": avg_for,
         "avg_against": avg_against,
         "form": "".join(r["result"] or "-" for r in rows),

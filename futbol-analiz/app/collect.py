@@ -56,7 +56,7 @@ STAT_KEYS = {
 _season_memo = {}
 
 # Analiz/paket biçimi değişince artırılır; eski sürümle üretilmiş paketler yeniden oluşturulur
-BUNDLE_VERSION = 16
+BUNDLE_VERSION = 17
 
 
 def _num(v):
@@ -128,6 +128,7 @@ async def team_recent(src, team_id, form_items):
             "date": gen.get("matchTimeUTCDate"),
             "comp": gen.get("leagueName"),
             "opponent": op_t.get("name"),
+            "opp_id": op_t.get("id"),
             "home": is_home,
             "gf": gf, "ga": ga, "result": res,
             "for": me, "against": opp,
@@ -241,6 +242,42 @@ async def season_stats(src, league_id):
     }
     _season_memo[league_id] = (time.time(), result)
     return result
+
+
+def opp_strength(season):
+    """Ligdeki her takımın hücum ve savunma gücü, lig ortalamasına oranla (1 = ortalama).
+    Sezon xG'si varsa o, yoksa puan durumundaki gol averajı kullanılır; az maç oynanmışsa ortalamaya çekilir."""
+    teams, table = season.get("teams") or {}, season.get("table") or {}
+    raw = {}
+    for tid in set(teams) | set(table):
+        st, tb = teams.get(tid) or {}, table.get(tid) or {}
+        xf, xa = (st.get("expected_goals_team") or {}).get("per_match"), (st.get("expected_goals_conceded_team") or {}).get("per_match")
+        n = (st.get("expected_goals_team") or {}).get("matches") or tb.get("played") or 0
+        if xf is None or xa is None:
+            try:
+                gf, ga = (int(x) for x in (tb.get("goals") or "").split("-"))
+                xf, xa = gf / n, ga / n
+            except (ValueError, ZeroDivisionError):
+                continue
+        if n:
+            raw[tid] = (xf, xa, n)
+    if len(raw) < 6:
+        return {}
+    af = sum(v[0] for v in raw.values()) / len(raw)
+    aa = sum(v[1] for v in raw.values()) / len(raw)
+    out = {}
+    for tid, (xf, xa, n) in raw.items():
+        w = n / (n + 4)  # 4 maçlık ortalama ön bilgisi
+        out[tid] = {"att": round((w * xf + (1 - w) * af) / af, 3), "def": round((w * xa + (1 - w) * aa) / aa, 3)}
+    return out
+
+
+def tag_opponents(rec, strength):
+    """Son maç satırlarına rakibin gücünü ekler (yalnızca aynı ligden rakipler; diğerleri 1 sayılır)."""
+    for r in (rec or {}).get("rows") or []:
+        s = strength.get(r.get("opp_id"))
+        if s:
+            r["opp_att"], r["opp_def"] = s["att"], s["def"]
 
 
 def parse_lineup(lu):
@@ -455,6 +492,9 @@ async def build_bundle(src, match_id, prev_odds=None):
         team_streaks(src, hid, kickoff),
         team_streaks(src, aid, kickoff),
     )
+    strength = opp_strength(season)
+    tag_opponents(rec_h, strength)
+    tag_opponents(rec_a, strength)
     # maç bittiyse / sürüyorsa: karnedeki korner ve kart tercihlerini değerlendirmek için maç istatistikleri
     fin_h, fin_a = match_team_stats(md)
     hs_ = header.get("status") or {}

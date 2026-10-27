@@ -563,27 +563,132 @@ def blend_scores(mat, cs_market, w=0.5):
     return out
 
 
+# model düzeltmeleri (geri test için kapatılabilir)
+# 128 bitmiş maçlık geri testte rakip gücü ve eksikler isabeti artırdı, ev/deplasman ağırlığı ılımlıyken (1.25) faydalı;
+# dinlenme günü düzeltmesi isabeti düşürdü (az dinlenenler çoğunlukla Avrupa'da oynayan güçlü takımlar), bu yüzden
+# beklentiye katılmıyor, sadece analizde bilgi olarak yazılıyor
+ADJ = {"opp": True, "venue": True, "rest": False, "absent": True}
+VENUE_W = 1.25     # bu maçla aynı sahada (iç/dış) oynanan son maçların ağırlığı
+TIRED_DAYS = 3     # bu kadar gün ya da daha az dinlenme yorgunluk sayılır
+
+
+def recent_avg(rec, side, at_home):
+    """Son maçlarda maç başı xG (yoksa gol). Rakip gücüne göre düzeltilir: zayıf savunmaya üretilen xG
+    daha az, güçlü savunmaya üretilen daha çok değerlidir. Bu maçla aynı sahadaki (iç/dış) maçlar daha ağır basar."""
+    num = den = 0.0
+    for r in rec.get("rows") or []:
+        v = (r.get(side) or {}).get("xg")
+        if v is None:
+            v = r.get("gf" if side == "for" else "ga")
+        if v is None:
+            continue
+        if ADJ["opp"]:
+            ratio = r.get("opp_def" if side == "for" else "opp_att") or 1.0
+            v /= min(1.6, max(0.6, ratio))
+        w = VENUE_W if ADJ["venue"] and r.get("home") == at_home else 1.0
+        num += w * v
+        den += w
+    return num / den if den else None
+
+
+def rest_days(rec, utc):
+    """Son maçtan bu maça kaç gün dinlenme (tüm kulvarlar)."""
+    from datetime import datetime
+    dates = [r.get("date") for r in rec.get("rows") or [] if r.get("date")]
+    if not dates or not utc:
+        return None
+    try:
+        last = max(datetime.fromisoformat(d.replace("Z", "+00:00")) for d in dates)
+        ko = datetime.fromisoformat(utc.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    d = (ko - last).total_seconds() / 86400
+    return round(d, 1) if 0 < d < 30 else None
+
+
+def absence_impact(lu_side, players, season):
+    """Eksik oyuncuların gerçek etkisi. Sezon xG'sinin ve asistlerinin (xA) ne kadarını bu oyuncular üretiyor:
+    payın %60'ı kayıp sayılır (yerine oynayan kalanını telafi eder). Gol katkısı listelerinde olmayan
+    önemli oyuncular (reyting 7.0+ ya da değer 20M+) savunmayı zayıflatır. "Şüpheli" olanlar yarım sayılır.
+    Dönüş: (hücum çarpanı, rakibin gol beklentisi çarpanı, açıklama satırları)."""
+    lu_side = lu_side or {}
+    starters = {p["id"] for p in lu_side.get("starters") or []}
+    team_xg = (season.get("expected_goals_team") or {}).get("value")
+    team_n = (season.get("expected_goals_team") or {}).get("matches") or 0
+    lists = {k: {p["id"]: p for p in ((players or {}).get(k) or {}).get("list", [])} for k in ("expected_goals", "expected_assists")}
+    att = dfn = 0.0
+    notes = []
+    for p in lu_side.get("unavailable") or []:
+        if p["id"] in starters:
+            continue
+        doubt = 0.5 if "şüpheli" in (p.get("return") or "").lower() else 1.0
+        share = 0.0
+        if team_xg:
+            for k, w in (("expected_goals", 1.0), ("expected_assists", 0.5)):
+                q = lists[k].get(p["id"])
+                if q and q.get("value"):
+                    # sezonun çoğunu kaçırdıysa takımın son maç verisi onsuz oynanmış demektir
+                    reg = min(1.0, (q.get("matches") or 0) / team_n) if team_n else 1.0
+                    share += w * reg * q["value"] / team_xg
+        if share >= 0.04:
+            att += doubt * 0.6 * share
+            notes.append((p["name"], f"xG/xA üretiminde payı %{round(min(share, 1) * 100)}", doubt < 1))
+        elif (p.get("rating") or 0) >= 7.0 or (p.get("value") or 0) >= 20_000_000:
+            dfn += doubt * 0.025
+            notes.append((p["name"], "kilit oyuncu", doubt < 1))
+    return max(0.82, 1 - att), min(1.08, 1 + dfn), notes
+
+
 def predict(b, prof_h, prof_a):
     rh, ra = b["recent"]["home"], b["recent"]["away"]
     sh, sa = b["season"]["home"], b["season"]["away"]
     H, A = b["home"]["name"], b["away"]["name"]
 
-    def att(rec, season):
-        return _wavg([(rec["avg_for"].get("xg"), 0.6), (_s(season, "expected_goals_team"), 0.4)]) or \
+    def att(rec, season, at_home):
+        return _wavg([(recent_avg(rec, "for", at_home), 0.6), (_s(season, "expected_goals_team"), 0.4)]) or \
             _wavg([(rec["avg_for"].get("goals"), 0.6), (_s(season, "goals_team_match"), 0.4)])
 
-    def dfn(rec, season):
-        return _wavg([(rec["avg_against"].get("xg"), 0.6), (_s(season, "expected_goals_conceded_team"), 0.4)]) or \
+    def dfn(rec, season, at_home):
+        return _wavg([(recent_avg(rec, "against", at_home), 0.6), (_s(season, "expected_goals_conceded_team"), 0.4)]) or \
             _wavg([(rec["avg_against"].get("goals"), 0.6), (_s(season, "goals_conceded_team_match"), 0.4)])
 
-    ah, aa_, dh, da = att(rh, sh), att(ra, sa), dfn(rh, sh), dfn(ra, sa)
+    ah, aa_, dh, da = att(rh, sh, True), att(ra, sa, False), dfn(rh, sh, True), dfn(ra, sa, False)
     lam_h = _wavg([(ah, 1), (da, 1)]) or 1.35
     lam_a = _wavg([(aa_, 1), (dh, 1)]) or 1.1
     lam_h *= HOME_ADV
     lam_a *= AWAY_ADJ
-    # önemli eksikler hücum gücünü düşürür
-    lam_h *= max(0.88, 1 - 0.03 * prof_h["important_absent"])
-    lam_a *= max(0.88, 1 - 0.03 * prof_a["important_absent"])
+    factors = []
+    # dinlenme: 3 gün ya da daha az dinlenen takım rakibinden en az 2 gün daha yorgunsa hücumu düşer, savunması açılır
+    rest = (rest_days(rh, b.get("utc")), rest_days(ra, b.get("utc")))
+    if None not in rest:
+        for i, (me, op) in enumerate((rest, rest[::-1])):
+            if me <= TIRED_DAYS and op - me >= 2:
+                team = (H, A)[i]
+                factors.append(f"{team} {round(me)} gün dinlenerek çıkıyor, rakibi {round(op)} gün dinlendi.")
+                if not ADJ["rest"]:
+                    continue
+                if i == 0:
+                    lam_h *= 0.95
+                    lam_a *= 1.03
+                else:
+                    lam_a *= 0.95
+                    lam_h *= 1.03
+    # eksik oyuncular
+    lu = b.get("lineup") or {}
+    if ADJ["absent"]:
+        imp = {}
+        for side, season, pl, team in (("home", sh, b["season"].get("players_home"), H), ("away", sa, b["season"].get("players_away"), A)):
+            a_f, d_f, notes = absence_impact(lu.get(side), pl, season or {})
+            imp[side] = (a_f, d_f)
+            if notes and (a_f < 0.99 or d_f > 1.01):
+                names = ", ".join(f"{n}{' (şüpheli)' if dbt else ''}: {why}" for n, why, dbt in notes[:4])
+                eff = ([f"kendi gol beklentisi %{round((1 - a_f) * 100)} düşürüldü"] if a_f < 0.99 else []) +                       ([f"rakibin gol beklentisi %{round((d_f - 1) * 100)} artırıldı"] if d_f > 1.01 else [])
+                factors.append(f"{team} eksikleri: {names}. Bu yüzden {' ve '.join(eff)}.")
+        lam_h *= imp["home"][0] * imp["away"][1]
+        lam_a *= imp["away"][0] * imp["home"][1]
+    else:
+        lam_h *= max(0.88, 1 - 0.03 * prof_h["important_absent"])
+        lam_a *= max(0.88, 1 - 0.03 * prof_a["important_absent"])
     lam_h, lam_a = max(0.2, lam_h), max(0.2, lam_a)
     model_lam = (round(lam_h, 2), round(lam_a, 2))
 
@@ -688,6 +793,7 @@ def predict(b, prof_h, prof_a):
     return {
         "lam_home": round(lam_h, 2), "lam_away": round(lam_a, 2),
         "lam_model": model_lam, "lam_market": mk, "uses_odds": bool(mk),
+        "factors": factors, "rest": rest,
         "p_home": round(pr["1"], 3), "p_draw": round(pr["X"], 3), "p_away": round(pr["2"], 3),
         "over15": round(pr["o1.5"], 3), "over25": round(pr["o2.5"], 3), "over35": round(pr["o3.5"], 3),
         "btts": round(pr["btts_yes"], 3),
@@ -1043,6 +1149,12 @@ def build(b):
     warn = lineup_warnings(b)
     for w_ in reversed(warn):
         sc.insert(0, w_)
+    for x in pr.get("factors") or []:
+        # eksiklerin somut etkisi yazıldıysa aynı takımın genel "önemli eksik" cümlesi kalkar
+        if " eksikleri: " in x:
+            team = x.split(" eksikleri: ")[0]
+            sc = [y for y in sc if not (y.startswith(f"{team} ") and "önemli eksikle oynayacak" in y)]
+        sc.append(x)
     rs = b.get("referee_stats") or {}
     if rs.get("matches", 0) >= 4 and rs.get("yellow_pm") and rs.get("yellow_avg"):
         ratio = rs["yellow_pm"] / rs["yellow_avg"]

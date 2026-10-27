@@ -25,7 +25,9 @@ def export(store):
     singles = [r for r in store.pred_all() if tr_day(r.get("utc")) >= KARNE_START]
     singles.sort(key=lambda r: r.get("utc") or "", reverse=True)
     coupons = [d for d in store.coupon_all() if d["date"] >= KARNE_START]
-    return {"start": KARNE_START, "singles": singles, "coupons": coupons}
+    rep = calib_table(store)[1]
+    lessons(rep)  # rapora ders ve "kanıtlanmış" işaretlerini ekler
+    return {"start": KARNE_START, "singles": singles, "coupons": coupons, "lessons": rep}
 
 
 def lock_pick(store, b):
@@ -72,6 +74,9 @@ def record(store, b):
             "pick": {**pr["best_pick"], "o0": code_odds(b.get("odds"), pr["best_pick"]["code"])[1]}, "score": pr["score_pick"],
             "p": {"1": pr.get("p_home"), "X": pr.get("p_draw"), "2": pr.get("p_away")}, "ms": pr.get("pick"),
             "state": "pending", "final": bool(pr.get("best_final")),
+            # değerli oran tercihi: ayrı izlenir (garanti tercih karnesine karışmaz)
+            "value": ({**pr["value_pick"], "o0": code_odds(b.get("odds"), pr["value_pick"]["code"])[1]}
+                      if pr.get("value_pick") else None),
         })
         return
 
@@ -93,6 +98,8 @@ def record(store, b):
         ps = [int(x) for x in old["score"]["score"].split("-")]
         ms_real = "1" if hs > as_ else ("X" if hs == as_ else "2")
         hit = pick_hit(old["pick"]["code"], hs, as_, b.get("final"))
+        if old.get("value"):
+            old["value_hit"] = pick_hit(old["value"]["code"], hs, as_, b.get("final"))
         old.pop("live", None)
         old.update({
             # beraberlikte iade gibi durumlarda tercih "iade" sayılır (None)
@@ -135,6 +142,28 @@ def calib_table(store):
             out[t] = round(min(1.10, max(0.85, 1 + 0.5 * (hr / mp - 1))), 3)
             report[t]["factor"] = out[t]
     return out, report
+
+
+LESSON_MIN_N = 12
+PROVEN_MIN_N = 15
+
+
+def lessons(report):
+    """Karneden ders: modelin sandığından zayıf çıkan türler (tutma oranı modelin olasılığının altında) garanti tercih
+    seçiminde geri alınır; fark veri azken küçültülür, en fazla 5 puan. İyi çıkan türler öne alınmaz (tek türe
+    yığılma olmasın). Olasılıkları karnede tutan (en az 15 sonuç, sapma -3 puandan iyi) türler "kanıtlanmış" sayılır;
+    değerli oran tercihi yalnızca bunlardan seçilir."""
+    lesson, proven = {}, set()
+    for t, r in report.items():
+        n, d = r["n"], r["hit"] - r["model"]
+        if n >= LESSON_MIN_N:
+            adj = round(max(-0.05, min(0.0, d * n / (n + 40))), 3)
+            if adj < 0:
+                lesson[t] = r["lesson"] = adj
+        if n >= PROVEN_MIN_N and d >= -0.03:
+            proven.add(t)
+            r["proven"] = True
+    return lesson, proven
 
 
 def seed(store, data):

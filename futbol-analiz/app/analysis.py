@@ -524,10 +524,11 @@ def safe_ok(code):
     return len(legs) <= 3 and all(x in SAFE_CODES or TOTAL_CODE.match(x) or stat_ok(x) for x in legs)
 
 
-def safe_score(p, odds):
-    """Önce yüksek olasılık; piyasanın ima ettiğinden iyi görülen (değerli) seçenekler biraz öne çıkar."""
+def safe_score(p, odds, code=None):
+    """Önce yüksek olasılık; piyasanın ima ettiğinden iyi görülen (değerli) seçenekler biraz öne çıkar.
+    Karnede modelin sandığından zayıf çıkan tercih türleri biraz geri alınır."""
     edge = p * odds - 1
-    return p + 0.5 * max(-0.10, min(edge, 0.10))
+    return p + 0.5 * max(-0.10, min(edge, 0.10)) + LESSON.get(pick_type(code), 0.0)
 
 
 def code_label(code, home, away):
@@ -586,6 +587,19 @@ def pick_type(code):
     return "diğer"
 
 
+REF_W = 0.5        # hakemin kart eğiliminin ağırlığı (0 = yok sayılır, 1 = tamamen hakemin ortalaması)
+REF_FULL_N = 4     # hakemin bu kadar maçı varsa ağırlığın tamamı kullanılır
+CARD_TIRED = 0.10  # 3.5 günden az dinlenen takımın kart beklentisi +%10 (geri testte kart log-loss iyileşti)
+
+# karneden öğrenilenler (her yayın başında karneden hesaplanır):
+# LESSON: karnede zayıf çıkan türlerin garanti tercih seçimindeki puan cezası (negatif, küçültülmüş)
+# PROVEN: modelin olasılıklarının karnede tuttuğu türler; değerli oran tercihi yalnızca bunlardan seçilir
+LESSON = {}
+PROVEN = set()
+VALUE_ODDS = (1.60, 3.20)  # değerli tercihin oran aralığı
+VALUE_MIN_P = 0.42
+VALUE_EDGE = 0.05          # model olasılığı x oran - 1 en az %5
+
 # karneden öğrenilen tür bazında düzeltme çarpanları ({tür: çarpan}); her yayın başında karneden hesaplanır.
 # Yalnızca yeterince veri birikip sapma istatistiksel olarak belirgin olan türlerde dolar.
 CALIB = {}
@@ -610,7 +624,7 @@ def make_picks(pr, odds, home, away):
     safe = None
     cands = [c for c in sel if c[2] >= MIN_ODDS and c[1] >= 0.5 and safe_ok(c[0])]
     if cands:
-        code, p, o = max(cands, key=lambda c: (safe_score(c[1], c[2]), c[2]))
+        code, p, o = max(cands, key=lambda c: (safe_score(c[1], c[2], c[0]), c[2]))
         safe = {"code": code, "p": round(p, 3), "odds": o}
     else:  # oran yoksa: adil oranı (1/olasılık) 1.30'un altında kalan seçenekler elenir
         model = [(c, pr[c]) for c in SAFE_CODES if c in pr and 1 / max(pr[c], 1e-9) >= MIN_ODDS]
@@ -626,10 +640,17 @@ def make_picks(pr, odds, home, away):
         dog = min(("1", pr["1"]), ("2", pr["2"]), key=lambda x: x[1])
         code, p = dog if dog[1] >= 0.18 else ("X", pr["X"])
         surprise = {"code": code, "p": round(p, 3), "odds": None, "ev": None}
-    for x in (safe, surprise):
+    # değerli oran: makul oranlı, karnede kendini kanıtlamış türden, modelin piyasadan belirgin şekilde olası gördüğü tercih
+    vc = [c for c in sel if VALUE_ODDS[0] <= c[2] <= VALUE_ODDS[1] and c[1] >= VALUE_MIN_P and c[1] * c[2] - 1 >= VALUE_EDGE
+          and "&" not in c[0] and safe_ok(c[0]) and pick_type(c[0]) in PROVEN and (not safe or c[0] != safe["code"])]
+    value = None
+    if vc:
+        code, p, o = max(vc, key=lambda c: c[1] * c[2])
+        value = {"code": code, "p": round(p, 3), "odds": o, "edge": round(p * o - 1, 3)}
+    for x in (safe, surprise, value):
         if x:
             x["label"] = code_label(x["code"], home, away)
-    return safe, surprise
+    return safe, surprise, value
 
 
 BLEND_PREFIX = ("cm", "rc", "fc8", "co", "cu", "ho", "hu", "ao", "au")
@@ -904,8 +925,12 @@ def predict(b, prof_h, prof_a):
     rs = b.get("referee_stats") or {}
     ref_f = 1.0
     if rs.get("matches", 0) >= 4 and rs.get("yellow_pm") and rs.get("yellow_avg"):
-        ref_f = 0.5 + 0.5 * rs["yellow_pm"] / rs["yellow_avg"]
-    k_h, k_a = ((y_h if y_h is not None else 2.0) + 0.07) * ref_f, ((y_a if y_a is not None else 2.0) + 0.07) * ref_f
+        w_ = REF_W * min(1.0, rs["matches"] / REF_FULL_N)  # az maçlı hakemin eğilimine daha az güvenilir
+        ref_f = 1 - w_ + w_ * rs["yellow_pm"] / rs["yellow_avg"]
+    # yorgunluk: 3 günden az dinlenen takım daha çok faul yapar mı (geri testle ayarlanır, 0 = etkisiz)
+    tired = [r_ is not None and r_ <= 3.5 for r_ in rest]
+    k_h, k_a = (((y_h if y_h is not None else 2.0) + 0.07) * ref_f * (1 + CARD_TIRED * tired[0]),
+                ((y_a if y_a is not None else 2.0) + 0.07) * ref_f * (1 + CARD_TIRED * tired[1]))
     stat_mu = {"k": (k_h, k_a), "s": (s_h, s_a), "t": (o_h, o_a)}
     cards = {"home": round(k_h, 1), "away": round(k_a, 1), "total": round(k_h + k_a, 1),
              "over": {str(l): round(_nb_over(k_h + k_a, l, STAT_K["k"]), 3) for l in (2.5, 3.5, 4.5, 5.5, 6.5)}}
@@ -926,7 +951,7 @@ def predict(b, prof_h, prof_a):
             f_ = CALIB.get(pick_type(c))
             if f_ and pr[c] is not None:
                 pr[c] = min(0.97, pr[c] * f_)
-    safe, surprise = make_picks(pr, odds, H, A)
+    safe, surprise, value = make_picks(pr, odds, H, A)
     score_pick = coherent_score(smat, pr, lam_h, lam_a)
     cs_m = _odds_market(odds, "odds_correct_score")
     if cs_m:  # skor tahmininin oranı (karnede 10 ₺'lik skor bahsi için)
@@ -958,6 +983,7 @@ def predict(b, prof_h, prof_a):
         "confidence": conf,
         "pick": best[1],
         "best_pick": safe,
+        "value_pick": value,
         "surprise": surprise,
         "probs": {c: round(pr[c], 4) for c in codes if c in pr},
     }

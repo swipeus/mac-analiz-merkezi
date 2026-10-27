@@ -75,6 +75,14 @@ async function staticApi(path) {
     try { return await getData("karne.json"); }
     catch (e) { if (e.message === "NOTFOUND") return []; throw e; }
   }
+  if (path === "/api/teams") {
+    try { return await getData("teams.json"); }
+    catch (e) { if (e.message === "NOTFOUND") return []; throw e; }
+  }
+  if ((m = path.match(/^\/api\/team\/(\d+)/))) {
+    try { return await getData(`team-${m[1]}.json`); }
+    catch (e) { if (e.message === "NOTFOUND") throw new Error("Bu takımın sayfası yok. Takım sayfaları dünün, bugünün ve yarının maçlarındaki takımlar için hazırlanır."); throw e; }
+  }
   if ((m = path.match(/^\/api\/player\/(\d+)/))) {
     try { return await getData(`player-${m[1]}.json`); }
     catch (e) { if (e.message === "NOTFOUND") throw new Error("Bu oyuncunun istatistikleri henüz hazırlanmadı, 15-20 dakika sonra tekrar bak."); throw e; }
@@ -463,9 +471,9 @@ function matchHtml(b) {
   <div class="hero" ${b.colors ? `style="--home:${esc(b.colors.home)};--away:${esc(b.colors.away)}"` : ""}>
     <a class="hero-league" href="#/lig/${b.league_id}" title="Puan durumu"><img src="${leagueLogo(b.league_id)}" alt="" onerror="this.remove()"><b>${esc(lgName(b.league_id, b.league_name))}</b><small>· puan durumu ›</small></a>
     <div class="teams">
-      <div class="team">${crestHtml(b.home, fav === "home", P.p_home, 84)}<span>${esc(H)} ${starBtn(b.home.id, H)}</span>${formDots(b.recent.home.rows)}</div>
+      <div class="team">${crestHtml(b.home, fav === "home", P.p_home, 84)}<span><a class="tlink" href="#/takim/${b.home.id}" title="Takım sayfası">${esc(H)}</a> ${starBtn(b.home.id, H)}</span>${formDots(b.recent.home.rows)}</div>
       <div class="score ${live ? "live" : ""}">${esc(scoreTxt)}<small>${esc(stTxt)}</small></div>
-      <div class="team">${crestHtml(b.away, fav === "away", P.p_away, 84)}<span>${esc(W)} ${starBtn(b.away.id, W)}</span>${formDots(b.recent.away.rows)}</div>
+      <div class="team">${crestHtml(b.away, fav === "away", P.p_away, 84)}<span><a class="tlink" href="#/takim/${b.away.id}" title="Takım sayfası">${esc(W)}</a> ${starBtn(b.away.id, W)}</span>${formDots(b.recent.away.rows)}</div>
     </div>
     <div class="chips">${chips}</div>
     <div class="updated">${b.status.finished ? "Maç sona erdi · tahminler maç öncesi hâliyle saklanıyor"
@@ -506,7 +514,7 @@ function matchTabBody(b) {
         ${teamHtml(A.home, b.home, b.recent.home.rows, "var(--home)")}
         ${teamHtml(A.away, b.away, b.recent.away.rows, "var(--away)")}</div>`;
     case "istat":
-      return `${compareHtml(b)}
+      return `<div class="tcmpbar"><a class="kbtn" href="#/karsilastir/${b.home.id}/${b.away.id}">⚖️ Takımları ayrıntılı karşılaştır</a></div>${compareHtml(b)}
         <div class="grid2">${recentHtml(b.recent.home, H, "home-c")}${recentHtml(b.recent.away, W, "away-c")}</div>
         ${seasonHtml(b)}`;
     case "odds":
@@ -514,7 +522,7 @@ function matchTabBody(b) {
     case "haber":
       return `${newsFilterBar()}<div class="grid2">${newsHtml(b.news.home, H, "home-c")}${newsHtml(b.news.away, W, "away-c")}</div>${extrasHtml(b)}`;
     default:
-      return `${commentaryHtml(A, b)}${predictionHtml(b)}${refereeHtml(b)}`;
+      return `${newsAlertsHtml(b)}${commentaryHtml(A, b)}${predictionHtml(b)}${refereeHtml(b)}`;
   }
 }
 function predictionHtml(b) {
@@ -528,7 +536,7 @@ function predictionHtml(b) {
     ${outcomeBars(b)}
     ${scoreHero(b)}
     <div class="pbwide">${probBoxes(boxItems(P.over25, P.btts, P.corner_pick, P.card_pick, P.box_odds), b.id)}</div>
-    ${P.best_pick || P.surprise ? `<div class="bigpicks">${bigPick("safe", "✅", "En garanti tercih", P.best_pick, finalBadge(bestFinal(b)))}${bigPick("sur", "⚡", "Olası sürpriz", P.surprise, "")}</div>` : ""}
+    ${P.best_pick || P.surprise ? `<div class="bigpicks">${bigPick("safe", "✅", "En garanti tercih", P.best_pick, finalBadge(bestFinal(b)))}${bigPick("val", "💎", "Değerli oran", P.value_pick, `<span class="vbadge" title="Model olasılığı × oran − 1: oranın, modelin gördüğü olasılığa göre ne kadar yüksek olduğu">+%${Math.round(((P.value_pick || {}).edge || 0) * 100)} değer</span>`)}${bigPick("sur", "⚡", "Olası sürpriz", P.surprise, "")}</div>` : ""}
     <div class="pred">
       ${goalCard(P)}
       ${P.corners ? kpi("🚩", "#d29922", "Korner beklentisi", `${nf(P.corners.home)} – ${nf(P.corners.away)}`, `Toplam ${nf(P.corners.total)} · 9.5Ü ${pc((P.probs || {})["co9.5"] ?? P.corners.over["9.5"])} · 10.5Ü ${pc((P.probs || {})["co10.5"] ?? P.corners.over["10.5"])}`) : ""}
@@ -607,7 +615,7 @@ function oddsHtml(b) {
   const P = b.analysis.prediction, o = b.odds;
   if (!o || !o.markets || !o.markets.length) return `<div class="card"><p class="muted">Bu maç için henüz bahis oranı bulunamadı. Oranlar genelde maçtan 1-3 gün önce açılır.</p></div>`;
   const probs = P.probs || {};
-  const safe = P.best_pick && P.best_pick.code, sur = P.surprise && P.surprise.code;
+  const safe = P.best_pick && P.best_pick.code, sur = P.surprise && P.surprise.code, val = P.value_pick && P.value_pick.code;
   BOX = boxCodes(P);
   const nSel = o.markets.reduce((a, m) => a + m.selections.length, 0);
   const pickCard = (cls, ic, title, x, note) => x ? `<div class="opick ${cls}"><div class="oi">${ic}</div><div>
@@ -617,6 +625,7 @@ function oddsHtml(b) {
   const top = `<div class="card" style="--c:#e3b341">${head("💰", `Bahis oranları <span class="muted">· ${esc((o.providers || []).join(", "))} · ${o.markets.length} pazar, ${nSel} seçenek</span>`)}
     <div class="opicks">
       ${pickCard("safe", "✅", "En garanti tercih " + finalBadge(bestFinal(b)), P.best_pick, "Oranı 1.30 ve üstü seçenekler (kombineler dahil) arasında modelin en yüksek olasılık verdiği tercih. Resmi ilk 11'ler açıklanınca son kontrol yapılır ve tercih kesinleşir.")}
+      ${pickCard("val", "💎", "Değerli oran", P.value_pick, "Oranı 1.60-3.20 arasında, modelin piyasadan en az %5 daha olası gördüğü ve türü karnede kendini kanıtlamış tercih. Karnede ayrı izlenir.")}
       ${pickCard("sur", "⚡", "Olası sürpriz", P.surprise, "Oranı yüksek ama modelin piyasadan daha olası gördüğü seçenek. Karnede yer almaz.")}
     </div>
     <p class="muted">Model gol beklentisini istatistiklerle bahis oranlarını harmanlayarak hesaplar${P.lam_market ? ` (piyasa: ${nf(P.lam_market[0], 2)} – ${nf(P.lam_market[1], 2)} gol, istatistik: ${nf(P.lam_model[0], 2)} – ${nf(P.lam_model[1], 2)})` : ""}. Tablolarda: oran, oranın ima ettiği olasılık (marjı temizlenmiş), modelin olasılığı ve <b>değer</b> (model olasılığı × oran − 1; yeşil = model piyasadan iyimser). Kombinelerde model olasılığı, ayakların aynı anda tutma ihtimalidir. 1.30 altındaki oranlar tercih dışıdır.</p>
@@ -1016,6 +1025,40 @@ function newsHtml(n, name, cls) {
     <h3>Türkçe basın (Google News)</h3><div class="nlist">${tr.map(item).join("")}${empty}</div>
     ${fm.length ? `<h3>FotMob haber akışı</h3><div class="nlist">${fm.map(item).join("")}<p class="muted nempty" ${fm.some((x) => newsCat === "all" || x.cat === newsCat) ? "hidden" : ""}>Bu konuda haber yok</p></div>` : ""}</div>`;
 }
+// haberlerden uyarı: takımla ilgili sakatlık, ceza, kadro dışı, teknik direktör değişikliği gibi başlıklar
+// (tahmini değiştirmez; maç özetinde kontrol edilmesi gerekenler olarak gösterilir)
+const ALERT_RX = /(sakat|sakatl|kadro dışı|kadrodan çıkar|cezalı|forma giyemeye|oynamayaca|oynayamaya|yok mu|ameliyat|görevden alın|istifa|kovuldu|yollar ayrıl|yeni teknik direktör|kriz|antrenmana çıkmad|maç kadrosunda yok|şok)/;
+const ALERT_SKIP = /(muhtemel 11|hangi kanalda|ne zaman|saat kaçta|son durum ve istatistik|hapis|para ceza|maç öncesi:|kimdir|nereli)/;
+// takım adının başlıktaki ilk geçtiği yer (tam ad ya da adın en uzun kelimesi)
+function namePos(lt, name) {
+  const n = name.toLocaleLowerCase("tr"), w = n.split(/\s+/).filter((x) => x.length >= 4).sort((a, c) => c.length - a.length)[0];
+  const ps = [lt.indexOf(n), w ? lt.indexOf(w) : -1].filter((x) => x >= 0);
+  return ps.length ? Math.min(...ps) : -1;
+}
+function newsAlerts(b) {
+  const out = [], seen = new Set();
+  const teams = [b.home, b.away];
+  for (const [side, t] of [["home", b.home], ["away", b.away]]) {
+    const list = cleanNews((b.news[side] || {}).tr, t.name).concat(cleanNews((b.news[side] || {}).fotmob, t.name));
+    list.sort((a, c) => (c.time || 0) - (a.time || 0)).forEach((x) => {
+      const lt = (x.title || "").toLocaleLowerCase("tr"), k = lt.search(ALERT_RX);
+      if (k < 0 || ALERT_SKIP.test(lt) || seen.has(lt)) return;
+      // haber, adı konudan (sakatlık, görevden alma...) önce geçen takımla ilgilidir; başka takımı anlatan haber elenir
+      const owner = teams.map((tm) => [tm, namePos(lt, tm.name)]).filter(([, p]) => p >= 0 && p < k).sort((a, c) => a[1] - c[1])[0];
+      if (!owner || out.filter((y) => y.team.id === owner[0].id).length >= 2) return;
+      seen.add(lt);
+      out.push({ ...x, team: owner[0] });
+    });
+  }
+  return out;
+}
+function newsAlertsHtml(b) {
+  const al = newsAlerts(b);
+  if (!al.length) return "";
+  return `<div class="card nalert" style="--c:#e3b341">${head("⚠️", `Haberlerden dikkat <span class="muted">· tahmini değiştirmez, kontrol için</span>`)}
+    ${al.map((x) => `<a class="nal" href="${esc(x.link)}" target="_blank" rel="noopener"><img src="${teamLogo(x.team.id)}" alt="" onerror="this.remove()">
+      <span><b>${esc(x.title)}</b><small class="muted">${esc(x.source || "")} · ${ago(x.time)}</small></span></a>`).join("")}</div>`;
+}
 function newsFilterBar() {
   return `<div class="chiprow newsbar">${NEWS_CATS.map(([k, l]) => `<button class="chipbtn ${newsCat === k ? "on" : ""}" data-ncf="${k}">${l}</button>`).join("")}</div>`;
 }
@@ -1171,7 +1214,7 @@ function themeStats() {
 }
 
 /* ---------- model karnesi ---------- */
-let karneRows = [], karneCoupons = [], karneStart = null, karneTab = "pick", calMonth = null;
+let karneRows = [], karneCoupons = [], karneStart = null, karneTab = "pick", calMonth = null, karneLessons = null;
 const karneOpen = new Set();  // açılan gün kartları (yenilemede kapanmasın)
 async function renderKarne(silent) {
   const v = $("#view");
@@ -1181,6 +1224,7 @@ async function renderKarne(silent) {
   catch (e) { v.innerHTML = `<div class="card"><p>${esc(e.message)}</p></div>`; return; }
   if (!state.karne) return;
   karneRows = Array.isArray(k) ? k : k.singles || [];
+  karneLessons = Array.isArray(k) ? null : k.lessons || null;
   karneStart = Array.isArray(k) ? null : k.start;
   karneCoupons = Array.isArray(k) ? [] : (k.coupons || []).flatMap((d) => d.coupons.map((c) => ({ ...c, draft: !d.locked })));
   drawKarne();
@@ -1341,7 +1385,7 @@ function singlesKarneHtml(s) {
     rows.filter((r) => pickDecided(r) && r.pick.odds).forEach((r) => { const k = trDay(r.utc); series[k] = (series[k] || 0) + rowProfit(r); });
     extra = plChart(series, "Tercih başına 250 ₺") + (types.length ? `<h3>Tercih türüne göre</h3>${ringsHtml(types.map(([lab, t]) => [lab, t.h, t.n]))}` : "");
     const decided = rows.filter(pickDecided);
-    extra += byLeagueHtml(decided) + calibrationHtml(decided)
+    extra += valueKarneHtml(rows) + lessonsHtml() + byLeagueHtml(decided) + calibrationHtml(decided)
       + clvHtml(rows.filter((r) => r.state === "done" || r.live).map((r) => [r.pick.o0, r.pick.odds]), "tercih");
   }
   const note = pick
@@ -1383,6 +1427,35 @@ function ringsHtml(items) {
       <text x="28" y="32" text-anchor="middle">%${v}</text></svg>
       <div class="rl">${esc(lab)}</div><div class="rn muted">${h}/${n}${pl != null ? ` · <span class="${pl >= 0 ? "pos" : "neg"}">${tl(pl, true)}</span>` : ""}</div></div>`;
   }).join("")}</div>`;
+}
+// değerli oran tercihleri: garanti tercihten ayrı izlenir (250 ₺ sabit)
+function valueKarneHtml(rows) {
+  const v = rows.filter((r) => r.value && r.state === "done" && (r.value_hit === true || r.value_hit === false));
+  const pend = rows.filter((r) => r.value && r.state !== "done" && r.state !== "void").length;
+  if (!v.length && !pend) return "";
+  const h = v.filter((r) => r.value_hit).length;
+  const pl = v.reduce((a, r) => a + (r.value_hit ? STAKE * (r.value.odds - 1) : -STAKE), 0);
+  const avg = v.length ? v.reduce((a, r) => a + r.value.odds, 0) / v.length : 0;
+  return `<h3>💎 Değerli oran tercihleri</h3><div class="vkarne">
+    <div><b>${v.length ? `${h}/${v.length}` : "—"}</b><small>tuttu${v.length ? ` · %${Math.round(h / v.length * 100)}` : ""}</small></div>
+    <div><b class="${pl >= 0 ? "pos" : "neg"}">${v.length ? tl(pl, true) : "—"}</b><small>kâr / zarar (250 ₺)</small></div>
+    <div><b>${v.length ? nf(avg, 2) : "—"}</b><small>ortalama oran</small></div>
+    <div><b>${pend}</b><small>bekleyen</small></div></div>
+    <p class="muted">Garanti tercihten ayrı izlenir. Oranlar daha yüksek olduğu için isabet daha düşük beklenir; ölçü kâr/zarardır.</p>`;
+}
+// modelin karneden öğrendikleri: tür bazında model olasılığı ve gerçek tutma oranı
+function lessonsHtml() {
+  const L = karneLessons;
+  if (!L) return "";
+  const rows = Object.entries(L).filter(([, r]) => r.n >= 8).sort((a, b) => b[1].n - a[1].n);
+  if (!rows.length) return "";
+  return `<h3>🧠 Modelin karneden öğrendikleri</h3><div class="lessons">${rows.map(([t, r]) => {
+    const d = Math.round((r.hit - r.model) * 100);
+    const tag = r.lesson ? `<span class="ltag neg">geri alınıyor</span>` : r.proven ? `<span class="ltag pos">kanıtlandı</span>` : `<span class="ltag">izleniyor</span>`;
+    return `<div class="lrow"><span class="lt">${esc(cap(t))} <small class="muted">· ${r.n} sonuç</small></span>
+      <span class="lv">model %${Math.round(r.model * 100)} → gerçek %${Math.round(r.hit * 100)} <b class="${d >= 0 ? "pos" : "neg"}">${d >= 0 ? "+" : ""}${d}</b></span>${tag}</div>`;
+  }).join("")}</div>
+  <p class="muted">Garanti tercih ve kupon ayaklarının sonuçlarından. Modelin sandığından zayıf çıkan türler garanti tercih seçiminde geri alınır; olasılıkları tutan (en az 15 sonuç) türler "kanıtlandı" sayılır ve değerli oran tercihi yalnızca bunlardan seçilir.</p>`;
 }
 // gün gün birikimli kâr/zarar çizgisi (tek seri); üzerine gelince o günün değeri
 function plChart(byDay, note) {
@@ -1955,6 +2028,141 @@ function refereeHtml(b) {
 }
 
 
+/* ---------- takım sayfası ve karşılaştırma ---------- */
+const teamCache = new Map();
+async function getTeam(id) {
+  if (!teamCache.has(id)) teamCache.set(id, await api(`/api/team/${id}`));
+  return teamCache.get(id);
+}
+let teamList = null;
+async function getTeams() { if (!teamList) { try { teamList = await api("/api/teams"); } catch { teamList = []; } } return teamList; }
+// güç puanı geçmişi: tek seri çizgi, üzerine gelince tarih ve puan
+function eloChart(hist) {
+  if (!hist || hist.length < 3) return "";
+  const W = 600, Hh = 150, p = 10;
+  const vs = hist.map((h) => h[1]), lo = Math.min(...vs) - 10, hi = Math.max(...vs) + 10;
+  const x = (i) => p + i * (W - 2 * p) / (hist.length - 1), y = (v) => p + (hi - v) * (Hh - 2 * p) / (hi - lo);
+  const d = hist.map((h, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(h[1]).toFixed(1)}`).join("");
+  const up = vs[vs.length - 1] >= vs[0], col = up ? "#3fb950" : "#f85149";
+  const fmt = (s) => new Date(s + "T12:00:00").toLocaleDateString("tr-TR", { day: "numeric", month: "short", year: "2-digit" });
+  const pts = esc(JSON.stringify(hist.map((h, i) => [x(i), y(h[1]), fmt(h[0]), h[1]])));
+  return `<div class="elochart" data-pts="${pts}">
+    <div class="plw"><svg viewBox="0 0 ${W} ${Hh}" preserveAspectRatio="none" class="plsvg" role="img" aria-label="Güç puanı geçmişi">
+      <path d="${d}L${x(hist.length - 1)},${Hh}L${x(0)},${Hh}Z" fill="${col}" opacity=".08"/>
+      <path d="${d}" fill="none" stroke="${col}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>
+      <span class="pldot" style="--c:${col}"></span><div class="pltip"></div></div>
+    <div class="plx muted"><span>${fmt(hist[0][0])} · ${vs[0]}</span><span>${fmt(hist[hist.length - 1][0])} · ${vs[vs.length - 1]}</span></div></div>`;
+}
+document.addEventListener("pointermove", (e) => {
+  const c = e.target.closest && e.target.closest(".elochart");
+  document.querySelectorAll(".elochart .plw.hov").forEach((w) => { if (!c || !c.contains(w)) w.classList.remove("hov"); });
+  if (!c) return;
+  const w = c.querySelector(".plw"), r = w.getBoundingClientRect(), pts = JSON.parse(c.dataset.pts);
+  const sx = r.width / 600, sy = r.height / 150, px = (e.clientX - r.left) / sx;
+  const q = pts.reduce((a, b) => Math.abs(b[0] - px) < Math.abs(a[0] - px) ? b : a);
+  const dot = w.querySelector(".pldot");
+  dot.style.left = q[0] * sx + "px"; dot.style.top = q[1] * sy + "px";
+  const tip = w.querySelector(".pltip");
+  tip.innerHTML = `<b>${q[2]}</b><span>Güç puanı ${q[3]}</span>`;
+  tip.style.left = Math.min(Math.max(q[0] * sx, 60), r.width - 60) + "px";
+  w.classList.add("hov");
+});
+const TEAM_AVG = [["goals", "Gol", 1], ["xg", "xG", 2], ["shots", "Şut", 1], ["sot", "İsabetli şut", 1], ["big_chances", "Net pozisyon", 1],
+  ["corners", "Korner", 1], ["possession", "Topla oynama %", 0], ["yellow", "Sarı kart", 1]];
+// istatistik başlıklarının Türkçesi (oyuncu listeleri)
+const trStat = (t) => ({ "FotMob rating": "Reyting", "Expected goals (xG)": "Beklenen gol (xG)", "Goals": "Gol", "Assists": "Asist",
+  "Top scorer": "Gol", "Expected assist (xA)": "Beklenen asist (xA)", "Goals + Assists": "Gol + asist" }[t] || t || "");
+async function renderTeam(id) {
+  const v = $("#view");
+  v.innerHTML = skel("page");
+  let t;
+  try { t = await getTeam(id); } catch (e) { v.innerHTML = `<div class="card"><p>${esc(e.message)}</p></div>`; return; }
+  if (state.takim !== id) return;
+  const tb = t.table || {}, r = t.recent || {}, af = r.avg_for || {}, aa = r.avg_against || {};
+  const rows = t.rows || [];
+  const pts = rows.slice(0, 5).reduce((a, x) => a + ({ G: 3, B: 1 }[x.result] || 0), 0);
+  const res = (x) => `<span class="fd ${x.result || ""}">${x.result || "-"}</span>`;
+  const playersHtml = Object.entries(t.players || {}).slice(0, 4).map(([, c]) => `<div class="tpcat"><h4>${esc(trStat(c.title))}</h4>
+    ${c.list.map((p) => `<a class="tprow" href="#/oyuncu/${p.id}"><span>${esc(p.name)}</span><b>${nf(p.value, Number.isInteger(p.value) ? 0 : 2)}</b></a>`).join("")}</div>`).join("");
+  const season = (t.season || []).map((x) => {
+    const pct = x.of ? Math.round((x.of - x.rank + 1) / x.of * 100) : 0;
+    return `<div class="srow"><div class="sl">${esc(x.label)} <span class="muted">· ${nf(x.value, Number.isInteger(x.value) ? 0 : 2)}</span></div><div class="sv">${x.rank}/${x.of}</div>
+      <div class="spct"><span style="width:${Math.max(3, pct)}%;background:${pctColor(pct)}"></span><b>${x.rank}.</b></div></div>`;
+  }).join("");
+  const next = (t.next || []).map((m) => {
+    const op = m.home.id === t.id ? m.away : m.home;
+    return `<a class="tnext" href="#/mac/${m.id}"><span class="muted">${dateOf(m.utc)} · ${timeOf(m.utc)}</span>
+      <span>${m.home.id === t.id ? "" : "@ "}<img src="${teamLogo(op.id)}" alt="" onerror="this.remove()">${esc(op.name)}</span></a>`;
+  }).join("");
+  v.innerHTML = `<div class="card thero" style="--c:#58a6ff">
+      <div class="thead"><img src="${teamLogo(t.id)}" alt="" onerror="this.remove()"><div><h1>${esc(t.name)} ${starBtn(t.id, t.name)}</h1>
+        <a class="muted" href="#/lig/${t.league_id}">${esc(lgName(t.league_id, t.league))} ›</a></div></div>
+      <div class="tkpis">
+        ${tb.pos ? `<div><b>${tb.pos}.</b><small>sıra · ${tb.played} maç, ${tb.pts} puan</small></div>` : ""}
+        ${t.elo ? `<div><b>${Math.round(t.elo)}</b><small>güç puanı (Elo)</small></div>` : ""}
+        <div><b>${pts}/15</b><small>son 5 maç puanı</small></div>
+        ${af.xg != null ? `<div><b>${nf(af.xg, 2)} – ${nf(aa.xg, 2)}</b><small>xG ürettiği – verdiği</small></div>` : ""}
+      </div>
+      <div class="tcmpbar"><button class="kbtn" id="tcmpBtn">⚖️ Başka bir takımla karşılaştır</button></div>
+      <div id="tcmpPick"></div></div>
+    ${t.elo_hist && t.elo_hist.length > 2 ? `<div class="card" style="--c:#a371f7">${head("📈", `Güç puanı (Elo) <span class="muted">· son ${t.elo_hist.length} maç, Avrupa kupaları dahil</span>`)}${eloChart(t.elo_hist)}</div>` : ""}
+    <div class="card" style="--c:#3fb950">${head("📅", "Son maçlar")}
+      <div class="tform">${rows.map((x) => `<div class="tfr">${res(x)}<span class="tfd muted">${dateOf(x.date)}</span>
+        <span class="tfo">${x.home ? "" : "@ "}${x.opp_id ? `<a href="#/takim/${x.opp_id}">${esc(x.opponent)}</a>` : esc(x.opponent)} <small class="muted">${esc(x.comp || "")}</small></span>
+        <b class="tfs">${x.gf ?? "-"}-${x.ga ?? "-"}</b><small class="tfx muted">${x.xg != null ? `xG ${nf(x.xg, 1)}-${nf(x.xga, 1)}` : ""}</small></div>`).join("") || `<p class="muted">Veri yok</p>`}</div></div>
+    <div class="card" style="--c:#58a6ff">${head("📊", `Maç başı ortalamalar <span class="muted">· son ${r.n || 0} maç</span>`)}
+      <div class="tavg"><div class="tavr tavh"><span></span><b>Üretti</b><b>İzin verdi</b></div>
+      ${TEAM_AVG.filter(([k]) => af[k] != null || aa[k] != null).map(([k, l, d]) => `<div class="tavr"><span>${l}</span><b>${nf(af[k], d)}</b><b>${nf(aa[k], d)}</b></div>`).join("")}</div></div>
+    ${season ? `<div class="card" style="--c:#d29922">${head("🏆", `Sezon sıralamaları <span class="muted">· ligdeki yeri</span>`)}${season}</div>` : ""}
+    ${playersHtml ? `<div class="card" style="--c:#f78166">${head("⭐", `Öne çıkan oyuncular <span class="muted">· sezon</span>`)}<div class="tplayers">${playersHtml}</div></div>` : ""}
+    ${next ? `<div class="card" style="--c:#39c5cf">${head("🗓️", "Sıradaki maçlar")}${next}</div>` : ""}`;
+  $("#tcmpBtn").onclick = async () => {
+    const same = (x) => (x.league_id === t.league_id ? 0 : 1);
+    const list = (await getTeams()).filter((x) => x.id !== t.id).sort((a, b) => same(a) - same(b) || a.name.localeCompare(b.name, "tr"));
+    $("#tcmpPick").innerHTML = `<input class="osearch" id="tcmpQ" type="search" placeholder="Takım ara" autocomplete="off"><div class="tcmplist">${list.map((x) =>
+      `<a href="#/karsilastir/${t.id}/${x.id}" data-n="${esc(x.name.toLocaleLowerCase("tr"))}"><img src="${teamLogo(x.id)}" alt="" onerror="this.remove()">${esc(x.name)}</a>`).join("")}</div>`;
+    $("#tcmpQ").oninput = (e) => { const q = e.target.value.toLocaleLowerCase("tr"); document.querySelectorAll(".tcmplist a").forEach((a) => a.hidden = !!q && !a.dataset.n.includes(q)); };
+    $("#tcmpQ").focus();
+  };
+}
+async function renderCompare(a, b) {
+  const v = $("#view");
+  v.innerHTML = skel("page");
+  let A, B;
+  try { [A, B] = await Promise.all([getTeam(a), getTeam(b)]); } catch (e) { v.innerHTML = `<div class="card"><p>${esc(e.message)}</p></div>`; return; }
+  if (!state.cmp || state.cmp[0] !== a || state.cmp[1] !== b) return;
+  const ppg = (t) => t.table && t.table.played ? t.table.pts / t.table.played : null;
+  const l5 = (t) => (t.rows || []).slice(0, 5).reduce((s, x) => s + ({ G: 3, B: 1 }[x.result] || 0), 0);
+  const sv = (t, k) => ((t.season || []).find((x) => x.key === k) || {}).value;
+  const f = (t, k) => ((t.recent || {}).avg_for || {})[k], g = (t, k) => ((t.recent || {}).avg_against || {})[k];
+  const cm = (k) => CMP.find((x) => x[0] === k);
+  // (ad, A değeri, B değeri, ondalık, yüksek mi iyi; null = iyi/kötü yok)
+  const groups = [
+    ["Genel", [["Güç puanı (Elo)", A.elo, B.elo, 0, true], ["Ligde maç başı puan", ppg(A), ppg(B), 2, true],
+      ["Son 5 maç puanı", l5(A), l5(B), 0, true], ["Sezon reytingi", sv(A, "rating_team"), sv(B, "rating_team"), 2, true]]],
+    ["Hücum · son maçlar, maç başı", ["goals", "xg", "shots", "sot", "big_chances", "box_touches", "corners"].map((k) => [cm(k)[1], f(A, k), f(B, k), cm(k)[2], true])],
+    ["Savunma · rakibe izin verdikleri", ["goals", "xg", "shots", "sot", "big_chances"].map((k) => [cm(k)[1], g(A, k), g(B, k), cm(k)[2], false])],
+    ["Oyun tarzı", [["Topla oynama %", f(A, "possession"), f(B, "possession"), 0, null], ["İsabetli pas", f(A, "passes_acc"), f(B, "passes_acc"), 0, null],
+      ["Faul", f(A, "fouls"), f(B, "fouls"), 1, null], ["Sarı kart", f(A, "yellow"), f(B, "yellow"), 1, null]]],
+  ];
+  let wa = 0, wb = 0;
+  const row = ([l, x, y, d, hi]) => {
+    if (x == null && y == null) return "";
+    let bx = "", by = "";
+    if (hi !== null && x != null && y != null && x !== y) { if ((x > y) === hi) { bx = "win"; wa++; } else { by = "win"; wb++; } }
+    const fx = Math.max(x || 0, 0), fy = Math.max(y || 0, 0), tot = fx + fy || 1;
+    return `<div class="cmp-row"><span class="cv ${bx}">${x == null ? "—" : nf(x, d)}</span>
+      <div class="cmp-mid"><div class="cmp-l">${l}</div><div class="cmp-bars"><span class="bh" style="flex:${fx / tot}"></span><span class="ba" style="flex:${fy / tot}"></span></div></div>
+      <span class="cv r ${by}">${y == null ? "—" : nf(y, d)}</span></div>`;
+  };
+  const body = groups.map(([gname, rs]) => `<h3>${gname}</h3>${rs.map(row).join("")}`).join("");
+  const side = (t) => `<a class="xside" href="#/takim/${t.id}"><img src="${teamLogo(t.id)}" alt="" onerror="this.remove()"><b>${esc(t.name)}</b><small class="muted">${esc(lgName(t.league_id, t.league))}</small></a>`;
+  v.innerHTML = `<div class="card xcmp" style="--c:#58a6ff">${head("⚖️", "Takım karşılaştırması")}
+    <div class="xhead">${side(A)}<div class="xscore"><span><b>${wa}</b><i>-</i><b>${wb}</b></span><small class="muted">üstün olduğu kalem</small></div>${side(B)}</div>
+    <div class="legend"><span><i style="background:var(--home)"></i>${esc(A.name)}</span><span><i style="background:var(--away)"></i>${esc(B.name)}</span></div>
+    ${body}<p class="muted">Kalın yazılan değer o kalemde daha iyi olanı gösterir. Son maç ortalamaları rakip gücüne göre düzeltilmemiştir; farklı liglerdeki takımlar için güç puanı daha doğru bir kıyastır.</p></div>`;
+}
+
 /* ---------- paylaşım sepeti (Telegram için elle seçilen analizler) ----------
    Metinlerde site adı, linki ve veri/oran kaynağı geçmez; sonuna sadece kanal imzası eklenir. */
 const SHARE_SIGN = "📊 Timy Analiz";
@@ -1991,6 +2199,23 @@ function matchShareText(b) {
     SH_LINE,
     bp ? `✅ En garanti: ${bp.label}${bp.odds ? ` · 💰 ${nf(bp.odds, 2)}` : ""} (📊 %${Math.round(bp.p * 100)})${bestFinal(b) ? "" : " · değişebilir"}` : ""].filter(Boolean).join("\n");
 }
+// bugünün kesinleşen (resmi 11 sonrası kilitlenen) garanti tercihleri: tek paylaşım öğesi, basınca güncellenir
+async function addFinalPicks() {
+  const note = $("#shareFinalNote");
+  let d;
+  try { d = await api("/api/day?date=" + todayStr()); } catch (e) { note.textContent = e.message; return; }
+  const ms = (d.matches || []).filter((m) => m.pred && m.pred.safe && m.pred.safe.final && !m.started && !m.finished && !m.cancelled)
+    .sort((a, b) => (a.utc || "").localeCompare(b.utc || ""));
+  if (!ms.length) { note.textContent = "Şu an kesinleşmiş ve başlamamış tercih yok. Resmi 11'ler genelde maçtan 1 saat önce açıklanır."; return; }
+  const day = new Date(todayStr() + "T12:00:00").toLocaleDateString("tr-TR", { day: "numeric", month: "long", weekday: "long" });
+  const text = [`✅ GÜNÜN SON TERCİHLERİ`, `🗓️ ${day}`, SH_LINE,
+    ms.map((m, i) => `${NUM_EMO[i] || "▪️"} ${m.home.name} 🆚 ${m.away.name}\n🕘 ${timeOf(m.utc)} · 👉 ${m.pred.safe.label}${m.pred.safe.odds ? ` · 💰 ${nf(m.pred.safe.odds, 2)}` : ""}`).join("\n\n")].join("\n");
+  const key = "final:" + todayStr();
+  const item = { key, title: `✅ Son tercihler · ${ms.length} maç`, text, added: Date.now() };
+  const i = shareItems.findIndex((x) => x.key === key);
+  if (i >= 0) shareItems[i] = item; else shareItems.push(item);
+  saveShare(); renderShare();
+}
 function shareText() {
   const parts = [];
   if (shareNote.trim()) parts.push(`📣 ${shareNote.trim()}`);
@@ -2007,11 +2232,14 @@ function renderShare() {
   v.innerHTML = `<div class="card" style="--c:#39c5cf">${head("📤", `Paylaşım <span class="muted">· ${shareItems.length} öğe</span>`)}
     <p class="muted">Sitede kuponların, maç özetlerinin, maç yorumlarının ve oran hareketlerinin yanındaki <b>➕ Paylaşıma ekle</b> ile seçtiklerin burada toplanır. Metinde site adı, linki ya da veri kaynağı geçmez; sonuna kanal imzası eklenir.</p>
     <label class="shlab">Başa eklenecek not (isteğe bağlı)</label>
-    <textarea id="shareNote" rows="2" placeholder="Örn: Bugünün seçmeleri 👇">${esc(shareNote)}</textarea></div>
+    <textarea id="shareNote" rows="2" placeholder="Örn: Bugünün seçmeleri 👇">${esc(shareNote)}</textarea>
+    <div class="kshare"><button class="kbtn" id="shareFinal">✅ Bugünün kesinleşen tercihlerini ekle</button></div>
+    <p class="muted" id="shareFinalNote">Resmi 11'i açıklanmış ve tercihi kilitlenmiş, henüz başlamamış maçların garanti tercihleri tek mesaj olarak eklenir. Tekrar basınca güncellenir.</p></div>
     ${shareItems.length ? `<div class="card" style="--c:#58a6ff">${items}</div>` : `<div class="card"><p class="muted">Henüz bir şey eklenmedi.</p></div>`}
     ${shareItems.length ? `<div class="card" style="--c:#2ea043">${head("👁️", "Önizleme")}<pre class="shtext shprev">${esc(shareText())}</pre>
       <div class="kshare"><button class="kbtn big" id="shareCopy">📋 Kopyala</button><button class="kbtn" id="shareClear">🗑️ Listeyi temizle</button></div>
       <p class="muted">Kopyaladıktan sonra Telegram kanalına yapıştır. Liste sen temizleyene kadar kalır.</p></div>` : ""}`;
+  $("#shareFinal").onclick = addFinalPicks;
   $("#shareNote").oninput = (e) => { shareNote = e.target.value; safeSet("shareNote", shareNote); const p = $(".shprev"); if (p) p.textContent = shareText(); };
   v.querySelectorAll("[data-smv]").forEach((b) => b.onclick = () => {
     const [i, d] = b.dataset.smv.split(":").map(Number);
@@ -2040,20 +2268,26 @@ function route() {
   const lm = location.hash.match(/^#\/lig\/(\d+)/);
   const om = location.hash.startsWith("#/oranlar");
   const shm = location.hash.startsWith("#/paylas");
+  const tm = location.hash.match(/^#\/takim\/(\d+)/);
+  const xm = location.hash.match(/^#\/karsilastir\/(\d+)\/(\d+)/);
   const h = location.hash || "#/";
   if (navStack.length > 1 && navStack[navStack.length - 2] === h) navStack.pop();
   else if (navStack[navStack.length - 1] !== h) navStack.push(h);
   // maç, oyuncu ve karne sayfalarında üst barda yalnızca Geri butonu görünür
-  document.body.classList.toggle("in-match", !!(mm || pm || km || cm || lm || om || shm));
+  document.body.classList.toggle("in-match", !!(mm || pm || km || cm || lm || om || shm || tm || xm));
   document.body.classList.toggle("on-moves", !!om);  // sayfa altı yazıları sadece oranlar sayfasında
   state.player = pm ? +pm[1] : null;
   state.karne = km;
   state.kombine = cm;
   state.lig = lm ? +lm[1] : null;
-  state.oranlar = om || shm;  // paylaşım sayfasında da gün listesi arka planda çizilmesin
-  const navKey = om ? "oranlar" : km ? "karne" : cm ? "kombine" : (mm || pm || lm) ? "" : "home";
+  state.oranlar = om || shm || !!tm || !!xm;  // paylaşım, takım ve karşılaştırma sayfalarında da gün listesi arka planda çizilmesin
+  state.takim = tm ? +tm[1] : null;
+  state.cmp = xm ? [+xm[1], +xm[2]] : null;
+  const navKey = om ? "oranlar" : km ? "karne" : cm ? "kombine" : (mm || pm || lm || tm || xm) ? "" : "home";
   document.querySelectorAll("#bottomNav [data-nav]").forEach((a) => a.classList.toggle("on", a.dataset.nav === navKey));
   if (shm) { state.current = null; window.scrollTo(0, 0); renderShare(); }
+  else if (tm) { state.current = null; window.scrollTo(0, 0); renderTeam(state.takim); }
+  else if (xm) { state.current = null; window.scrollTo(0, 0); renderCompare(...state.cmp); }
   else if (lm) { state.current = null; window.scrollTo(0, 0); renderLeague(state.lig); }
   else if (om) { state.current = null; window.scrollTo(0, 0); renderMoves(); }
   else if (cm) { state.current = null; window.scrollTo(0, 0); renderCoupons(); }
@@ -2140,7 +2374,7 @@ function startPolling() {
       const evs = await getData("events.json");
       evs.filter((e) => e.id > lastEv).reverse().forEach((ev) => addFeed(ev, true));
       if (evs.length) { lastEv = Math.max(lastEv, evs[0].id); safeSet("lastEventId", String(lastEv)); }
-      location.hash.startsWith("#/paylas") ? null : state.lig ? renderLeague(state.lig) : state.oranlar ? renderMoves() : state.kombine ? (dayCache = null, renderCoupons()) : state.karne ? renderKarne(true) : state.player ? renderPlayer(state.player, true) : state.current ? renderMatch(state.current, true) : renderDay(true);
+      /^#\/(paylas|takim|karsilastir)/.test(location.hash) ? null : state.lig ? renderLeague(state.lig) : state.oranlar ? renderMoves() : state.kombine ? (dayCache = null, renderCoupons()) : state.karne ? renderKarne(true) : state.player ? renderPlayer(state.player, true) : state.current ? renderMatch(state.current, true) : renderDay(true);
     } catch { /* bir sonraki turda tekrar dener */ }
   };
 
@@ -2237,6 +2471,18 @@ const RELEASES = [
       ["📊", "Daha fazla pazar", "Yarılar, handikaplar, korner/kart/şut/ofsayt/faul toplamları, takım bazlı alt/üst ve dakika aralıkları."],
       ["🔍", "Oranlarda arama", "Oranlar sekmesinde oyuncu veya pazar adı yaz, sadece o seçenekler kalsın; gruplar açılıp kapanır."],
       ["🔕", "Sessiz bildirimler", "Bildirimler artık ekranı kaplamaz; yalnızca sarı çana dokununca görünür."],
+    ],
+  },
+  {
+    id: 17, date: "27 Ekim 2026", title: "Yeni: Takım sayfası ve değerli oranlar", sub: "Bu güncellemede gelenler",
+    items: [
+      ["🏟️", "Takım sayfası", "Maç sayfasında takım adına dokun: son maçlar, güç puanı grafiği, maç başı ortalamalar, sezon sıralamaları, öne çıkan oyuncular ve sıradaki maçlar."],
+      ["⚖️", "Takım karşılaştırma", "Takım sayfasından ya da maçın İstatistikler sekmesinden iki takımı hücum, savunma ve oyun tarzında yan yana karşılaştır."],
+      ["💎", "Değerli oran", "Oranı 1.60-3.20 arasında, modelin piyasadan belirgin şekilde olası gördüğü ve türü karnede kendini kanıtlamış tercih. Karnede ayrı izlenir."],
+      ["🧠", "Karneden öğrenme", "Karnede modelin sandığından zayıf çıkan tercih türleri garanti tercih seçiminde geri alınıyor; karnede hangi türün nasıl gittiği yazıyor."],
+      ["⚠️", "Haberlerden dikkat", "Maç özetinin başında takımla ilgili sakatlık, ceza, kadro dışı ya da teknik direktör haberleri (tahmini değiştirmez)."],
+      ["🟨", "Kart tahmini", "Az dinlenmeyle (3 gün ve altı) gelen takımların kart beklentisi biraz artırıldı; geçmiş maçlarda isabeti iyileştirdi."],
+      ["📤", "Son tercihleri paylaş", "Paylaşım sayfasında tek tuşla bugünün resmi 11 sonrası kesinleşen tercihleri tek mesaj olarak eklenir."],
     ],
   },
   {

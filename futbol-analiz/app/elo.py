@@ -70,8 +70,9 @@ async def load_matches(src, season_ttl):
     return out
 
 
-def run(matches):
-    """Sırayla Elo günceller. Dönüş: (son puanlar {takım: puan}, maç öncesi puanlar {maç id: (ev, dep)})."""
+def run(matches, hist=None):
+    """Sırayla Elo günceller. Dönüş: (son puanlar {takım: puan}, maç öncesi puanlar {maç id: (ev, dep)}).
+    hist verilirse her takımın maç sonrası puanı tarihiyle eklenir: {takım: [(utc, puan), ...]}."""
     rating, pre = {}, {}
     league_of = {}
     for m in matches:
@@ -95,6 +96,9 @@ def run(matches):
         mult = 1 if gd <= 1 else (1.5 if gd == 2 else (11 + gd) / 8)
         d = K * mult * (res - exp)
         rating[m["h"]], rating[m["a"]] = rh + d, ra - d
+        if hist is not None:
+            hist.setdefault(m["h"], []).append((m["t"], round(rh + d)))
+            hist.setdefault(m["a"], []).append((m["t"], round(ra - d)))
     return rating, pre
 
 

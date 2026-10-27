@@ -128,6 +128,27 @@ async def player(player_id: int):
     return p
 
 
+@app.get("/api/team/{team_id}")
+async def team(team_id: int):
+    from . import teams
+    bodies = [b["body"] for b in (store.bundle_get(r[0]) for r in store.conn.execute("select match_id from bundles")) if b]
+    bodies = [b for b in bodies if team_id in (b["home"]["id"], b["away"]["id"])]
+    if not bodies:
+        raise HTTPException(404, "Bu takımın sayfası yok (yalnızca listedeki maçların takımları)")
+    return (await teams.collect_pages(src, bodies)).get(team_id)
+
+
+@app.get("/api/teams")
+def team_list():
+    seen = {}
+    for (body,) in store.conn.execute("select body from bundles"):
+        import json
+        b = json.loads(body)
+        for s in ("home", "away"):
+            seen[b[s]["id"]] = {"id": b[s]["id"], "name": b[s]["name"], "league_id": b.get("league_id")}
+    return list(seen.values())
+
+
 @app.get("/api/karne")
 def karne_rows():
     from . import karne

@@ -485,9 +485,16 @@ async def elo_ratings(src):
     global _elo_memo
     if _elo_memo and time.time() - _elo_memo[0] < SEASON_TTL:
         return _elo_memo[1]
-    rating, _ = elo_mod.run(await elo_mod.load_matches(src, SEASON_TTL))
-    _elo_memo = (time.time(), rating)
+    hist = {}
+    rating, _ = elo_mod.run(await elo_mod.load_matches(src, SEASON_TTL), hist)
+    _elo_memo = (time.time(), rating, hist)
     return rating
+
+
+async def elo_history(src):
+    """Takımların maç maç güç puanı geçmişi (takım sayfasındaki grafik için)."""
+    await elo_ratings(src)
+    return _elo_memo[2]
 
 
 async def build_bundle(src, match_id, prev_odds=None):

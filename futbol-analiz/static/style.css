@@ -1022,3 +1022,76 @@ body.on-moves footer.foot { display: block; }
 .ring .rn { font-size: 11px; }
 .ring .pos { color: #56d364; } .ring .neg { color: #ff7b72; }
 @media (min-width: 700px) { .bigpicks { grid-template-columns: 1fr 1fr; } }
+
+/* haberlerden uyarı */
+.nalert .nal { display: flex; gap: 10px; align-items: flex-start; padding: 8px 4px; border-top: 1px solid var(--line); color: inherit; text-decoration: none; }
+.nalert .nal:first-of-type { border-top: 0; }
+.nalert .nal img { width: 22px; height: 22px; object-fit: contain; flex: none; margin-top: 2px; }
+.nalert .nal b { display: block; font-size: 14px; font-weight: 600; line-height: 1.35; }
+.nalert .nal small { font-size: 11px; }
+.nalert .nal:hover b { text-decoration: underline; }
+
+/* takım sayfası */
+.tlink { color: inherit; text-decoration: none; border-bottom: 1px dashed color-mix(in srgb, currentColor 40%, transparent); }
+.tlink:hover { border-bottom-style: solid; }
+.thead { display: flex; align-items: center; gap: 14px; }
+.thead img { width: 64px; height: 64px; object-fit: contain; }
+.thead h1 { font-size: 22px; margin: 0 0 2px; display: flex; align-items: center; gap: 6px; }
+.thead a { font-size: 13px; text-decoration: none; }
+.tkpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin: 14px 0 10px; }
+.tkpis > div { background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.tkpis b { display: block; font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.tkpis small { color: var(--muted); font-size: 11px; }
+.tcmpbar { margin: 6px 0; } .tcmpbar .kbtn { text-decoration: none; display: inline-flex; }
+.tcmplist { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px; margin-top: 8px; max-height: 320px; overflow: auto; }
+.tcmplist a { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 10px; background: var(--panel2); border: 1px solid var(--line); color: inherit; text-decoration: none; font-size: 13px; }
+.tcmplist a:hover { border-color: var(--accent2); }
+.tcmplist img { width: 20px; height: 20px; object-fit: contain; }
+.tform { display: flex; flex-direction: column; }
+.tfr { display: grid; grid-template-columns: 26px 64px 1fr auto; align-items: center; column-gap: 8px; padding: 7px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.tfr:first-child { border-top: 0; }
+.tfo { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tfo a { color: inherit; }
+.tfs { font-variant-numeric: tabular-nums; text-align: right; }
+.tfx { grid-column: 3 / 5; font-size: 11px; }
+.tavg { display: flex; flex-direction: column; font-size: 13px; }
+.tavr { display: grid; grid-template-columns: 1fr 80px 80px; padding: 6px 0; border-top: 1px solid var(--line); }
+.tavr b { text-align: right; font-variant-numeric: tabular-nums; }
+.tavh { border-top: 0; color: var(--muted); font-size: 11px; } .tavh b { font-weight: 600; }
+.tplayers { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.tpcat h4 { margin: 0 0 4px; font-size: 12px; color: var(--muted); font-weight: 600; }
+.tprow { display: flex; justify-content: space-between; padding: 5px 0; border-top: 1px solid var(--line); color: inherit; text-decoration: none; font-size: 13px; }
+.tprow:hover span { text-decoration: underline; }
+.tnext { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); color: inherit; text-decoration: none; font-size: 13px; }
+.tnext:first-of-type { border-top: 0; }
+.tnext img { width: 18px; height: 18px; object-fit: contain; vertical-align: -4px; margin-right: 6px; }
+.elochart .plw { height: 140px; }
+/* karşılaştırma */
+.xhead { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; margin: 6px 0 10px; }
+.xside { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 3px; color: inherit; text-decoration: none; min-width: 0; }
+.xside img { width: 48px; height: 48px; object-fit: contain; }
+.xside b { font-size: 14px; } .xside small { font-size: 11px; }
+.xscore { display: flex; flex-direction: column; align-items: center; }
+.xscore span { display: flex; gap: 6px; align-items: center; font-size: 28px; font-weight: 800; }
+.xscore i { font-style: normal; color: var(--muted); font-size: 20px; }
+.xscore small { font-size: 11px; }
+
+/* değerli oran */
+.bpick.val { border-color: rgba(57,197,207,.55); background: color-mix(in srgb, #39c5cf 9%, var(--panel2)); }
+.bpick.val .bpi, .bpick.val .bpo { color: #56d4dd; }
+.vbadge { margin-left: auto; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; color: #56d4dd; background: rgba(57,197,207,.12); border: 1px solid rgba(57,197,207,.45); cursor: help; }
+.opick.val { border-color: rgba(57,197,207,.55); background: color-mix(in srgb, #39c5cf 9%, var(--panel2)); }
+.opicks { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.vkarne { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin: 6px 0; }
+.vkarne > div { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+.vkarne b { display: block; font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.vkarne small { color: var(--muted); font-size: 11px; }
+.vkarne .pos, .lessons .pos { color: #56d364; } .vkarne .neg, .lessons .neg { color: #ff7b72; }
+/* karneden öğrenilenler */
+.lessons { display: flex; flex-direction: column; }
+.lrow { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 4px 10px; padding: 7px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.lrow:first-child { border-top: 0; }
+.lv { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; } .lv b { margin-left: 4px; }
+.ltag { font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 999px; background: rgba(255,255,255,.06); color: var(--muted); white-space: nowrap; }
+.ltag.pos { background: rgba(46,160,67,.15); color: #56d364 !important; } .ltag.neg { background: rgba(218,54,51,.15); color: #ff7b72 !important; }
+@media (max-width: 480px) { .lrow { grid-template-columns: 1fr auto; } .lrow .lv { grid-column: 1 / -1; grid-row: 2; } }

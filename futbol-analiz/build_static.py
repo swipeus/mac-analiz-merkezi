@@ -14,7 +14,7 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from app import analysis, karne, kupon, leagues, players
+from app import analysis, karne, kupon, leagues, players, teams
 from app.config import DB_PATH, LEAGUES, STATIC_DIR, TR_TZ
 from app.crypto_box import derive_key, seal, unseal
 from app.sources import Sources
@@ -52,6 +52,8 @@ async def main(out):
     # karneden tür bazında kalibrasyon (yeterli veri ve belirgin sapma varsa olasılıklar düzeltilir)
     analysis.CALIB, calib_report = karne.calib_table(store)
     log.info("kalibrasyon: %s", analysis.CALIB or "gerek yok")
+    analysis.LESSON, analysis.PROVEN = karne.lessons(calib_report)
+    log.info("karne dersleri: %s · kanıtlanmış türler: %s", analysis.LESSON, sorted(analysis.PROVEN))
     await up.cycle()
     store.prune()
 
@@ -65,6 +67,7 @@ async def main(out):
 
     now = datetime.now(TR_TZ)
     days, n_match, player_ids = [], 0, []
+    all_bodies = []  # takım sayfaları için yayındaki bütün maç paketleri
     move_bodies = []  # oran hareketleri için bugün ve yarının maçları
     kupon.settle(store)
     # bugün önce: oyuncu yenileme bütçesi önce bugünün maçlarına harcansın
@@ -75,6 +78,7 @@ async def main(out):
             log.warning("gün listesi alınamadı %s: %s", day_key(d), e)
             continue
         bodies = [b["body"] for b in (store.bundle_get(m["id"]) for m in matches) if b]
+        all_bodies += bodies
         if d >= now - timedelta(hours=1):
             move_bodies += bodies
         # günün kombineleri: bugün ve yarın için (dünün kuponları kilitli, sadece gösterilir)
@@ -101,6 +105,16 @@ async def main(out):
             write(f"player-{pid}.json", p)
             n_players += 1
     log.info("oyuncular: %s yenilendi, %s yayınlandı (%s kadroda)", n_fetched, n_players, len(set(player_ids)))
+    # takım sayfaları ve karşılaştırma ekranı için takım listesi
+    try:
+        tp = await teams.collect_pages(src, all_bodies)
+    except Exception as e:  # noqa: BLE001
+        log.warning("takım sayfaları üretilemedi: %s", e)
+        tp = {}
+    for tid, page in tp.items():
+        write(f"team-{tid}.json", page)
+    write("teams.json", [{"id": p["id"], "name": p["name"], "league_id": p["league_id"]} for p in tp.values()])
+    log.info("takım sayfaları: %s", len(tp))
     write("events.json", store.recent_events(60))
     write("odds-moves.json", {"updated": time.time(), "moves": leagues.odds_moves(move_bodies)})
     # lig sayfaları: puan durumu, gol ve asist krallığı

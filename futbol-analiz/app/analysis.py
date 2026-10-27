@@ -259,6 +259,20 @@ def stat_ok(code):
     return lo <= float(m.group(4)) <= hi
 
 
+def line_pick(pr, pref, rng):
+    """Korner (c) ya da kart (k) için en olası alt/üst tahmini, ör. {"label": "8.5 Üst", "p": 0.72}.
+    Çok kesin ama bilgisiz çizgiler (ör. 5.5 üst) dışarıda kalsın diye çizgi aralığı sınırlı."""
+    opts = []
+    for c, p in pr.items():
+        m = re.fullmatch(pref + r"([ou])(\d+(?:\.\d+)?)", c)
+        if m and p is not None and rng[0] <= float(m.group(2)) <= rng[1]:
+            opts.append((f"{m.group(2)} {'Üst' if m.group(1) == 'o' else 'Alt'}", p))
+    # %85 üstü neredeyse kesin ama bilgisiz (6.5 kart altı gibi): önce onların altındaki en olası çizgi
+    pool = [o for o in opts if o[1] <= 0.85] or opts
+    best = max(pool, key=lambda o: o[1], default=None)
+    return {"label": best[0], "p": round(best[1], 3)} if best else None
+
+
 def stat_prob(mm, stat_mu):
     stat, side, ou, line = mm.group(1), mm.group(2), mm.group(3), float(mm.group(4))
     h, a = stat_mu.get(stat, (None, None))
@@ -675,6 +689,9 @@ def predict(b, prof_h, prof_a):
         "score_pick": score_pick,
         "corners": corners,
         "cards": cards,
+        "corner_pick": line_pick(pr, "c", (7.5, 11.5)),
+        "card_pick": line_pick({**{f"k{d}{l}": (p_ if d == "o" else 1 - p_) for l, p_ in ((float(x), v) for x, v in cards["over"].items()) for d in "ou"},
+                                **{c: v for c, v in pr.items() if re.match(r"^k[ou]\d", c)}}, "k", (2.5, 6.5)),
         "shots": {"home": s_h and round(s_h, 1), "away": s_a and round(s_a, 1)},
         "sot": {"home": o_h and round(o_h, 1), "away": o_a and round(o_a, 1)},
         "yellow": {"home": y_h, "away": y_a, "total": round(y_h + y_a, 1) if y_h is not None and y_a is not None else None},

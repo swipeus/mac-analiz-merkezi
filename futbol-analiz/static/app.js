@@ -246,6 +246,9 @@ function crestHtml(team, isFav, pct, size) {
   </div>`;
 }
 // en garanti tercihin altındaki 4 olasılık kutusu; en yüksek olasılıklı kutunun etrafı parlar
+// korner ve kart kutusunda yazı yerine en olası tahmin (simge zaten neyin kutusu olduğunu söylüyor)
+const boxItems = (o25, btts, cpick, kpick) => [["⚽", "2.5 Üst", o25], ["🔁", "KG Var", btts],
+  ["🚩", cpick ? cpick.label : "Korner", cpick ? cpick.p : null], ["🟨", kpick ? kpick.label : "Kart", kpick ? kpick.p : null]];
 function probBoxes(items) {
   const vals = items.filter((x) => x[2] != null);
   if (!vals.length) return "";
@@ -262,7 +265,7 @@ function cardHtml(m, sorted) {
     : live ? `<span class="badge-live">CANLI ${esc(m.live || "")}</span>`
     : m.finished ? `<span class="when">Maç sonu</span>` : `<span></span>`;
   const tags = p ? [m.lineup_type && !["predicted", "lastStarting11"].includes(m.lineup_type) ? lineupTag(m.lineup_type, false) : "",
-    m.absent && (m.absent[0] + m.absent[1]) ? `<span class="tag warn">${m.absent[0]}+${m.absent[1]} eksik</span>` : ""].join("") : "";
+    ""].join("") : "";
   const mid = (m.started || m.finished)
     ? `<div class="sc">${m.home.score ?? 0} - ${m.away.score ?? 0}</div><div class="sub">${live ? "devam ediyor" : "skor"}</div>`
     : `<div class="ko">${esc(timeOf(m.utc))}</div><div class="sub">başlama</div>`;
@@ -273,8 +276,7 @@ function cardHtml(m, sorted) {
     <div class="pills">
       ${p.safe ? `<span class="pill safe"><i>✅</i>${esc(p.safe.label.replace(/ \(.*\)$/, ""))}${p.safe.odds ? ` @${nf(p.safe.odds, 2)}` : ""}</span>` : ""}
     </div>
-    ${probBoxes([["⚽", "2.5 Üst", p.over25], ["🔁", "KG Var", p.btts], ["🚩", "Korner 9.5Ü", p.c95], ["🟨", "Kart 4.5Ü", p.k45]])}
-    <div class="cmeta">Skor <b>${esc(p.score)}</b> · Beraberlik <b>${pc(p.p_draw)}</b></div>` : `<div class="pending">Analiz hazırlanıyor…</div>`;
+    ${probBoxes(boxItems(p.over25, p.btts, p.cpick, p.kpick))}` : `<div class="pending">Analiz hazırlanıyor…</div>`;
   return `<div class="mcard ${live ? "is-live" : ""}" data-id="${m.id}">
     <div class="mtop">${top}<div class="mtags">${sorted ? `<span class="tag lgt"><img src="${leagueLogo(m.league_id)}" alt="" onerror="this.remove()">${esc(m.league)}</span>${sortBadge(m)}` : tags}</div></div>
     <div class="mteams">
@@ -486,9 +488,7 @@ function predictionHtml(b) {
     </div>
     <div class="pred">
       ${P.best_pick ? kpi("✅", "#2ea043", "En garanti tercih", P.best_pick.label, `${P.best_pick.odds ? "Oran " + nf(P.best_pick.odds, 2) + " · " : ""}model ${pc(P.best_pick.p)}`) : ""}
-      <div class="pbwide">${probBoxes([["⚽", "2.5 Üst", P.over25], ["🔁", "KG Var", P.btts],
-        ["🚩", "Korner 9.5Ü", (P.probs || {})["co9.5"] ?? (P.corners && P.corners.over && P.corners.over["9.5"])],
-        ["🟨", "Kart 4.5Ü", (P.probs || {})["ko4.5"] ?? (P.cards && P.cards.over && P.cards.over["4.5"])]])}</div>
+      <div class="pbwide">${probBoxes(boxItems(P.over25, P.btts, P.corner_pick, P.card_pick))}</div>
       ${P.surprise ? kpi("⚡", "#e3b341", "Olası sürpriz", P.surprise.label, `${P.surprise.odds ? "Oran " + nf(P.surprise.odds, 2) + " · " : ""}model ${pc(P.surprise.p)}`) : ""}
       ${kpi("🎲", "#a371f7", "Skor tahmini", (P.score_pick || P.scores[0]).score, "Diğer olasılar: " + P.scores.filter((s) => s.score !== (P.score_pick || {}).score).slice(0, 3).map((s) => s.score).join(" · "))}
       ${kpi("⚽", "#f85149", "Beklenen gol (xG)", `${nf(P.lam_home, 2)} – ${nf(P.lam_away, 2)}`, P.uses_odds ? "İstatistik + bahis oranları" : "İstatistik modeli")}
@@ -1839,6 +1839,7 @@ function route() {
   else if (navStack[navStack.length - 1] !== h) navStack.push(h);
   // maç, oyuncu ve karne sayfalarında üst barda yalnızca Geri butonu görünür
   document.body.classList.toggle("in-match", !!(mm || pm || km || cm || lm || om || shm));
+  document.body.classList.toggle("on-moves", !!om);  // sayfa altı yazıları sadece oranlar sayfasında
   state.player = pm ? +pm[1] : null;
   state.karne = km;
   state.kombine = cm;

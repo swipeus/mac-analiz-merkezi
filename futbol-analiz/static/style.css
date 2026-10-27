@@ -893,3 +893,12 @@ a#movesBtn { display: inline-flex; align-items: center; justify-content: center;
 .pbwide .pbox b { font-size: 20px; }
 /* telefonda alt menüde olan simgeler üst barda tekrar etmesin (başlık tek satırda kalsın) */
 @media (max-width: 700px) { #karneBtn, #botBtn, #movesBtn { display: none !important; } }
+
+/* sayfa altı yazıları sadece oran hareketleri sayfasında */
+footer.foot { display: none; }
+body.on-moves footer.foot { display: block; }
+/* telefonda açılan küçük pencereler (tarih, sıralama, arama) ekranın içinde ortalı dursun */
+@media (max-width: 700px) {
+  .calpop { position: fixed !important; left: 12px !important; right: 12px !important; top: 118px !important; width: auto !important; max-width: none !important; }
+  .calrow button { font-size: 13px; padding: 9px 4px; white-space: nowrap; }
+}

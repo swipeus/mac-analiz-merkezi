@@ -51,10 +51,8 @@ def enrich_day(store, matches):
             m["pred"] = {k: pr[k] for k in ("p_home", "p_draw", "p_away", "over25", "btts", "pick")}
             m["pred"]["score"] = (pr.get("score_pick") or pr["scores"][0])["score"]
             probs = pr.get("probs") or {}
-            corner = probs.get("co9.5") or ((pr.get("corners") or {}).get("over") or {}).get("9.5")
-            card = probs.get("ko4.5") or ((pr.get("cards") or {}).get("over") or {}).get("4.5")
-            m["pred"]["c95"] = round(corner, 3) if corner is not None else None
-            m["pred"]["k45"] = round(card, 3) if card is not None else None
+            m["pred"]["cpick"] = pr.get("corner_pick")  # en olası korner tahmini, ör. 8.5 Üst
+            m["pred"]["kpick"] = pr.get("card_pick")    # en olası kart tahmini
             bp = pr.get("best_pick")
             m["pred"]["safe"] = {"label": bp["label"], "odds": bp.get("odds")} if bp else None
             m["lineup_type"] = lu.get("type")

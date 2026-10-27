@@ -53,6 +53,7 @@ def enrich_day(store, matches):
             probs = pr.get("probs") or {}
             m["pred"]["cpick"] = pr.get("corner_pick")  # en olası korner tahmini, ör. 8.5 Üst
             m["pred"]["kpick"] = pr.get("card_pick")    # en olası kart tahmini
+            m["pred"]["bodds"] = pr.get("box_odds")       # 2.5 Üst ve KG Var oranları
             bp = pr.get("best_pick")
             m["pred"]["safe"] = {"label": bp["label"], "odds": bp.get("odds")} if bp else None
             m["lineup_type"] = lu.get("type")

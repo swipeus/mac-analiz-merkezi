@@ -695,6 +695,7 @@ def predict(b, prof_h, prof_a):
         "score_pick": score_pick,
         "corners": corners,
         "cards": cards,
+        "box_odds": {"o2.5": oddsmap.get("o2.5"), "btts_yes": oddsmap.get("btts_yes")},  # kutularda gösterilen oranlar
         "corner_pick": line_pick(pr, "c", (7.5, 11.5), oddsmap),
         "card_pick": line_pick({**{f"k{d}{l}": (p_ if d == "o" else 1 - p_) for l, p_ in ((float(x), v) for x, v in cards["over"].items()) for d in "ou"},
                                 **{c: v for c, v in pr.items() if re.match(r"^k[ou]\d", c)}}, "k", (2.5, 6.5), oddsmap),

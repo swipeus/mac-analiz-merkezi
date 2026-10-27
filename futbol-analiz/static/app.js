@@ -249,7 +249,7 @@ function crestHtml(team, isFav, pct, size) {
 // korner ve kart kutusunda yazı yerine en olası tahmin (simge zaten neyin kutusu olduğunu söylüyor)
 // "7.5 Üst" -> co7.5, "4.5 Alt" -> ku4.5 (oranlar sekmesindeki seçeneğin iç kodu)
 const pickCode = (pref, pk) => { const m = pk && pk.label.match(/^([\d.]+) (Üst|Alt)$/); return m ? `${pref}${m[2] === "Üst" ? "o" : "u"}${m[1]}` : null; };
-const boxItems = (o25, btts, cpick, kpick) => [["⚽", "2.5 Üst", o25, "o2.5"], ["🔁", "KG Var", btts, "btts_yes"],
+const boxItems = (o25, btts, cpick, kpick, bodds) => [["⚽", "2.5 Üst", o25, "o2.5", (bodds || {})["o2.5"]], ["🔁", "KG Var", btts, "btts_yes", (bodds || {}).btts_yes],
   ["🚩", cpick ? cpick.label : "Korner", cpick ? cpick.p : null, pickCode("c", cpick), cpick && cpick.odds], ["🟨", kpick ? kpick.label : "Kart", kpick ? kpick.p : null, pickCode("k", kpick), kpick && kpick.odds]];
 // kutulardaki korner ve kart simgeleri dolu ve renkli: kırmızı bayrak, sarı kart
 const BOX_ICON = {
@@ -303,7 +303,7 @@ function cardHtml(m, sorted) {
     <div class="pills">
       ${p.safe ? `<span class="pill safe"><i>✅</i>${esc(p.safe.label.replace(/ \(.*\)$/, ""))}${p.safe.odds ? ` @${nf(p.safe.odds, 2)}` : ""}</span>` : ""}
     </div>
-    ${probBoxes(boxItems(p.over25, p.btts, p.cpick, p.kpick), m.id)}` : `<div class="pending">Analiz hazırlanıyor…</div>`;
+    ${probBoxes(boxItems(p.over25, p.btts, p.cpick, p.kpick, p.bodds), m.id)}` : `<div class="pending">Analiz hazırlanıyor…</div>`;
   return `<div class="mcard ${live ? "is-live" : ""}" data-id="${m.id}">
     <div class="mtop">${top}<div class="mtags">${sorted ? `<span class="tag lgt"><img src="${leagueLogo(m.league_id)}" alt="" onerror="this.remove()">${esc(m.league)}</span>${sortBadge(m)}` : tags}</div></div>
     <div class="mteams">
@@ -516,7 +516,7 @@ function predictionHtml(b) {
     </div>
     <div class="pred">
       ${P.best_pick ? kpi("✅", "#2ea043", "En garanti tercih", P.best_pick.label, `${P.best_pick.odds ? "Oran " + nf(P.best_pick.odds, 2) + " · " : ""}model ${pc(P.best_pick.p)}`) : ""}
-      <div class="pbwide">${probBoxes(boxItems(P.over25, P.btts, P.corner_pick, P.card_pick), b.id)}</div>
+      <div class="pbwide">${probBoxes(boxItems(P.over25, P.btts, P.corner_pick, P.card_pick, P.box_odds), b.id)}</div>
       ${P.surprise ? kpi("⚡", "#e3b341", "Olası sürpriz", P.surprise.label, `${P.surprise.odds ? "Oran " + nf(P.surprise.odds, 2) + " · " : ""}model ${pc(P.surprise.p)}`) : ""}
       ${kpi("🎲", "#a371f7", "Skor tahmini", (P.score_pick || P.scores[0]).score, "Diğer olasılar: " + P.scores.filter((s) => s.score !== (P.score_pick || {}).score).slice(0, 3).map((s) => s.score).join(" · "))}
       ${kpi("⚽", "#f85149", "Beklenen gol (xG)", `${nf(P.lam_home, 2)} – ${nf(P.lam_away, 2)}`, P.uses_odds ? "İstatistik + bahis oranları" : "İstatistik modeli")}

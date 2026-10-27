@@ -9,6 +9,7 @@ import urllib.parse
 from datetime import datetime, timezone
 
 from . import analysis
+from . import elo as elo_mod
 from . import odds as odds_mod
 from .config import NEWS_TTL, SEASON_TTL
 from .sources import FOTMOB, PLAYER_STATS, TEAM_STATS
@@ -56,7 +57,7 @@ STAT_KEYS = {
 _season_memo = {}
 
 # Analiz/paket biçimi değişince artırılır; eski sürümle üretilmiş paketler yeniden oluşturulur
-BUNDLE_VERSION = 19
+BUNDLE_VERSION = 20
 RECENT_MORE = 5  # son 5 maça ek olarak çekilen eski maç sayısı
 
 
@@ -476,6 +477,19 @@ def carry_open_odds(new, prev):
     return new
 
 
+_elo_memo = None
+
+
+async def elo_ratings(src):
+    """Takımların güncel Elo puanları (6 saatte bir yeniden hesaplanır)."""
+    global _elo_memo
+    if _elo_memo and time.time() - _elo_memo[0] < SEASON_TTL:
+        return _elo_memo[1]
+    rating, _ = elo_mod.run(await elo_mod.load_matches(src, SEASON_TTL))
+    _elo_memo = (time.time(), rating)
+    return rating
+
+
 async def build_bundle(src, match_id, prev_odds=None):
     md = await src.match_details(match_id, 30)
     gen = md.get("general") or {}
@@ -527,6 +541,11 @@ async def build_bundle(src, match_id, prev_odds=None):
         return (await team_recent(src, tid, None, ids))["rows"]
     more_h, more_a = await asyncio.gather(older(rec_h, str_h, hid), older(rec_a, str_a, aid))
     rec_h["rows_more"], rec_a["rows_more"] = more_h, more_a
+    try:
+        ratings = await elo_ratings(src)
+    except Exception as e:  # noqa: BLE001
+        log.warning("Elo hesaplanamadı: %s", e)
+        ratings = {}
     strength = opp_strength(season)
     for rec in (rec_h, rec_a):
         tag_opponents(rec, strength)
@@ -568,6 +587,8 @@ async def build_bundle(src, match_id, prev_odds=None):
         # maç sayfası üst bölümünün arka planı için takım renkleri (karanlık tema)
         "colors": ((gen.get("teamColors") or {}).get("darkMode") or None),
         "weather": content.get("weather"),
+        # takım gücü puanları (Elo); takip edilmeyen liglerin takımlarında yok
+        "elo": [round(ratings[hid], 1) if hid in ratings else None, round(ratings[aid], 1) if aid in ratings else None],
         "lineup": parse_lineup(content.get("lineup")),
         "recent": {"home": rec_h, "away": rec_a},
         "season": {

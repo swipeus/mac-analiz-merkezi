@@ -14,7 +14,7 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from app import karne, kupon, leagues, players
+from app import analysis, karne, kupon, leagues, players
 from app.config import DB_PATH, LEAGUES, STATIC_DIR, TR_TZ
 from app.crypto_box import derive_key, seal, unseal
 from app.sources import Sources
@@ -49,6 +49,9 @@ async def main(out):
                 store.cache_put("karne:synced", True)
         except Exception as e:  # noqa: BLE001
             log.warning("karne geri yüklenemedi: %s", e)
+    # karneden tür bazında kalibrasyon (yeterli veri ve belirgin sapma varsa olasılıklar düzeltilir)
+    analysis.CALIB, calib_report = karne.calib_table(store)
+    log.info("kalibrasyon: %s", analysis.CALIB or "gerek yok")
     await up.cycle()
     store.prune()
 

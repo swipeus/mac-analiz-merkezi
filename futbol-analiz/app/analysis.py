@@ -544,6 +544,46 @@ def code_label(code, home, away):
     return code
 
 
+def pick_type(code):
+    """Tercih türü (karnede tür bazında isabet ve kalibrasyon için)."""
+    c = code or ""
+    if "&" in c:
+        return "kombine"
+    if c in ("1", "X", "2"):
+        return "MS"
+    if c in ("1X", "X2", "12"):
+        return "çifte şans"
+    if c.startswith("btts"):
+        return "KG"
+    if re.match(r"^[ou]\d", c):
+        return "toplam gol"
+    if re.match(r"^[ha][ou]\d", c):
+        return "takım golü"
+    if re.match(r"^c[ou]\d", c):
+        return "korner"
+    if re.match(r"^cm", c):
+        return "en çok korner"
+    if re.match(r"^k[ha]?[ou]\d", c):
+        return "kart"
+    if re.match(r"^[st][ha]?[ou]\d", c):
+        return "şut"
+    return "diğer"
+
+
+# karneden öğrenilen tür bazında düzeltme çarpanları ({tür: çarpan}); her yayın başında karneden hesaplanır.
+# Yalnızca yeterince veri birikip sapma istatistiksel olarak belirgin olan türlerde dolar.
+CALIB = {}
+
+
+def code_odds(odds, code):
+    """Bir seçeneğin güncel ve ilk görülen (açılış) oranı."""
+    for m in (odds or {}).get("markets") or []:
+        for s in m["selections"]:
+            if s.get("code") == code:
+                return s.get("odds"), s.get("o0")
+    return None, None
+
+
 def make_picks(pr, odds, home, away):
     """En garanti tercih (oran >= 1.30) ve olası sürpriz."""
     sel = []  # (kod, model olasılığı, oran)
@@ -619,6 +659,10 @@ DECAY = 1.0        # her eski maçın ağırlığı bir öncekinin bu katı
 STAT_N = 10        # korner, şut, kart için bakılan son maç sayısı (bu istatistikler daha uzun geçmişle iyileşiyor)
 STAT_DECAY = 0.95
 ABSENT_SCALE = 1.0  # eksik etkisinin gücü
+# takım gücü puanı (Elo): beklenen gol farkının yarısı Elo'dan. 761 maçlık testte (verinin iki yarısında da)
+# oransız 1X2 isabeti belirgin arttı (0.989 -> 0.963); xG'ye dayalı gol farkı tek başına fazla sıkışık kalıyordu
+ELO_W = 0.5
+ELO_SLOPE = 0.85   # 100 Elo puanı ≈ bu kadar gol farkı
 CARD_PAIR = True   # kart beklentisinde rakibin karşısındakilere gördürdüğü kartlar da hesaba katılsın
 
 
@@ -756,6 +800,12 @@ def predict(b, prof_h, prof_a):
                 factors.append(f"{team} eksikleri: {names}. Bu yüzden {' ve '.join(eff)}.")
         lam_h *= imp["home"][0] * imp["away"][1]
         lam_a *= imp["away"][0] * imp["home"][1]
+    # takım gücü puanı (Elo): beklenen gol farkı kısmen Elo'dan gelir, toplam gol beklentisi değişmez
+    elo_r = b.get("elo")
+    if ELO_W and elo_r and None not in elo_r:
+        tot = lam_h + lam_a
+        sup = (1 - ELO_W) * (lam_h - lam_a) + ELO_W * (elo_r[0] + 60 - elo_r[1]) / 100 * ELO_SLOPE
+        lam_h, lam_a = (tot + sup) / 2, (tot - sup) / 2
     lam_h, lam_a = max(0.2, lam_h), max(0.2, lam_a)
     model_lam = (round(lam_h, 2), round(lam_a, 2))
 
@@ -853,6 +903,11 @@ def predict(b, prof_h, prof_a):
                 continue
             # piyasa bu pazarlarda modelden çok daha bilgili: %75 piyasa, %25 model
             pr[c] = 0.25 * p_ + 0.75 * ip if ip is not None else p_
+    if CALIB:
+        for c in list(pr):
+            f_ = CALIB.get(pick_type(c))
+            if f_ and pr[c] is not None:
+                pr[c] = min(0.97, pr[c] * f_)
     safe, surprise = make_picks(pr, odds, H, A)
     score_pick = coherent_score(smat, pr, lam_h, lam_a)
     cs_m = _odds_market(odds, "odds_correct_score")

@@ -12,7 +12,7 @@ import time
 from collections import Counter
 from datetime import datetime, timezone
 
-from .analysis import SAFE_CODES, STAT_CODE, TOTAL_CODE, code_label, early_hit, pick_hit, stat_ok
+from .analysis import SAFE_CODES, STAT_CODE, TOTAL_CODE, code_label, code_odds, early_hit, pick_hit, stat_ok
 
 STAKE = 1000           # kupon başına
 PER_THEME = 3          # her temada günlük kupon sayısı
@@ -245,6 +245,8 @@ def _update_leg(store, l):
     hs, as_ = body.get("home", {}).get("score"), body.get("away", {}).get("score")
     if hs is None or as_ is None or not st.get("started"):
         return False
+    if "close" not in l:  # maç başladı: tercihin kapanış oranı (maç öncesi son oran)
+        l["close"] = code_odds(body.get("odds"), l["code"])[0]
     if not st.get("finished"):
         if time.time() - b["ts"] > 3 * 3600:  # paket bayatsa "canlı" gösterme
             return False

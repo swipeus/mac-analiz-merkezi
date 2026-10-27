@@ -1229,6 +1229,19 @@ function calibrationHtml(rows) {
       <span class="cv">%${act} <small class="${diff >= 0 ? "pos" : "neg"}">${diff >= 0 ? "+" : ""}${diff}</small></span></div>`; }).join("")}
     <p class="muted">Çubuk gerçekleşen isabet oranı, ince çizgi modelin o tercihlere verdiği ortalama olasılık. Çubuk çizgiyi geçiyorsa model temkinli, geride kalıyorsa iyimser.</p>`;
 }
+// kapanış oranı farkı: tercihin oranı maç başlayana kadar düştüyse (piyasa da o tarafa geldiyse) olumlu.
+// pairs: [alınan/ilk oran, kapanış oranı]. Kazanma oranından çok daha hızlı sinyal verir.
+function clvHtml(pairs, what) {
+  const ok = pairs.filter(([a, c]) => a && c);
+  if (ok.length < 3) return `<h3>Kapanış oranı farkı</h3><p class="muted">Yeni eklendi; ${what} biriktikçe burada görünecek (en az 3).</p>`;
+  const diffs = ok.map(([a, c]) => a / c - 1);
+  const avg = diffs.reduce((x, y) => x + y, 0) / diffs.length * 100;
+  const beat = diffs.filter((d) => d > 0.001).length, worse = diffs.filter((d) => d < -0.001).length;
+  return `<h3>Kapanış oranı farkı <span class="muted">· ${ok.length} ${what}</span></h3>
+    <div class="srow"><div class="sl">Ortalama <span class="muted">· ${beat} lehimize, ${worse} aleyhimize, ${ok.length - beat - worse} aynı</span></div>
+      <div class="sv"><span class="kpl ${avg >= 0 ? "pos" : "neg"}">${avg >= 0 ? "+" : "−"}%${nf(Math.abs(avg), 1)}</span></div></div>
+    <p class="muted">Tercihin oranı maç başlayana kadar düştüyse piyasa da bizim tarafa gelmiş demektir (lehimize). Uzun vadede ortalamanın artıda olması modelin doğru tarafı bulduğunun en hızlı göstergesidir.</p>`;
+}
 // lige göre isabet ve kâr/zarar (tek tercihler)
 function byLeagueHtml(rows) {
   const g = {};
@@ -1269,7 +1282,8 @@ function singlesKarneHtml(s) {
       <div class="sl">${esc(lab)} <span class="muted">· ${t.h}/${t.n}</span></div><div class="sv">%${v}</div>
       <div class="spct"><span style="width:${Math.max(3, v)}%;background:${pctColor(v)}"></span><b>${v}</b></div></div>`; }).join("")}` : "";
     const decided = rows.filter(pickDecided);
-    extra += byLeagueHtml(decided) + calibrationHtml(decided);
+    extra += byLeagueHtml(decided) + calibrationHtml(decided)
+      + clvHtml(rows.filter((r) => r.state === "done" || r.live).map((r) => [r.pick.o0, r.pick.odds]), "tercih");
   }
   const note = pick
     ? `Model her maç için başlama düdüğünden önceki son "en garanti tercihini" kaydeder. Tercihler maç sonucu, çifte şans, karşılıklı gol, gol alt/üst, takım golleri, toplam korner, en çok korner, kırmızı kart ve kombine pazarlardan; oranı 1.30 ve üstü olanlar arasından seçilir. Her tercihe 250 ₺: tutarsa 250 × (oran − 1) kazanç, tutmazsa 250 ₺ kayıp; iade olanlar sayılmaz.`
@@ -1321,6 +1335,7 @@ const inWeek = (k) => { const [a, b] = weekRange(karneWeek); return k >= a && k 
 function couponKarneHtml(s) {
   const top = `<div class="card" style="--c:#e3b341">${statKpis(s, COUPON_STAKE, "kupon")}
     ${themeStats()}
+    ${clvHtml(karneCoupons.flatMap((c) => c.legs.filter((l) => !l.void).map((l) => [l.odds, l.close])), "kupon ayağı")}
     <p class="muted">Günün kombineleri: model her gün beş temada üçer kupon hazırlar (2-5 maç). Kupondaki ilk maç başlayınca o günün kuponları kilitlenir. Her kupona 1.000 ₺: bütün tercihler tutarsa 1.000 × toplam oran döner, biri bile tutmazsa 1.000 ₺ kayıp. İade olan ya da ertelenen maç kupondan düşer (oranı 1 sayılır). Tutarlar geçmiş kuponlar için de bu tutarla hesaplanır.</p></div>`;
   const byDay = new Map();
   karneCoupons.forEach((c) => { if (!byDay.has(c.date)) byDay.set(c.date, []); byDay.get(c.date).push(c); });
@@ -2113,6 +2128,14 @@ const RELEASES = [
       ["📊", "Daha fazla pazar", "Yarılar, handikaplar, korner/kart/şut/ofsayt/faul toplamları, takım bazlı alt/üst ve dakika aralıkları."],
       ["🔍", "Oranlarda arama", "Oranlar sekmesinde oyuncu veya pazar adı yaz, sadece o seçenekler kalsın; gruplar açılıp kapanır."],
       ["🔕", "Sessiz bildirimler", "Bildirimler artık ekranı kaplamaz; yalnızca sarı çana dokununca görünür."],
+    ],
+  },
+  {
+    id: 13, date: "27 Ekim 2026", title: "Yeni: Takım gücü puanı ve kapanış oranı takibi", sub: "Bu güncellemede gelenler",
+    items: [
+      ["🏆", "Takım gücü puanı (Elo)", "Model artık takımların son iki sezon ve bu sezondaki bütün sonuçlarından (Avrupa kupaları dahil) çıkan güç puanını da kullanıyor; maç sonucu tahminleri belirgin şekilde iyileşti."],
+      ["📉", "Kapanış oranı farkı", "Karnede yeni ölçü: tercihlerimizin oranı maç başlayana kadar düştü mü? Artıda olması modelin doğru tarafı bulduğunu gösterir."],
+      ["🎯", "Kendini düzelten model", "Bir tercih türü karnede sürekli beklenenden az ya da çok tutarsa model o türün olasılıklarını kendiliğinden düzeltir."],
     ],
   },
   {

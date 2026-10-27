@@ -6,7 +6,9 @@ skor tahminleri (her birine 10 ₺, skorun oranıyla). KARNE_START öncesindeki 
 from datetime import datetime
 
 from . import kupon
-from .analysis import early_hit, pick_hit
+import math
+
+from .analysis import code_odds, early_hit, pick_hit, pick_type
 from .config import TR_TZ
 
 KARNE_START = "2026-10-22"  # yeni oran sağlayıcısı ve genişletilmiş modelle karne bu günden başladı
@@ -48,7 +50,8 @@ def record(store, b):
             "id": mid, "utc": b.get("utc"), "league_id": b.get("league_id"), "league": b.get("league_name"),
             "home": {"id": b["home"]["id"], "name": b["home"]["name"]},
             "away": {"id": b["away"]["id"], "name": b["away"]["name"]},
-            "pick": pr["best_pick"], "score": pr["score_pick"],
+            # o0: tercihin ilk görülen oranı; maç başlayınca kalan "odds" kapanış oranıdır (kapanış farkı için)
+            "pick": {**pr["best_pick"], "o0": code_odds(b.get("odds"), pr["best_pick"]["code"])[1]}, "score": pr["score_pick"],
             "p": {"1": pr.get("p_home"), "X": pr.get("p_draw"), "2": pr.get("p_away")}, "ms": pr.get("pick"),
             "state": "pending",
         })
@@ -82,6 +85,38 @@ def record(store, b):
             "ms_hit": old.get("ms") == ms_real,
         })
         store.pred_put(mid, old)
+
+
+CALIB_MIN_N = 40
+
+
+def calib_table(store):
+    """Tür bazında kalibrasyon: model ortalama %p dedi, gerçekte %h tuttu. En az 40 sonuçlanmış tercih olan ve
+    sapması iki standart hatayı aşan türlerde olasılık çarpanı (0.85-1.10 arası, yarı yolda) döner."""
+    items = []
+    for r in store.pred_all():
+        if tr_day(r.get("utc")) >= KARNE_START and r.get("state") == "done" and r.get("pick_hit") is not None:
+            items.append((r["pick"]["code"], r["pick"]["p"], bool(r["pick_hit"])))
+    for d in store.coupon_all():
+        if d["date"] >= KARNE_START:
+            for c in d.get("coupons") or []:
+                for l in c.get("legs") or []:
+                    if l.get("hit") is not None and not l.get("void"):
+                        items.append((l["code"], l["p"], bool(l["hit"])))
+    by = {}
+    for code, p, hit in items:
+        by.setdefault(pick_type(code), []).append((p, hit))
+    out, report = {}, {}
+    for t, xs in by.items():
+        n = len(xs)
+        mp = sum(p for p, _ in xs) / n
+        hr = sum(h for _, h in xs) / n
+        se = math.sqrt(max(mp * (1 - mp), 0.01) / n)
+        report[t] = {"n": n, "model": round(mp, 3), "hit": round(hr, 3)}
+        if n >= CALIB_MIN_N and abs(hr - mp) > 2 * se:
+            out[t] = round(min(1.10, max(0.85, 1 + 0.5 * (hr / mp - 1))), 3)
+            report[t]["factor"] = out[t]
+    return out, report
 
 
 def seed(store, data):

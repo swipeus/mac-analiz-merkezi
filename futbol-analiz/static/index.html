@@ -29,16 +29,6 @@
         <circle cx="3.9" cy="7" r="1" fill="#8b98a8"/><circle cx="3.9" cy="12" r="1" fill="#8b98a8"/><circle cx="3.9" cy="17" r="1" fill="#8b98a8"/>
       </svg>
     </a>
-    <button id="botBtn" class="bot-btn" aria-label="Model asistanı" title="Modele soru sor">
-      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-        <line x1="12" y1="2.6" x2="12" y2="5.2" stroke="#a371f7" stroke-width="1.6"/><circle cx="12" cy="2.4" r="1.4" fill="#d2a8ff"/>
-        <rect x="4" y="5.5" width="16" height="12.5" rx="4" fill="#a371f7"/>
-        <rect x="6.3" y="8.2" width="11.4" height="6.6" rx="3.2" fill="#1b1340"/>
-        <circle cx="9.4" cy="11.5" r="1.45" fill="#79f2c0"/><circle cx="14.6" cy="11.5" r="1.45" fill="#79f2c0"/>
-        <rect x="2" y="9.5" width="2" height="4.5" rx="1" fill="#8957e5"/><rect x="20" y="9.5" width="2" height="4.5" rx="1" fill="#8957e5"/>
-        <path d="M8.5 18v2.2h7V18" fill="#8957e5"/>
-      </svg>
-    </button>
     <a id="movesBtn" class="bot-btn" href="#/oranlar" aria-label="Oran hareketleri" title="Oran hareketleri">
       <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M3 17l5-5 4 3 7-8" fill="none" stroke="#39c5cf" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 7h4v4" fill="none" stroke="#39c5cf" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 21h18" stroke="#8b98a8" stroke-width="1.6" stroke-linecap="round"/></svg>
     </a>
@@ -91,27 +81,12 @@
   <div class="sheet-foot"><button id="filterDone" class="primary">Tamam</button></div>
 </div>
 <main id="view"></main>
-<div id="chatBackdrop" class="backdrop hidden"></div>
-<div id="chat" class="chat hidden" role="dialog" aria-modal="true" aria-label="Model asistanı">
-  <div class="chat-head">
-    <span class="chat-av">🤖</span>
-    <div><b>Model asistanı</b><small>Sitedeki verilerle cevap verir · tahminler kesinlik içermez</small></div>
-    <button id="chatClose" class="x" aria-label="Kapat">✕</button>
-  </div>
-  <div id="chatLog" class="chat-log" aria-live="polite"></div>
-  <div id="chatChips" class="chat-chips"></div>
-  <form id="chatForm" class="chat-form">
-    <input id="chatInput" type="text" autocomplete="off" placeholder="Örn: Bugün Fenerbahçe maçı ne olur?" aria-label="Sorunu yaz">
-    <button type="submit" class="primary" aria-label="Gönder">➤</button>
-  </form>
-</div>
 <div id="toasts" class="toasts"></div>
 <nav id="bottomNav" class="bnav" aria-label="Ana menü">
   <a href="#/" data-nav="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span>Maçlar</span></a>
   <a href="#/kombine" data-nav="kombine"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l9 5-9 5-9-5z M3 12l9 5 9-5 M3 17l9 5 9-5"/></svg><span>Kombineler</span></a>
   <a href="#/karne" data-nav="karne"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5z M9 3v18 M12 8h4 M12 12h4"/></svg><span>Karne</span></a>
   <a href="#/oranlar" data-nav="oranlar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8 M15 7h6v6"/></svg><span>Oranlar</span></a>
-  <button type="button" data-nav="bot"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v3 M5 7h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z M9 12h.01 M15 12h.01 M9 21h6"/></svg><span>Asistan</span></button>
 </nav>
 <div id="newsModal" class="wn-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="wnTitle">
   <div class="wn">
@@ -122,7 +97,6 @@
 </div>
 <footer class="foot"><span id="updatedAt"></span> Veriler: FotMob (sağlayıcı lige göre değişir) · Haberler: Google News, FotMob · Tahminler istatistiksel modeldir, kesinlik içermez. · <span class="love">Ece'yi çok seviyorum ❤️</span></footer>
 <script src="/static/app.js"></script>
-<script src="/static/asistan.js"></script>
 <script src="/static/canli.js"></script>
 </body>
 </html>

@@ -1180,97 +1180,188 @@ def _table_line(team, t, league_id):
         return f"{team} şampiyonluk yarışında kritik konumda: {pos}. sırada, liderin {gap} puan gerisinde. Puan kaybı istemeyecektir."
     if zone == "küme düşme":
         safe = t.get("safe_pts")
-        need = f" Kurtuluş hattıyla arası {safe - pts} puan." if safe is not None and safe >= pts else ""
+        need = (f" Kurtuluş hattıyla arası {safe - pts} puan." if safe is not None and safe > pts
+                else " Kurtuluş hattındaki takımla puanı eşit." if safe == pts else "")
         return f"{team} {pos}. sırada, düşme hattında.{need} Her puan hayati önemde."
     if t.get("first_rel_pts") is not None and pts - t["first_rel_pts"] <= 3 and pos > of / 2:
-        return f"{team} düşme hattının sadece {pts - t['first_rel_pts']} puan üzerinde ({pos}. sıra); alt sıralardan uzaklaşmak isteyecek."
+        d_ = pts - t["first_rel_pts"]
+        return (f"{team} düşme hattının sadece {d_} puan üzerinde ({pos}. sıra); alt sıralardan uzaklaşmak isteyecek." if d_ > 0
+                else f"{team} {pos}. sırada, düşme hattındaki takımla puanı eşit; kaybederse aşağı düşebilir.")
     if zone:
         return f"{team} {pos}. sırada, {zone} hattında yer alıyor; bu konumu korumak isteyecek."
     return f"{team} {of} takımlı ligde {pos}. sırada ({pts} puan)."
 
 
+def _var(seed, *options):
+    """Aynı anlamdaki cümle kalıplarından maça göre birini seçer (her maçta aynı kalıp tekrar etmesin)."""
+    return options[seed % len(options)]
+
+
+def _form_line(team, rec, seed):
+    """Son maçlardaki sonuçlar ile üretilen/yenen xG karşılaştırması: form gerçek mi, şans mı?"""
+    rows = [r for r in (rec or {}).get("rows") or [] if r.get("for") and r["for"].get("xg") is not None]
+    if len(rows) < 4:
+        return None
+    gf, ga = sum(r["gf"] or 0 for r in rows), sum(r["ga"] or 0 for r in rows)
+    xf, xa = sum(r["for"]["xg"] for r in rows), sum((r.get("against") or {}).get("xg") or 0 for r in rows)
+    pts = sum({"G": 3, "B": 1}.get(r["result"], 0) for r in rows)
+    n = len(rows)
+    luck = (gf - ga) - (xf - xa)
+    base = f"{team} son {n} maçta {pts} puan topladı (gol {gf}-{ga}, xG {f(xf, 1)}-{f(xa, 1)})"
+    if luck >= 3:
+        return base + _var(seed, "; skorlar oyunun önünde gidiyor, bu verimlilik her maç sürmeyebilir.",
+                           "; ürettiğinden fazlasını skora çeviriyor, şans faktörü de payını almış görünüyor.")
+    if luck <= -3:
+        return base + _var(seed, "; oyun skordan iyi, sonuçlar yakında düzelebilir.",
+                           "; pozisyon üretiyor ama karşılığını alamıyor, bu tablo genelde uzun sürmez.")
+    if xf - xa >= 3:
+        return base + _var(seed, "; rakiplerine açık ara üstünlük kuruyor, form gerçek.", "; üstünlüğü istatistiklerle de sağlam.")
+    if xf - xa <= -3:
+        return base + _var(seed, "; oyunda da geride kalıyor, sıkıntılı bir dönem.", "; rakiplerine pozisyon üstünlüğü kaptırıyor.")
+    return base + "."
+
+
 def commentary(b, pr, prof_h, prof_a):
-    """Kaynaklara ve oranlara dayalı maç yorumu: paragraflar ve öne çıkan etiketler."""
+    """Maç yorumu: güç dengesi, form ile oyunun gerçeği, hücum-savunma eşleşmesi, eksikler, maçın temposu,
+    piyasa ile modelin görüşü ve skorun gerekçesi. Cümle kalıpları maça göre değişir."""
     H, A = b["home"]["name"], b["away"]["name"]
     lid = b.get("league_id")
+    seed = int(b.get("id") or 0)
     paras, tags = [], []
-    # 1) bağlam: lig/kupa durumu
+    lp = pr.get("lam_parts") or {}
+    elo_r = b.get("elo") or [None, None]
+
+    # 1) güç dengesi ve puan durumu
     ctx = []
+    if None not in elo_r:
+        gap = elo_r[0] - elo_r[1]
+        strong, weak = (H, A) if gap > 0 else (A, H)
+        if abs(gap) >= 200:
+            ctx.append(_var(seed, f"Kağıt üstünde büyük bir güç farkı var: {strong}, son iki sezonun sonuçlarına göre {weak} takımından belirgin şekilde güçlü.",
+                            f"İki takım aynı seviyede değil; uzun dönem güç puanında {strong} açık ara önde.",
+                            f"Bu eşleşmede kalite farkı {strong} lehine çok net."))
+        elif abs(gap) >= 80:
+            ctx.append(_var(seed, f"Güç dengesi {strong} lehine; uzun dönem sonuçlarına göre bir adım önde.",
+                            f"{strong} kağıt üstünde daha güçlü taraf, ama fark ezici değil.",
+                            f"Uzun dönem performansı {strong} takımını hafif favori yapıyor."))
+        else:
+            ctx.append(_var(seed, "İki takım uzun dönem güç puanında birbirine çok yakın; kalite olarak denk bir eşleşme.",
+                            "Güç puanları neredeyse aynı, maçın kaderini günün performansı belirleyecek.",
+                            "Denk iki takım karşı karşıya; ev sahipliği avantajı bu yüzden daha da önemli."))
     if lid in EURO_CUPS:
-        ctx.append(f"Bu bir {EURO_CUPS[lid]} maçı; Avrupa'da alınacak her puan hem tur hem de ülke puanı için önemli.")
+        ctx.append(f"Maç {EURO_CUPS[lid]} kapsamında oynanıyor.")
     for team, key in ((H, "table_home"), (A, "table_away")):
         line = _table_line(team, (b.get("season") or {}).get(key), lid)
         if line:
             ctx.append(line)
-    if ctx:
-        paras.append(" ".join(ctx))
-    # 2) seriler
+    paras.append(" ".join(ctx))
+
+    # 2) form: sonuçlar ve oyunun gerçeği
+    fl = [x for x in (_form_line(H, b["recent"]["home"], seed), _form_line(A, b["recent"]["away"], seed + 1)) if x]
     st = b.get("streaks") or {}
-    sl = []
+    streak_seen = set()
     for team, k in ((H, "home"), (A, "away")):
         lines, t = _streak_lines(team, st.get(k))
-        sl += lines[:2]
         tags += t
-    if sl:
-        paras.append(" ".join(sl))
-    # 3) eksikler ve rekabet geçmişi
-    ab = []
-    lu = b.get("lineup") or {}
+        if lines:
+            tail = lines[0].split(";", 1)[-1]
+            if tail in streak_seen:  # iki takımın aynı seri cümlesi: ikincisinde yalnızca olgu
+                lines[0] = lines[0].split(";", 1)[0] + "."
+            streak_seen.add(tail)
+            fl.append(lines[0])
+    if fl:
+        paras.append(" ".join(fl))
+
+    # 3) hücum-savunma eşleşmesi
+    att, conc = lp.get("att") or [None, None], lp.get("conc") or [None, None]
+    mm = []
+    if None not in att and None not in conc:
+        for k_, (atk, dfn, a_, c_) in enumerate(((H, A, att[0], conc[0]), (A, H, att[1], conc[1]))):
+            if a_ >= 1.6 and c_ >= 1.4:
+                mm.append(_var(seed + k_, f"{atk} hücumu (maç başı {f(a_, 1)} xG) {dfn} savunmasının zaafına (maç başı {f(c_, 1)} xG yiyor) denk geliyor; bu tarafta gol beklentisi yüksek.",
+                               f"Maçın kilit eşleşmesi {atk} hücumu ile {dfn} savunması: biri bol pozisyon üretiyor ({f(a_, 1)} xG), diğeri bol pozisyon veriyor ({f(c_, 1)} xG)."))
+            elif a_ <= 1.0 and c_ <= 1.0:
+                mm.append(f"{atk} az pozisyon üretiyor ({f(a_, 1)} xG) ve {dfn} savunması sağlam ({f(c_, 1)} xG yiyor); {atk} cephesinde gol zor gelebilir.")
+            elif a_ >= 1.6 and c_ <= 1.0:
+                mm.append(f"Güçlü hücum ile güçlü savunma karşı karşıya: {atk} maç başı {f(a_, 1)} xG üretiyor, {dfn} ise sadece {f(c_, 1)} xG veriyor.")
+            elif c_ >= 2.0:
+                mm.append(f"{dfn} savunması son maçlarda çok pozisyon veriyor (maç başı {f(c_, 1)} xG); {atk} hücumu ({f(a_, 1)} xG) üretken olmasa da bu maçta fırsat bulabilir.")
+        if not mm:
+            mm.append(f"Hücum-savunma dengesinde uç bir eşleşme yok: {H} {f(att[0], 1)} xG üretip {f(conc[1], 1)} yiyor, "
+                      f"{A} {f(att[1], 1)} üretip {f(conc[0], 1)} yiyor (son maçlar, rakip gücüne göre düzeltilmiş).")
+    if mm:
+        paras.append(" ".join(mm))
+
+    # 4) eksikler: yalnızca son maçlarda as oynayanlar
     miss = []
-    for team, side in ((H, "home"), (A, "away")):
-        imp = [p["name"] for p in (lu.get(side) or {}).get("unavailable", []) if (p.get("rating") or 0) >= 6.9 or (p.get("value") or 0) >= 15_000_000]
-        if imp:
-            miss.append(f"{team} cephesinde {', '.join(imp[:3])} {'gibi önemli isimler' if len(imp) > 1 else 'önemli bir eksik olarak'}")
-    if miss:  # iki takımın eksikleri tek cümlede, yorum cümlesi bir kez
-        ab.append(f"{'; '.join(miss)} forma giyemeyecek; bu eksikler planı ve kadro derinliğini etkileyecek.")
-    h2h = (b.get("h2h") or {}).get("summary")
-    if h2h and sum(h2h) >= 3:
-        if h2h[0] - h2h[2] >= 3:
-            ab.append(f"Rekabet geçmişinde {H} üstün ({h2h[0]} galibiyet, {h2h[1]} beraberlik, {h2h[2]} mağlubiyet); psikolojik avantaj ev sahibinde.")
-        elif h2h[2] - h2h[0] >= 3:
-            ab.append(f"Rekabet geçmişinde {A} üstün ({h2h[2]} galibiyet, {h2h[1]} beraberlik, {h2h[0]} mağlubiyet); deplasman ekibi bu maça moralli çıkacak.")
-    if ab:
-        paras.append(" ".join(ab))
-    # 4) bahis piyasası ve modelin görüşü
-    odds = b.get("odds")
-    mw = _odds_market(odds, "who_will_win")
-    mk = []
+    for team, prof in ((H, prof_h), (A, prof_a)):
+        names = [x.split(": ", 1)[1].split(" (")[0] for x in prof["sections"]["absent"] if x.startswith("Önemli eksik: ")]
+        if names:
+            miss.append(f"{team} tarafında {', '.join(names[:3])}")
+    if miss:
+        paras.append(_var(seed, f"As kadrodan eksikler: {'; '.join(miss)}.",
+                          f"Son haftalarda düzenli oynayan isimlerden {'; '.join(miss)} bu maçta yok.",
+                          f"Kadroda boşluk var: {'; '.join(miss)} forma giyemeyecek."))
+
+    # 5) maçın temposu: gol, korner, kart, dinlenme
+    tempo = []
+    tot = pr["lam_home"] + pr["lam_away"]
+    if pr.get("p_over35", 0) >= 0.45 or tot >= 3.3:
+        tempo.append(f"Beklenen toplam gol {f(tot, 1)}; 3.5 üst ihtimali {pct(pr.get('p_over35') or 0)} ile bol gollü bir maç bekleniyor.")
+    elif pr["over25"] <= 0.42:
+        tempo.append(f"Beklenen toplam gol {f(tot, 1)}; kontrollü, az gollü bir maç bekleniyor (2.5 alt {pct(1 - pr['over25'])}).")
+    else:
+        tempo.append(f"Beklenen toplam gol {f(tot, 1)} (2.5 üst {pct(pr['over25'])}, karşılıklı gol {pct(pr['btts'])}).")
+    cor, crd = pr.get("corners") or {}, pr.get("cards") or {}
+    if cor.get("total"):
+        tempo.append(f"Korner beklentisi {f(cor['total'], 1)}" + (f", kart beklentisi {f(crd['total'], 1)}." if crd.get("total") else "."))
+    rs = b.get("referee_stats") or {}
+    if rs.get("matches", 0) >= 4 and rs.get("yellow_pm") and rs.get("yellow_avg") and abs(rs["yellow_pm"] / rs["yellow_avg"] - 1) >= 0.15:
+        tempo.append(f"Hakem {b.get('referee')} maç başı {f(rs['yellow_pm'], 1)} sarı kart gösteriyor (lig ortalaması {f(rs['yellow_avg'], 1)}).")
+    rest = pr.get("rest") or (None, None)
+    if None not in rest and abs(rest[0] - rest[1]) >= 2 and min(rest) <= 3.5:
+        tired = H if rest[0] < rest[1] else A
+        tempo.append(f"{tired} {round(min(rest))} gün dinlenerek çıkıyor, rakibi {round(max(rest))} gün.")
+    paras.append(" ".join(tempo))
+
+    # 6) piyasa ile modelin karşılaştırması
+    mw = _odds_market(b.get("odds"), "who_will_win")
     if mw and len(mw["selections"]) == 3:
         from .odds import implied
-        imp = dict(zip([s.get("code") for s in mw["selections"]], implied(mw)))
-        od = {s.get("code"): s["odds"] for s in mw["selections"]}
+        imp = dict(zip([s_.get("code") for s_ in mw["selections"]], implied(mw)))
+        od = {s_.get("code"): s_["odds"] for s_ in mw["selections"]}
         if all(k in imp for k in ("1", "X", "2")):
             fav = "1" if imp["1"] >= imp["2"] else "2"
-            ft, other = (H, A) if fav == "1" else (A, H)
-            if abs(imp["1"] - imp["2"]) < 0.08:
-                mk.append(f"Bahis piyasası dengeli bir maç bekliyor (1: {f(od['1'], 2)}, X: {f(od['X'], 2)}, 2: {f(od['2'], 2)}).")
-            else:
-                mk.append(f"Bahis piyasası favori olarak {ft} takımını görüyor (oran {f(od[fav], 2)}, kazanma ihtimali {pct(imp[fav])}).")
-                mp = pr["p_home"] if fav == "1" else pr["p_away"]
-                if imp[fav] - mp >= 0.07:
-                    mk.append(f"Model ise daha temkinli ({pct(mp)}); {other} için sürpriz ihtimali göz ardı edilmemeli.")
-                elif mp - imp[fav] >= 0.07:
-                    mk.append(f"Model favoriye piyasadan da fazla şans veriyor ({pct(mp)}).")
-    ou = _odds_market(odds, "odds_goals_over_under", 2.5)
-    if ou and len(ou["selections"]) == 2:
-        from .odds import implied
-        io = dict(zip([s.get("code") for s in ou["selections"]], implied(ou)))
-        if io.get("o2.5", 0) >= 0.6:
-            mk.append(f"Oranlar gollü bir maça işaret ediyor (2.5 üst ihtimali {pct(io['o2.5'])}).")
-        elif io.get("u2.5", 0) >= 0.55:
-            mk.append(f"Oranlar kontrollü, az gollü bir maç bekliyor (2.5 alt ihtimali {pct(io['u2.5'])}).")
-    if mk:
-        paras.append(" ".join(mk))
-    # 5) sonuç
+            ft = H if fav == "1" else A
+            mp = pr["p_home"] if fav == "1" else pr["p_away"]
+            mv = next((s_ for s_ in mw["selections"] if s_.get("code") == fav and s_.get("o0") and abs(s_["o0"] - s_["odds"]) >= 0.05), None)
+            txt = (f"Oranlar dengeli (1: {f(od['1'], 2)}, X: {f(od['X'], 2)}, 2: {f(od['2'], 2)})." if abs(imp["1"] - imp["2"]) < 0.08
+                   else f"Bahis piyasasının favorisi {ft} (oran {f(od[fav], 2)}, %{round(imp[fav] * 100)}).")
+            if mv:
+                txt += (f" Favorinin oranı açılışta {f(mv['o0'], 2)} iken şimdi {f(mv['odds'], 2)}; "
+                        + ("para bu tarafa geliyor." if mv["odds"] < mv["o0"] else "piyasa favoriye eskisi kadar güvenmiyor."))
+            if mp - imp[fav] >= 0.04:
+                txt += f" Model favoriye piyasadan biraz daha fazla şans veriyor (%{round(mp * 100)})."
+            elif imp[fav] - mp >= 0.04:
+                txt += f" Model piyasadan daha temkinli (%{round(mp * 100)})."
+            paras.append(txt)
+
+    # 7) sonuç ve skorun gerekçesi
     sp, bp, su = pr.get("score_pick") or {}, pr.get("best_pick"), pr.get("surprise")
-    out = {"1": f"{H} galibiyeti", "X": "beraberlik", "2": f"{A} galibiyeti"}[pr["pick"]]
-    concl = f"Genel beklenti: {out}. Skor tahmini {sp.get('score', '—')}."
+    try:
+        si, sj = map(int, sp.get("score", "").split("-"))
+        so = "1" if si > sj else ("X" if si == sj else "2")
+    except ValueError:
+        so = pr["pick"]
+    out = {"1": f"{H} galibiyeti", "X": "dengeli bir maç, beraberlik ön planda", "2": f"{A} galibiyeti"}[so]
+    concl = (f"Genel beklenti {out}. Beklenen goller {H} {f(pr['lam_home'], 1)}, {A} {f(pr['lam_away'], 1)}; "
+             f"buna en uygun skor {sp.get('score', '—')}.")
     if bp:
         concl += f" Modelin en güvendiği tercih {bp['label']}" + (f" (oran {f(bp['odds'], 2)})." if bp.get("odds") else ".")
     if su:
-        concl += f" Sürpriz arayanlar için: {su['label']}" + (f" (oran {f(su['odds'], 2)})." if su.get("odds") else ".")
+        concl += f" Sürpriz için: {su['label']}" + (f" (oran {f(su['odds'], 2)})." if su.get("odds") else ".")
     paras.append(concl)
-    return {"paragraphs": paras, "tags": tags[:6]}
+    return {"paragraphs": [p_ for p_ in paras if p_], "tags": tags[:6]}
 
 
 def score_why(pr, H, A):

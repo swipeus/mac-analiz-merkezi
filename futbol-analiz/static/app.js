@@ -2092,11 +2092,8 @@ const RELEASES = [
     ],
   },
   {
-    id: 5, date: "20 Ekim 2026", title: "Yeni: Model asistanı", sub: "Bu güncellemede gelenler",
+    id: 5, date: "20 Ekim 2026", title: "Yeni: Takvim", sub: "Bu güncellemede gelenler",
     items: [
-      ["🤖", "Model asistanı", "Sağ üstteki robota dokun ve sor: \"Bugün Fenerbahçe maçı ne olur?\" Sitedeki analiz, oran ve tahminlerle cevap verir; ne oynayacağını ve riskini söyler."],
-      ["🎟️", "Garanti tercihler ve kupon", "\"Günün en garanti tercihleri\" ya da \"kupon\" yaz: en güvenilen tercihler, toplam oran ve tutma ihtimali."],
-      ["🏃", "Oyuncu soruları", "\"Salah kaç gol attı?\" gibi sorulara oyuncu istatistikleriyle cevap."],
       ["📅", "Takvim simgesi", "Tarih çubuğu kalktı; Filtre butonunun yanındaki takvimden gün değiştirebilirsin."],
     ],
   },
@@ -2128,6 +2125,14 @@ const RELEASES = [
       ["📊", "Daha fazla pazar", "Yarılar, handikaplar, korner/kart/şut/ofsayt/faul toplamları, takım bazlı alt/üst ve dakika aralıkları."],
       ["🔍", "Oranlarda arama", "Oranlar sekmesinde oyuncu veya pazar adı yaz, sadece o seçenekler kalsın; gruplar açılıp kapanır."],
       ["🔕", "Sessiz bildirimler", "Bildirimler artık ekranı kaplamaz; yalnızca sarı çana dokununca görünür."],
+    ],
+  },
+  {
+    id: 14, date: "27 Ekim 2026", title: "Yeni: Maça özel yorumlar ve skor tahmini", sub: "Bu güncellemede gelenler",
+    items: [
+      ["🎯", "Daha tutarlı skor tahmini", "Skor, iki takımın beklenen gollerinden (güç puanı, rakibe göre xG, yenen goller, oranlar) kuruluyor ve alt/üst olasılıklarıyla çelişmiyor; maç özetinde skorun dayanağı yazıyor."],
+      ["🗣️", "Yeni maç yorumları", "Her maçın yorumu artık kendine özgü: güç dengesi, formun gerçek mi şans mı olduğu (gol ve xG karşılaştırması), hücum-savunma eşleşmesi, as kadrodan eksikler, maçın temposu ve skorun gerekçesi."],
+      ["🧹", "Asistan kaldırıldı", "Sohbet asistanı kaldırıldı; aynı bilgiler maç sayfalarında ve yorumlarda."],
     ],
   },
   {
@@ -2231,7 +2236,6 @@ $("#prevDay").onclick = () => shiftDay(-1);
 $("#nextDay").onclick = () => shiftDay(1);
 $("#today").onclick = () => setDate(todayStr());
 // bildirim zili kaldırıldı (yerine oran hareketleri); olay akışı arka planda tutulur
-document.querySelector('#bottomNav [data-nav="bot"]').onclick = () => $("#botBtn").click();
 updateShareCount();
 window.addEventListener("hashchange", () => { if (ready) route(); });
 // liste görünümünü 60 sn'de bir sessizce tazele (canlı skorlar için)

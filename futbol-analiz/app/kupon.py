@@ -1,7 +1,7 @@
-"""Günün kombineleri: model her gün beş temada (Banko, En garantiler, Gol şöleni, Kornerler, Değerli oranlar)
-üçer kupon hazırlar; her kupon 2-5 maç.
+"""Günün kombineleri: model her gün beş temada kupon hazırlar: Banko 5, Gol şöleni, Kornerler, Kartlar ve
+Değerli oranlar üçer kupon (az maçlı günlerde daha az); her kupon 2-5 maç.
 
-Bir kupon içinde her maçtan tek tercih olur. Banko ve En garantiler'deki bir tercih başka hiçbir kupona girmez
+Bir kupon içinde her maçtan tek tercih olur. Banko'daki bir tercih başka hiçbir kupona girmez
 (tek kötü sonuç birden çok kuponu yakmasın); diğer temalarda aynı tercih en fazla iki kuponda olur. Karnede zayıf
 çıkan çifte şans 12 ve en çok korner güvenli kuponlara alınmaz. Az maçlı günlerde tema başına daha az kupon çıkar. Her temanın toplam oran aralığı sabittir. Tercih başına risk düşük tutulur (model olasılığı temaya göre
 en az %52-75). Kuponlar en güncel verilerle yeniden hazırlanır; kuponlardaki maçlardan birinin resmi ilk 11'i açıklanınca
@@ -21,9 +21,9 @@ MAX_USE = 2            # aynı tercih günün en fazla kaç kuponunda yer alır
 
 GOALISH = re.compile(r"^(o1\.5|o2\.5|o3\.5|btts_yes|[ha]o[01]\.5)$")
 CORNER_TOTAL = re.compile(r"^c[ou]\d+(\.\d+)?$")
-SAFE_THEMES = {"banko", "garanti"}
+SAFE_THEMES = {"banko"}
 # kuponun en az tutma ihtimali: altındaki kupon hiç kurulmaz
-MIN_COUPON_P = {"banko": 0.35, "garanti": 0.35, "deger": 0.25}
+MIN_COUPON_P = {"banko": 0.35, "deger": 0.25}
 MIN_COUPON_P_OTHER = 0.20
 
 
@@ -32,20 +32,28 @@ def _weak(code):
     return any(x == "12" or x.startswith("cm") for x in code.split("&"))
 
 
-def per_theme(n_matches):
-    """Az maçlı günlerde tema başına daha az kupon: tercih havuzu dar olunca kuponlar birbirine benzer."""
+def per_theme(n_matches, tk=None):
+    """Az maçlı günlerde tema başına daha az kupon: tercih havuzu dar olunca kuponlar birbirine benzer.
+    Banko yeterli maçlı günlerde 5 kupon (eski Banko + En garantiler birleşti)."""
+    if tk == "banko":
+        return 5 if n_matches >= 10 else 3 if n_matches >= 6 else 1
     return 3 if n_matches >= 8 else 2 if n_matches >= 5 else 1
+
+
+def _card(c):
+    m = STAT_CODE.match(c)
+    return bool(m) and m.group(1) == "k"
 
 # (anahtar, ad, simge, açıklama, seçici, en az olasılık, tek tercih oran aralığı, toplam oran aralığı)
 THEMES = [
-    ("banko", "Banko", "🔒", "Modelin en emin olduğu tercihler; düşük oran, yüksek isabet.",
-     lambda c: not _weak(c), 0.75, (1.25, 1.60), (2.0, 3.5)),
-    ("garanti", "En garantiler", "✅", "Farklı pazarlardan, her biri yüksek olasılıklı ve oranı makul tercihler.",
-     lambda c: not _weak(c), 0.68, (1.25, 1.90), (2.0, 3.5)),
+    ("banko", "Banko", "✅", "Modelin en emin olduğu tercihler, farklı pazarlardan; düşük oran, yüksek isabet.",
+     lambda c: not _weak(c), 0.70, (1.25, 1.80), (2.0, 3.5)),
     ("gol", "Gol şöleni", "⚽", "Gol beklentisi yüksek maçlardan üst, karşılıklı gol ve takım golü tercihleri.",
      lambda c: bool(GOALISH.match(c)) or c == "btts_yes&o2.5", 0.58, (1.25, 2.30), (2.5, 6.0)),
     ("korner", "Kornerler", "🚩", "Toplam korner alt/üst tercihleri.",
      lambda c: bool(CORNER_TOTAL.match(c)), 0.57, (1.25, 2.30), (2.5, 6.0)),
+    ("kart", "Kartlar", "🟨", "Yalnızca kart tercihleri: toplam ve takım kart alt/üstleri (hakemin ve takımların kart eğilimine göre).",
+     _card, 0.58, (1.25, 2.30), (2.0, 6.0)),
     ("deger", "Değerli oranlar", "💎", "Oranı 1.45-2.20 arası, modelin en az %58 ihtimal verdiği ve piyasa kadar ya da daha olası gördüğü tercihler.",
      lambda c: True, 0.58, (1.45, 2.20), (3.0, 6.0)),
 ]
@@ -72,8 +80,8 @@ def family(c):
     if c.startswith(("co", "cu")):  # korner üst ve alt ayrı pazar sayılır (Kornerler kuponu 3-4 maç olabilsin)
         return "korner_" + c[1]
     m = STAT_CODE.match(c)
-    if m:  # kart / şut / isabetli şut
-        return "stat_" + m.group(1)
+    if m:  # kart / şut / isabetli şut; toplam ve takım, alt ve üst ayrı pazar (Kartlar kuponu 3-4 maç olabilsin)
+        return "stat_" + m.group(1) + (m.group(2) or "t") + m.group(3)
     if c.startswith("cm"):
         return "kornerms"
     return c
@@ -164,7 +172,7 @@ def _fill(best, tmin, tmax, min_p):
 
 
 def build(bundles, date):
-    """bundles: o günün başlamamış, oranı olan maç paketleri. Her temada en fazla 3 kupon (veri yetmezse daha az)."""
+    """bundles: o günün başlamamış, oranı olan maç paketleri. Banko 5, diğer temalar en fazla 3 kupon (veri yetmezse daha az)."""
     pool = [(b, _cands(b)) for b in bundles]
     pool = [(b, [x for x in cs if x[2] >= MIN_LEG_ODDS]) for b, cs in pool]
     pool = [(b, cs) for b, cs in pool if cs]
@@ -172,9 +180,12 @@ def build(bundles, date):
     theme_use = {t[0]: Counter() for t in THEMES}
     count = Counter()
     # temalar sırayla birer kupon alır (önce herkesin 1. kuponu): güçlü tercihler tek temada tükenmesin
-    for _round in range(per_theme(len(pool))):
+    quota = {t[0]: per_theme(len(pool), t[0]) for t in THEMES}
+    for _round in range(max(quota.values())):
         for theme in THEMES:
             tk, name, icon, desc = theme[:4]
+            if count[tk] >= quota[tk]:
+                continue
             legs = None
             for relax in (0.0, 0.04, 0.08, 0.12, 0.16):  # yeterli tercih yoksa olasılık eşiği biraz gevşer
                 legs = _one(pool, theme, relax, use, theme_use[tk], seen)

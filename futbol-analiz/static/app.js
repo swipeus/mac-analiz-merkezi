@@ -984,7 +984,7 @@ function drawCoupons() {
   const cs = dayCache.coupons || [];
   const title = new Date(state.date + "T12:00:00").toLocaleDateString("tr-TR", { weekday: "long", day: "numeric", month: "long" });
   const intro = `<div class="card" style="--c:#a371f7">${head("🧩", `Günün kombineleri <span class="muted">· ${cap(title)}</span>`)}
-    <details class="kinfo"><summary>Kuponlar nasıl hazırlanıyor? ›</summary><p class="muted">Model her gün beş temada üçer kupon hazırlar; her kupon 2-5 maçtan oluşur ve her maçtan tek tercih içerir. Banko ve En garantiler'deki bir tercih başka hiçbir kupona girmez; diğer temalarda aynı tercih en fazla iki kuponda olur. Çifte şans 12 ve en çok korner güvenli kuponlara alınmaz. Az maçlı günlerde tema başına daha az kupon çıkar; tutma ihtimali %20'nin altındaki kupon kurulmaz (Banko ve En garantiler'de %35). Toplam oranlar: Banko ve En garantiler 2-3.5, Gol şöleni ve Kornerler 2.5-6, Değerli oranlar 3-10. Kuponlar ilk maç başlayana kadar en güncel verilerle yenilenir, sonra kilitlenir ve karneye kupon başına 1.000 ₺ ile yazılır.</p></details></div>`;
+    <details class="kinfo"><summary>Kuponlar nasıl hazırlanıyor? ›</summary><p class="muted">Model her gün beş temada üçer kupon hazırlar; her kupon 2-5 maçtan oluşur ve her maçtan tek tercih içerir. Banko ve En garantiler'deki bir tercih başka hiçbir kupona girmez; diğer temalarda aynı tercih en fazla iki kuponda olur. Çifte şans 12 ve en çok korner güvenli kuponlara alınmaz. Az maçlı günlerde tema başına daha az kupon çıkar; tutma ihtimali %20'nin altındaki kupon kurulmaz (Banko ve En garantiler'de %35). Toplam oranlar: Banko ve En garantiler 2-3.5, Gol şöleni ve Kornerler 2.5-6, Değerli oranlar 3-6 (tercih başına en az %58, kupon en az %25). Kuponlar ilk maç başlayana kadar en güncel verilerle yenilenir, sonra kilitlenir ve karneye kupon başına 1.000 ₺ ile yazılır.</p></details></div>`;
   const tabs = COUPON_THEMES.concat(cs.some((c) => themeOf(c) === "diger") ? [["diger", "📋", "Diğer"]] : []);
   const hot = hotTheme();
   if (!tabs.some(([k]) => k === couponTab)) couponTab = "banko";
@@ -2039,7 +2039,7 @@ const RELEASES = [
     id: 10, date: "25 Ekim 2026", title: "Yeni: Temalı kombineler", sub: "Bu güncellemede gelenler",
     items: [
       ["🧩", "Beş tema, günde 15 kupon", "Günün kombinelerinde sekmeler: Banko, En garantiler, Gol şöleni, Kornerler, Değerli oranlar; her temada her gün 3 kupon (2-5 maç)."],
-      ["🎚️", "Sabit oran aralıkları", "Banko ve En garantiler 2-3.5, Gol şöleni ve Kornerler 2.5-6, Değerli oranlar 3-10 toplam oran."],
+      ["🎚️", "Sabit oran aralıkları", "Banko ve En garantiler 2-3.5, Gol şöleni ve Kornerler 2.5-6, Değerli oranlar 3-6 (tercih başına en az %58, kupon en az %25) toplam oran."],
       ["🔁", "Daha çeşitli kuponlar", "Aynı tercih günün en fazla iki kuponunda kullanılır."],
       ["💰", "Yeni tutarlar", "Karnede her tek tercihe 250 ₺, her kombineye 1.000 ₺; geçmiş sonuçlar da bu tutarlarla yeniden hesaplandı."],
     ],

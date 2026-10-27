@@ -23,7 +23,7 @@ GOALISH = re.compile(r"^(o1\.5|o2\.5|o3\.5|btts_yes|[ha]o[01]\.5)$")
 CORNER_TOTAL = re.compile(r"^c[ou]\d+(\.\d+)?$")
 SAFE_THEMES = {"banko", "garanti"}
 # kuponun en az tutma ihtimali: altındaki kupon hiç kurulmaz
-MIN_COUPON_P = {"banko": 0.35, "garanti": 0.35}
+MIN_COUPON_P = {"banko": 0.35, "garanti": 0.35, "deger": 0.25}
 MIN_COUPON_P_OTHER = 0.20
 
 
@@ -46,8 +46,8 @@ THEMES = [
      lambda c: bool(GOALISH.match(c)) or c == "btts_yes&o2.5", 0.58, (1.25, 2.30), (2.5, 6.0)),
     ("korner", "Kornerler", "🚩", "Toplam korner alt/üst tercihleri.",
      lambda c: bool(CORNER_TOTAL.match(c)), 0.57, (1.25, 2.30), (2.5, 6.0)),
-    ("deger", "Değerli oranlar", "💎", "Oranı 1.45 üstü olup modelin piyasa kadar ya da daha olası gördüğü tercihler.",
-     lambda c: True, 0.52, (1.45, 2.60), (3.0, 10.0)),
+    ("deger", "Değerli oranlar", "💎", "Oranı 1.45-2.20 arası, modelin en az %58 ihtimal verdiği ve piyasa kadar ya da daha olası gördüğü tercihler.",
+     lambda c: True, 0.58, (1.45, 2.20), (3.0, 6.0)),
 ]
 MIN_LEG_ODDS = 1.25
 MAX_SAME = 2  # bir kuponda aynı pazardan en çok kaç tercih

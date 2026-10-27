@@ -249,9 +249,13 @@ def _leg(title, o, home, away):
 
 
 def _total_code(crit, o, home, away):
-    """Takım gol alt/üstü (ho/hu/ao/au) ve toplam korner alt/üstü (co/cu) için iç kod."""
-    c = crit.replace(" By ", " by ")
-    pref = {f"Total Goals by {home}": "h", f"Total Goals by {away}": "a", "Total Corners": "c"}.get(c)
+    """Alt/üst pazarları için iç kod: takım golü (ho/hu/ao/au), toplam korner (co/cu), toplam ve takım kartı
+    (ko/ku, kho/khu, kao/kau), toplam ve takım şutu (so/su, sho/..), isabetli şut (to/tu, tho/..)."""
+    c = OPTA.sub("", crit).replace(" By ", " by ").strip()
+    pref = {f"Total Goals by {home}": "h", f"Total Goals by {away}": "a", "Total Corners": "c",
+            "Total Cards": "k", f"Total Cards - {home}": "kh", f"Total Cards - {away}": "ka",
+            "Total Shots": "s", f"Total Shots by {home}": "sh", f"Total Shots by {away}": "sa",
+            "Total Shots on Target": "t", f"Total Shots on Target by {home}": "th", f"Total Shots on Target by {away}": "ta"}.get(c)
     line = _line(o.get("line"))
     if not pref or line is None:
         return None

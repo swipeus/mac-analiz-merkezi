@@ -240,6 +240,51 @@ def _pois(k, lam):
     return math.exp(-lam) * lam ** k / math.factorial(k)
 
 
+# kart (k), şut (s), isabetli şut (t) alt/üst kodları: ko4.5 toplam kart 4.5 üst, kho1.5 ev sahibi kart 1.5 üst
+STAT_CODE = re.compile(r"^([kst])([ha]?)([ou])(\d+(?:\.\d+)?)$")
+STAT_K = {"k": 1.3, "s": 1.2, "t": 1.25}  # dağılım genişliği (varyans / ortalama)
+STAT_NAME = {"k": "kart", "s": "şut", "t": "isabetli şut"}
+
+
+# garanti tercih ve kupon için anlamlı çizgiler ("takım 0.5 kart üst" gibi neredeyse kesin ama bilgisiz olanlar elenir)
+STAT_LINES = {("k", ""): (2.5, 6.5), ("k", "t"): (1.5, 3.5), ("s", ""): (18.5, 30.5), ("s", "t"): (8.5, 17.5),
+              ("t", ""): (5.5, 11.5), ("t", "t"): (2.5, 6.5)}
+
+
+def stat_ok(code):
+    m = STAT_CODE.match(code)
+    if not m:
+        return False
+    lo, hi = STAT_LINES[(m.group(1), "t" if m.group(2) else "")]
+    return lo <= float(m.group(4)) <= hi
+
+
+def stat_prob(mm, stat_mu):
+    stat, side, ou, line = mm.group(1), mm.group(2), mm.group(3), float(mm.group(4))
+    h, a = stat_mu.get(stat, (None, None))
+    mu = {"": (h + a) if h is not None and a is not None else None, "h": h, "a": a}[side]
+    if not mu:
+        return None
+    p = _nb_over(mu, line, STAT_K[stat])
+    return p if ou == "o" else 1 - p
+
+
+def stat_value(mm, final):
+    """Maç sonu (ya da canlı) istatistikten değer: kartta sarı + kırmızı."""
+    stat, side = mm.group(1), mm.group(2)
+    f = final or {}
+    if stat == "k":
+        y, r = f.get("yellow") or [None, None], f.get("red") or [0, 0]
+        vals = [None if y[i] is None else y[i] + (r[i] or 0) for i in (0, 1)]
+    else:
+        vals = f.get("shots" if stat == "s" else "sot") or [None, None]
+    if side == "h":
+        return vals[0]
+    if side == "a":
+        return vals[1]
+    return None if None in vals else vals[0] + vals[1]
+
+
 def _nb_over(mu, line, k=1.4):
     """Negatif binom (varyans = k × ortalama): korner sayıları Poisson'dan daha dağınıktır."""
     r, q = mu / (k - 1), 1 / k
@@ -397,7 +442,7 @@ TOTAL_CODE = re.compile(r"^([ha]o[01]\.5|[ha]u[12]\.5|co([789]|10)\.5|cu(8|9|10|
 def safe_ok(code):
     """Garanti tercih adayı: klasik pazarlar, takım gol ve korner alt/üstleri, bunlardan oluşan kombineler."""
     legs = code.split("&")
-    return len(legs) <= 3 and all(x in SAFE_CODES or TOTAL_CODE.match(x) for x in legs)
+    return len(legs) <= 3 and all(x in SAFE_CODES or TOTAL_CODE.match(x) or stat_ok(x) for x in legs)
 
 
 def safe_score(p, odds):
@@ -422,6 +467,11 @@ def code_label(code, home, away):
     m = re.fullmatch(r"([ou])(\d+(?:\.\d+)?)", code)
     if m:
         return f"{m.group(2)} {'Üst' if m.group(1) == 'o' else 'Alt'}"
+    m = STAT_CODE.match(code)
+    if m:
+        what = STAT_NAME[m.group(1)]
+        who = {"": f"Toplam {what}", "h": f"{home} {what}", "a": f"{away} {what}"}[m.group(2)]
+        return f"{who} {m.group(4)} {'Üst' if m.group(3) == 'o' else 'Alt'}"
     m = re.fullmatch(r"([hac])([ou])(\d+(?:\.\d+)?)", code)
     if m:
         who = {"h": f"{home} gol", "a": f"{away} gol", "c": "Toplam korner"}[m.group(1)]
@@ -587,6 +637,27 @@ def predict(b, prof_h, prof_a):
     has_season = bool(sh) and bool(sa)
     conf = "Yüksek" if n_min >= 5 and has_season else ("Orta" if n_min >= 3 else "Düşük")
     best = max((pr["1"], "1"), (pr["X"], "X"), (pr["2"], "2"))
+    # kart, şut ve isabetli şut beklentileri (son maçlar; kartta hakemin sertliği de hesaba katılır)
+    rs = b.get("referee_stats") or {}
+    ref_f = 1.0
+    if rs.get("matches", 0) >= 4 and rs.get("yellow_pm") and rs.get("yellow_avg"):
+        ref_f = 0.5 + 0.5 * rs["yellow_pm"] / rs["yellow_avg"]
+    k_h, k_a = ((y_h if y_h is not None else 2.0) + 0.07) * ref_f, ((y_a if y_a is not None else 2.0) + 0.07) * ref_f
+    stat_mu = {"k": (k_h, k_a), "s": (s_h, s_a), "t": (o_h, o_a)}
+    cards = {"home": round(k_h, 1), "away": round(k_a, 1), "total": round(k_h + k_a, 1),
+             "over": {str(l): round(_nb_over(k_h + k_a, l, STAT_K["k"]), 3) for l in (2.5, 3.5, 4.5, 5.5, 6.5)}}
+    for m in (odds or {}).get("markets") or []:
+        ips = [s_.get("ip") for s_ in m["selections"]]
+        for s_, ip in zip(m["selections"], ips):
+            c = s_.get("code")
+            mm = STAT_CODE.match(c or "")
+            if not mm or c in pr:
+                continue
+            p_ = stat_prob(mm, stat_mu)
+            if p_ is None:
+                continue
+            # piyasa bu pazarlarda modelden çok daha bilgili: %75 piyasa, %25 model
+            pr[c] = 0.25 * p_ + 0.75 * ip if ip is not None else p_
     safe, surprise = make_picks(pr, odds, H, A)
     score_pick = coherent_score(smat, pr, lam_h, lam_a)
     cs_m = _odds_market(odds, "odds_correct_score")
@@ -603,6 +674,7 @@ def predict(b, prof_h, prof_a):
         "scores": [{"score": s, "p": round(p, 3)} for p, s in scores],
         "score_pick": score_pick,
         "corners": corners,
+        "cards": cards,
         "shots": {"home": s_h and round(s_h, 1), "away": s_a and round(s_a, 1)},
         "sot": {"home": o_h and round(o_h, 1), "away": o_a and round(o_a, 1)},
         "yellow": {"home": y_h, "away": y_a, "total": round(y_h + y_a, 1) if y_h is not None and y_a is not None else None},
@@ -647,6 +719,12 @@ def pick_hit(code, hs, as_, final=None):
         return t > line if m.group(1) == "o" else t < line
     if code.startswith("cs:"):
         return code[3:] == f"{hs}-{as_}"
+    m = STAT_CODE.match(code)
+    if m:  # kart, şut, isabetli şut alt/üst
+        v = stat_value(m, final)
+        if v is None:
+            return None
+        return v > float(m.group(4)) if m.group(3) == "o" else v < float(m.group(4))
     m = re.fullmatch(r"([hac])([ou])(\d+(?:\.\d+)?)", code)
     if m:  # takım golü (h/a) veya toplam korner (c) alt/üst
         line = float(m.group(3))
@@ -691,6 +769,12 @@ def early_hit(code, hs, as_, live=None):
     if "&" in code:
         res = [early_hit(c, hs, as_, live) for c in code.split("&")]
         return False if False in res else True if all(r is True for r in res) else None
+    sm = STAT_CODE.match(code)
+    if sm:
+        v = stat_value(sm, live)
+        if v is not None and v > float(sm.group(4)):
+            return sm.group(3) == "o"
+        return None
     if code == "btts_yes" and hs > 0 and as_ > 0:
         return True
     if code == "btts_no" and hs > 0 and as_ > 0:

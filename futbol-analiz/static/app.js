@@ -245,6 +245,15 @@ function crestHtml(team, isFav, pct, size) {
       onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'fb',textContent:'${initials}'}))">
   </div>`;
 }
+// en garanti tercihin altındaki 4 olasılık kutusu; en yüksek olasılıklı kutunun etrafı parlar
+function probBoxes(items) {
+  const vals = items.filter((x) => x[2] != null);
+  if (!vals.length) return "";
+  const top = Math.max(...vals.map((x) => x[2]));
+  return `<div class="pboxes">${items.map(([ic, l, v]) => `<div class="pbox ${v != null && v === top ? "best" : ""} ${v != null && v >= 0.6 ? "hi" : ""}">
+    <span class="pbl">${ico(ic)} ${esc(l)}</span><b>${v != null ? pc(v) : "—"}</b>
+    <span class="pbb"><span style="width:${v != null ? Math.round(v * 100) : 0}%"></span></span></div>`).join("")}</div>`;
+}
 function cardHtml(m, sorted) {
   const live = m.started && !m.finished;
   const p = m.pred;
@@ -263,11 +272,9 @@ function cardHtml(m, sorted) {
       <span class="pa">${pc(p.p_away)}</span></div>
     <div class="pills">
       ${p.safe ? `<span class="pill safe"><i>✅</i>${esc(p.safe.label.replace(/ \(.*\)$/, ""))}${p.safe.odds ? ` @${nf(p.safe.odds, 2)}` : ""}</span>` : ""}
-      <span class="pill"><i>Beraberlik</i>${pc(p.p_draw)}</span>
-      <span class="pill"><i>Skor</i>${esc(p.score)}</span>
-      <span class="pill"><i>2.5 Üst</i>${pc(p.over25)}</span>
-      <span class="pill"><i>KG</i>${pc(p.btts)}</span>
-    </div>` : `<div class="pending">Analiz hazırlanıyor…</div>`;
+    </div>
+    ${probBoxes([["⚽", "2.5 Üst", p.over25], ["🔁", "KG Var", p.btts], ["🚩", "Korner 9.5Ü", p.c95], ["🟨", "Kart 4.5Ü", p.k45]])}
+    <div class="cmeta">Skor <b>${esc(p.score)}</b> · Beraberlik <b>${pc(p.p_draw)}</b></div>` : `<div class="pending">Analiz hazırlanıyor…</div>`;
   return `<div class="mcard ${live ? "is-live" : ""}" data-id="${m.id}">
     <div class="mtop">${top}<div class="mtags">${sorted ? `<span class="tag lgt"><img src="${leagueLogo(m.league_id)}" alt="" onerror="this.remove()">${esc(m.league)}</span>${sortBadge(m)}` : tags}</div></div>
     <div class="mteams">
@@ -479,12 +486,15 @@ function predictionHtml(b) {
     </div>
     <div class="pred">
       ${P.best_pick ? kpi("✅", "#2ea043", "En garanti tercih", P.best_pick.label, `${P.best_pick.odds ? "Oran " + nf(P.best_pick.odds, 2) + " · " : ""}model ${pc(P.best_pick.p)}`) : ""}
+      <div class="pbwide">${probBoxes([["⚽", "2.5 Üst", P.over25], ["🔁", "KG Var", P.btts],
+        ["🚩", "Korner 9.5Ü", (P.probs || {})["co9.5"] ?? (P.corners && P.corners.over && P.corners.over["9.5"])],
+        ["🟨", "Kart 4.5Ü", (P.probs || {})["ko4.5"] ?? (P.cards && P.cards.over && P.cards.over["4.5"])]])}</div>
       ${P.surprise ? kpi("⚡", "#e3b341", "Olası sürpriz", P.surprise.label, `${P.surprise.odds ? "Oran " + nf(P.surprise.odds, 2) + " · " : ""}model ${pc(P.surprise.p)}`) : ""}
       ${kpi("🎲", "#a371f7", "Skor tahmini", (P.score_pick || P.scores[0]).score, "Diğer olasılar: " + P.scores.filter((s) => s.score !== (P.score_pick || {}).score).slice(0, 3).map((s) => s.score).join(" · "))}
       ${kpi("⚽", "#f85149", "Beklenen gol (xG)", `${nf(P.lam_home, 2)} – ${nf(P.lam_away, 2)}`, P.uses_odds ? "İstatistik + bahis oranları" : "İstatistik modeli")}
       ${kpi("📈", "#3fb950", "Toplam gol", `2.5 Üst ${pc(P.over25)}`, `1.5Ü ${pc(P.over15)} · 3.5Ü ${pc(P.over35)}`)}
       ${kpi("🔁", "#58a6ff", "Karşılıklı gol", pc(P.btts), "KG Var olasılığı")}
-      ${P.corners ? kpi("🚩", "#d29922", "Korner beklentisi", `${nf(P.corners.home)} – ${nf(P.corners.away)}`, `Toplam ${nf(P.corners.total)} · 9.5Ü ${pc(P.corners.over["9.5"])} · 10.5Ü ${pc(P.corners.over["10.5"])}`) : ""}
+      ${P.corners ? kpi("🚩", "#d29922", "Korner beklentisi", `${nf(P.corners.home)} – ${nf(P.corners.away)}`, `Toplam ${nf(P.corners.total)} · 9.5Ü ${pc((P.probs || {})["co9.5"] ?? P.corners.over["9.5"])} · 10.5Ü ${pc((P.probs || {})["co10.5"] ?? P.corners.over["10.5"])}`) : ""}
       ${P.shots.home != null ? kpi("🥅", "#f78166", "Şut beklentisi", `${nf(P.shots.home)} – ${nf(P.shots.away)}`, `İsabetli: ${nf(P.sot.home)} – ${nf(P.sot.away)}`) : ""}
       ${P.yellow.total != null ? kpi("🟨", "#e3b341", "Sarı kart ort.", nf(P.yellow.total), `${nf(P.yellow.home)} + ${nf(P.yellow.away)} (son maçlar)`) : ""}
       ${kpi("🧠", conf, "Model güveni", P.confidence, "Veri miktarına göre")}

@@ -56,7 +56,7 @@ STAT_KEYS = {
 _season_memo = {}
 
 # Analiz/paket biçimi değişince artırılır; eski sürümle üretilmiş paketler yeniden oluşturulur
-BUNDLE_VERSION = 11
+BUNDLE_VERSION = 12
 
 
 def _num(v):
@@ -461,6 +461,8 @@ async def build_bundle(src, match_id, prev_odds=None):
     final = {
         "corners": [fin_h.get("corners"), fin_a.get("corners")],
         "yellow": [fin_h.get("yellow"), fin_a.get("yellow")],
+        "shots": [fin_h.get("shots"), fin_a.get("shots")],
+        "sot": [fin_h.get("sot"), fin_a.get("sot")],
         "red": [hs_.get("numberOfHomeRedCards") or 0, hs_.get("numberOfAwayRedCards") or 0],
     } if hs_.get("started") else None
     info = facts.get("infoBox") or {}

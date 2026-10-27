@@ -12,7 +12,7 @@ import time
 from collections import Counter
 from datetime import datetime, timezone
 
-from .analysis import SAFE_CODES, TOTAL_CODE, code_label, early_hit, pick_hit
+from .analysis import SAFE_CODES, STAT_CODE, TOTAL_CODE, code_label, early_hit, pick_hit, stat_ok
 
 STAKE = 1000           # kupon başına
 PER_THEME = 3          # her temada günlük kupon sayısı
@@ -71,6 +71,9 @@ def family(c):
         return "takim"
     if c.startswith(("co", "cu")):  # korner üst ve alt ayrı pazar sayılır (Kornerler kuponu 3-4 maç olabilsin)
         return "korner_" + c[1]
+    m = STAT_CODE.match(c)
+    if m:  # kart / şut / isabetli şut
+        return "stat_" + m.group(1)
     if c.startswith("cm"):
         return "kornerms"
     return c
@@ -87,7 +90,7 @@ def _cands(b):
             if not c or c not in probs or c.startswith(("cs:", "fts", "odd", "even", "rc_", "fc8", "dnb")):
                 continue
             legs = c.split("&")
-            if len(legs) > 2 or not all(x in SAFE_CODES or TOTAL_CODE.match(x) for x in legs):
+            if len(legs) > 2 or not all(x in SAFE_CODES or TOTAL_CODE.match(x) or stat_ok(x) for x in legs):
                 continue
             p, o = probs[c], s["odds"]
             if p < 0.5 or o < 1.05:

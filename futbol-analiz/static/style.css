@@ -871,3 +871,25 @@ a#movesBtn { display: inline-flex; align-items: center; justify-content: center;
 .shbtns { display: flex; gap: 4px; }
 .shtext { white-space: pre-wrap; font: inherit; font-size: 13px; margin: 6px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--panel2); color: var(--text); }
 .shprev { font-size: 14px; line-height: 1.5; }
+
+/* en garanti tercihin altındaki 4 olasılık kutusu */
+.pboxes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 8px; }
+.pbox { position: relative; background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 6px 7px 7px; min-width: 0; text-align: center; }
+.pbox .pbl { display: block; font-size: 10.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pbox .pbl .svgi { width: 11px; height: 11px; }
+.pbox b { display: block; font-size: 16px; font-weight: 800; margin: 1px 0 3px; font-variant-numeric: tabular-nums; }
+.pbox .pbb { display: block; height: 3px; border-radius: 2px; background: rgba(255,255,255,.07); overflow: hidden; }
+.pbox .pbb span { display: block; height: 100%; background: #58a6ff; }
+.pbox.hi .pbb span { background: #3fb950; }
+.pbox.best { border-color: #3fb950; box-shadow: 0 0 0 1px #3fb950, 0 0 14px rgba(63,185,80,.45); animation: pbglow 2.4s ease-in-out infinite; }
+.pbox.best b { color: #56d364; }
+@keyframes pbglow { 0%, 100% { box-shadow: 0 0 0 1px #3fb950, 0 0 8px rgba(63,185,80,.3); } 50% { box-shadow: 0 0 0 1px #3fb950, 0 0 18px rgba(63,185,80,.6); } }
+.cmeta { margin-top: 7px; font-size: 12px; color: var(--muted); }
+.cmeta b { color: var(--text); }
+.pbwide { grid-column: 1 / -1; }
+.pbwide .pboxes { margin-top: 0; }
+.pbwide .pbox { padding: 9px 8px; }
+.pbwide .pbox .pbl { font-size: 12px; }
+.pbwide .pbox b { font-size: 20px; }
+/* telefonda alt menüde olan simgeler üst barda tekrar etmesin (başlık tek satırda kalsın) */
+@media (max-width: 700px) { #karneBtn, #botBtn, #movesBtn { display: none !important; } }

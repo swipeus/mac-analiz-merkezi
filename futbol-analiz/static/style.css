@@ -911,3 +911,6 @@ body.on-moves footer.foot { display: block; }
 .orow.bx .ol::before { content: "◆ "; color: #58a6ff; font-size: 10px; }
 .orow.focus { background: rgba(88,166,255,.18) !important; box-shadow: inset 0 0 0 1px #58a6ff; animation: ofocus 1.2s ease-in-out 3; }
 @keyframes ofocus { 50% { background: rgba(88,166,255,.32); } }
+
+.pbox .pbl .bxi { width: 13px; height: 13px; stroke: none; vertical-align: -2px; }
+.pbox .pbo { display: block; margin: -3px 0 3px; font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }

@@ -250,7 +250,12 @@ function crestHtml(team, isFav, pct, size) {
 // "7.5 Üst" -> co7.5, "4.5 Alt" -> ku4.5 (oranlar sekmesindeki seçeneğin iç kodu)
 const pickCode = (pref, pk) => { const m = pk && pk.label.match(/^([\d.]+) (Üst|Alt)$/); return m ? `${pref}${m[2] === "Üst" ? "o" : "u"}${m[1]}` : null; };
 const boxItems = (o25, btts, cpick, kpick) => [["⚽", "2.5 Üst", o25, "o2.5"], ["🔁", "KG Var", btts, "btts_yes"],
-  ["🚩", cpick ? cpick.label : "Korner", cpick ? cpick.p : null, pickCode("c", cpick)], ["🟨", kpick ? kpick.label : "Kart", kpick ? kpick.p : null, pickCode("k", kpick)]];
+  ["🚩", cpick ? cpick.label : "Korner", cpick ? cpick.p : null, pickCode("c", cpick), cpick && cpick.odds], ["🟨", kpick ? kpick.label : "Kart", kpick ? kpick.p : null, pickCode("k", kpick), kpick && kpick.odds]];
+// kutulardaki korner ve kart simgeleri dolu ve renkli: kırmızı bayrak, sarı kart
+const BOX_ICON = {
+  "🚩": `<svg class="svgi bxi" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V3" stroke="#c9d1d9" stroke-width="2" stroke-linecap="round"/><path d="M5 4h13l-3 4.5 3 4.5H5z" fill="#f85149" stroke="#f85149" stroke-width="1.2" stroke-linejoin="round"/></svg>`,
+  "🟨": `<svg class="svgi bxi" viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="3" width="11" height="18" rx="2" transform="rotate(8 12 12)" fill="#f5c518" stroke="#d9a400" stroke-width="1"/></svg>`,
+};
 const boxCodes = (P) => new Set(boxItems(0, 0, P.corner_pick, P.card_pick).map((x) => x[3]).filter(Boolean));
 // kutuya dokununca o maçın Oranlar sekmesi açılır ve ilgili seçenek vurgulanır
 let oddsFocus = null, pendingTab = null;
@@ -275,8 +280,8 @@ function probBoxes(items, mid) {
   const vals = items.filter((x) => x[2] != null);
   if (!vals.length) return "";
   const top = Math.max(...vals.map((x) => x[2]));
-  return `<div class="pboxes">${items.map(([ic, l, v, code]) => `<div class="pbox ${v != null && v === top ? "best" : ""} ${v != null && v >= 0.6 ? "hi" : ""}" ${mid && code ? `data-ocode="${code}" data-omid="${mid}" title="Oranlarda göster"` : ""}>
-    <span class="pbl">${ico(ic)} ${esc(l)}</span><b>${v != null ? pc(v) : "—"}</b>
+  return `<div class="pboxes">${items.map(([ic, l, v, code, odds]) => `<div class="pbox ${v != null && v === top ? "best" : ""} ${v != null && v >= 0.6 ? "hi" : ""}" ${mid && code ? `data-ocode="${code}" data-omid="${mid}" title="Oranlarda göster"` : ""}>
+    <span class="pbl">${BOX_ICON[ic] || ico(ic)} ${esc(l)}</span><b>${v != null ? pc(v) : "—"}</b>${odds ? `<small class="pbo">${nf(odds, 2)}</small>` : ""}
     <span class="pbb"><span style="width:${v != null ? Math.round(v * 100) : 0}%"></span></span></div>`).join("")}</div>`;
 }
 function cardHtml(m, sorted) {

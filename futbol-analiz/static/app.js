@@ -1254,6 +1254,9 @@ const pickType = (p) => {
   if (/^cm/.test(c)) return "En çok korner";
   if (/^rc/.test(c)) return "Kırmızı kart";
   if (/^cs:/.test(c)) return "Skor";
+  // kart, şut ve isabetli şut: takım (Cagliari kart 2.5 Alt) ve toplam ayrı türler
+  const st = c.match(/^([kst])([ha]?)[ou]\d/);
+  if (st) return `${st[2] ? "Takım" : "Toplam"} ${{ k: "kart", s: "şut", t: "isabetli şut" }[st[1]]} alt/üst`;
   return (p.label || "").replace(/ \(.*\)$/, "");
 };
 const STAKE = 250;

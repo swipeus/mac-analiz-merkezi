@@ -1109,6 +1109,8 @@ const THEME_COLOR = { banko: "#f0b429", garanti: "#2ea043", gol: "#f85149", korn
 const COUPON_THEMES = [["banko", "🔒", "Banko"], ["garanti", "✅", "En garantiler"], ["gol", "⚽", "Gol şöleni"], ["korner", "🚩", "Kornerler"], ["deger", "💎", "Değerli oranlar"]];
 const OLD_THEME = { "Banko": "banko", "En garantiler": "garanti", "Gol şöleni": "gol", "Korner kombinesi": "korner", "Değerli oranlar": "deger" };
 const themeOf = (c) => c.theme || OLD_THEME[c.name] || "diger";
+// karnedeki kuponlar; temalardan önceki eski düzenin kuponları (örn. "Günün favorileri") gösterilmez ve sayılmaz
+const karneCouponList = (k) => (k.coupons || []).flatMap((d) => d.coupons.map((c) => ({ ...c, draft: !d.locked }))).filter((c) => themeOf(c) !== "diger");
 let couponTab = "banko";
 const legStatus = (l) => l.void ? `<span class="kst wait">↩ İade</span>` : l.hit === true ? `<span class="kst ok">✓</span>`
   : l.hit === false ? `<span class="kst no">✗</span>` : "";
@@ -1169,17 +1171,17 @@ async function renderCoupons() {
   catch (e) { v.innerHTML = `<div class="card"><p>${esc(e.message)}</p></div>`; return; }
   if (!state.kombine) return;
   if (!karneCoupons.length) {  // tema performansı notu için karne (bir kez)
-    try { const k = await api("/api/karne"); karneCoupons = Array.isArray(k) ? [] : (k.coupons || []).flatMap((d) => d.coupons.map((c) => ({ ...c, draft: !d.locked }))); } catch { }
+    try { const k = await api("/api/karne"); karneCoupons = Array.isArray(k) ? [] : karneCouponList(k); } catch { }
   }
   drawCoupons();
 }
 function drawCoupons() {
   const v = $("#view");
-  const cs = dayCache.coupons || [];
+  const cs = (dayCache.coupons || []).filter((c) => themeOf(c) !== "diger");
   const title = new Date(state.date + "T12:00:00").toLocaleDateString("tr-TR", { weekday: "long", day: "numeric", month: "long" });
   const intro = `<div class="card" style="--c:#a371f7">${head("🧩", `Günün kombineleri <span class="muted">· ${cap(title)}</span>`)}
     <details class="kinfo"><summary>Kuponlar nasıl hazırlanıyor? ›</summary><p class="muted">Model her gün beş temada üçer kupon hazırlar; her kupon 2-5 maçtan oluşur ve her maçtan tek tercih içerir. Banko ve En garantiler'deki bir tercih başka hiçbir kupona girmez; diğer temalarda aynı tercih en fazla iki kuponda olur. Çifte şans 12 ve en çok korner güvenli kuponlara alınmaz. Az maçlı günlerde tema başına daha az kupon çıkar; tutma ihtimali %20'nin altındaki kupon kurulmaz (Banko ve En garantiler'de %35). Toplam oranlar: Banko ve En garantiler 2-3.5, Gol şöleni ve Kornerler 2.5-6, Değerli oranlar 3-6 (tercih başına en az %58, kupon en az %25). Kuponlar en güncel verilerle yenilenir; bu sürede kuponda <b>! Değişebilir</b> yazar. Kuponlardaki maçlardan ilkinin resmi ilk 11'i açıklanınca model son kontrolü yapar ve kuponları kilitler (<b>✓ Son hali</b>); karneye bu hâliyle kupon başına 1.000 ₺ ile yazılır.</p></details></div>`;
-  const tabs = COUPON_THEMES.concat(cs.some((c) => themeOf(c) === "diger") ? [["diger", "📋", "Diğer"]] : []);
+  const tabs = COUPON_THEMES;
   const hot = hotTheme();
   if (!tabs.some(([k]) => k === couponTab)) couponTab = "banko";
   const list = cs.filter((c) => themeOf(c) === couponTab);
@@ -1206,7 +1208,7 @@ function hotTheme() {
 function themeStats() {
   const done = karneCoupons.filter((c) => c.state === "done");
   if (!done.length) return "";
-  const items = COUPON_THEMES.concat([["diger", "📋", "Diğer"]]).map(([k, ic, name]) => {
+  const items = COUPON_THEMES.map(([k, ic, name]) => {
     const d = done.filter((c) => themeOf(c) === k);
     return d.length ? [`${ic} ${name}`, d.filter((c) => c.won).length, d.length, d.reduce((a, c) => a + couponProfit(c), 0)] : null;
   }).filter(Boolean);
@@ -1226,7 +1228,7 @@ async function renderKarne(silent) {
   karneRows = Array.isArray(k) ? k : k.singles || [];
   karneLessons = Array.isArray(k) ? null : k.lessons || null;
   karneStart = Array.isArray(k) ? null : k.start;
-  karneCoupons = Array.isArray(k) ? [] : (k.coupons || []).flatMap((d) => d.coupons.map((c) => ({ ...c, draft: !d.locked })));
+  karneCoupons = Array.isArray(k) ? [] : karneCouponList(k);
   drawKarne();
 }
 // karnede tercih türü (örn. "MS 1 (Liverpool)" -> "Maç sonucu")

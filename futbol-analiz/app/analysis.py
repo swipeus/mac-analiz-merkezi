@@ -329,7 +329,7 @@ def _over(lam, line):
 
 
 RHO = -0.08          # Dixon-Coles düşük skor düzeltmesi
-MARKET_WEIGHT = 0.6  # oran varsa gol beklentisinde piyasanın ağırlığı
+MARKET_WEIGHT = 0.75  # oran varsa gol beklentisinde piyasanın ağırlığı (93 oranlı maçta 1X2 isabeti %75 civarında belirgin iyi, 2.5 hafif kötü; denge noktası)
 MIN_ODDS = 1.30      # en garanti tercih bu orandan düşük olamaz
 N_GOALS = 10
 

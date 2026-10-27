@@ -918,3 +918,11 @@ body.on-moves footer.foot { display: block; }
 /* haber konu filtresi */
 .newsbar { margin: 0 0 12px; }
 .nwrap[hidden], .nempty[hidden] { display: none; }
+
+/* garanti tercih: değişebilir (resmi 11'ler bekleniyor) / son tercih */
+.fbadge { margin-left: auto; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; white-space: nowrap; cursor: help; }
+.fbadge.wait { color: #e3b341; background: rgba(227,179,65,.12); border: 1px solid rgba(227,179,65,.45); }
+.fbadge.ok { color: #7ee2a8; background: rgba(46,160,67,.14); border: 1px solid rgba(46,160,67,.5); }
+.kpi .fbadge { display: inline-block; margin: 2px 0 4px; }
+.opick .k .fbadge { margin-left: 6px; vertical-align: 1px; }
+.pill.safe.tbd i { color: #e3b341; font-weight: 800; }

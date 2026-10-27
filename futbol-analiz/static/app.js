@@ -301,7 +301,7 @@ function cardHtml(m, sorted) {
       <div class="probbar"><span style="width:${p.p_home * 100}%"></span><span style="width:${p.p_draw * 100}%"></span><span style="width:${p.p_away * 100}%"></span></div>
       <span class="pa">${pc(p.p_away)}</span></div>
     <div class="pills">
-      ${p.safe ? `<span class="pill safe"><i>✅</i>${esc(p.safe.label.replace(/ \(.*\)$/, ""))}${p.safe.odds ? ` @${nf(p.safe.odds, 2)}` : ""}</span>` : ""}
+      ${p.safe ? `<span class="pill safe${p.safe.final ? "" : " tbd"}" title="${p.safe.final ? "Son tercih (resmi 11'ler sonrası)" : "Resmi 11'ler açıklanınca kesinleşir, değişebilir"}"><i>${p.safe.final ? "✅" : "!"}</i>${esc(p.safe.label.replace(/ \(.*\)$/, ""))}${p.safe.odds ? ` @${nf(p.safe.odds, 2)}` : ""}</span>` : ""}
     </div>
     ${probBoxes(boxItems(p.over25, p.btts, p.cpick, p.kpick, p.bodds), m.id)}` : `<div class="pending">Analiz hazırlanıyor…</div>`;
   return `<div class="mcard ${live ? "is-live" : ""}" data-id="${m.id}">
@@ -516,7 +516,7 @@ function predictionHtml(b) {
     </div>
     <div class="pred">
       <div class="pbwide">${probBoxes(boxItems(P.over25, P.btts, P.corner_pick, P.card_pick, P.box_odds), b.id)}</div>
-      ${P.best_pick ? kpi("✅", "#2ea043", "En garanti tercih", P.best_pick.label, `${P.best_pick.odds ? "Oran " + nf(P.best_pick.odds, 2) + " · " : ""}model ${pc(P.best_pick.p)}`) : ""}
+      ${P.best_pick ? kpi("✅", "#2ea043", "En garanti tercih", P.best_pick.label, `${P.best_pick.odds ? "Oran " + nf(P.best_pick.odds, 2) + " · " : ""}model ${pc(P.best_pick.p)}`).replace('</div><div class="s">', `</div>${finalBadge(bestFinal(b))}<div class="s">`) : ""}
       ${P.surprise ? kpi("⚡", "#e3b341", "Olası sürpriz", P.surprise.label, `${P.surprise.odds ? "Oran " + nf(P.surprise.odds, 2) + " · " : ""}model ${pc(P.surprise.p)}`) : ""}
       ${kpi("🎲", "#a371f7", "Skor tahmini", (P.score_pick || P.scores[0]).score, "Diğer olasılar: " + P.scores.filter((s) => s.score !== (P.score_pick || {}).score).slice(0, 3).map((s) => s.score).join(" · "))}
       ${kpi("⚽", "#f85149", "Beklenen gol (xG)", `${nf(P.lam_home, 2)} – ${nf(P.lam_away, 2)}`, P.uses_odds ? "İstatistik + bahis oranları" : "İstatistik modeli")}
@@ -564,7 +564,7 @@ function oddsHtml(b) {
       <small class="muted">${note}</small></div></div>` : "";
   const top = `<div class="card" style="--c:#e3b341">${head("💰", `Bahis oranları <span class="muted">· ${esc((o.providers || []).join(", "))} · ${o.markets.length} pazar, ${nSel} seçenek</span>`)}
     <div class="opicks">
-      ${pickCard("safe", "✅", "En garanti tercih", P.best_pick, "Oranı 1.30 ve üstü seçenekler (kombineler dahil) arasında modelin en yüksek olasılık verdiği tercih.")}
+      ${pickCard("safe", "✅", "En garanti tercih " + finalBadge(bestFinal(b)), P.best_pick, "Oranı 1.30 ve üstü seçenekler (kombineler dahil) arasında modelin en yüksek olasılık verdiği tercih. Resmi ilk 11'ler açıklanınca son kontrol yapılır ve tercih kesinleşir.")}
       ${pickCard("sur", "⚡", "Olası sürpriz", P.surprise, "Oranı yüksek ama modelin piyasadan daha olası gördüğü seçenek. Karnede yer almaz.")}
     </div>
     <p class="muted">Model gol beklentisini istatistiklerle bahis oranlarını harmanlayarak hesaplar${P.lam_market ? ` (piyasa: ${nf(P.lam_market[0], 2)} – ${nf(P.lam_market[1], 2)} gol, istatistik: ${nf(P.lam_model[0], 2)} – ${nf(P.lam_model[1], 2)})` : ""}. Tablolarda: oran, oranın ima ettiği olasılık (marjı temizlenmiş), modelin olasılığı ve <b>değer</b> (model olasılığı × oran − 1; yeşil = model piyasadan iyimser). Kombinelerde model olasılığı, ayakların aynı anda tutma ihtimalidir. 1.30 altındaki oranlar tercih dışıdır.</p>
@@ -675,6 +675,11 @@ const ICON_PATHS = {
 };
 // başlık ve özet kartlarındaki emojiler tek tip çizgi simgelere çevrilir (her telefonda aynı görünsün)
 const ico = (ic) => ICON_PATHS[ic] ? `<svg class="svgi" viewBox="0 0 24 24" aria-hidden="true">${ICON_PATHS[ic]}</svg>` : ic;
+// garanti tercih kesinleşti mi: resmi 11'ler açıklandıktan sonraki son kontrol yapıldıysa ya da maç başladıysa
+const bestFinal = (b) => !!(b.analysis.prediction.best_final || b.analysis.frozen || (b.status || {}).started);
+const finalBadge = (fin) => fin
+  ? `<span class="fbadge ok" title="Resmi ilk 11'ler açıklandıktan sonra son kontrol yapıldı; bu tercih artık değişmez.">✓ Son tercih</span>`
+  : `<span class="fbadge wait" title="Resmi ilk 11'ler açıklanınca son kontrol yapılır ve tercih kesinleşir; o zamana kadar değişebilir.">! Değişebilir</span>`;
 const kpi = (ic, color, l, v, s) => `<div class="kpi" style="--k:${color}"><div class="l"><span class="ki">${ico(ic)}</span>${esc(l)}</div><div class="v">${esc(v)}</div><div class="s">${esc(s || "")}</div></div>`;
 const head = (ic, title, extra = "") => `<h2 class="ch"><span class="ci">${ico(ic)}</span><span class="ct">${title}</span>${extra}</h2>`;
 // hakem düdüğü (emoji setinde düdük yok)
@@ -1877,7 +1882,7 @@ function matchShareText(b) {
     `🔥 2.5 Üst: ${pc(P.over25)} · ⚡ KG Var: ${pc(P.btts)}`,
     P.corners ? `🚩 Korner beklentisi: ${nf(P.corners.total, 1)}` : "",
     SH_LINE,
-    bp ? `✅ En garanti: ${bp.label}${bp.odds ? ` · 💰 ${nf(bp.odds, 2)}` : ""} (📊 %${Math.round(bp.p * 100)})` : ""].filter(Boolean).join("\n");
+    bp ? `✅ En garanti: ${bp.label}${bp.odds ? ` · 💰 ${nf(bp.odds, 2)}` : ""} (📊 %${Math.round(bp.p * 100)})${bestFinal(b) ? "" : " · değişebilir"}` : ""].filter(Boolean).join("\n");
 }
 function shareText() {
   const parts = [];
@@ -2125,6 +2130,13 @@ const RELEASES = [
       ["📊", "Daha fazla pazar", "Yarılar, handikaplar, korner/kart/şut/ofsayt/faul toplamları, takım bazlı alt/üst ve dakika aralıkları."],
       ["🔍", "Oranlarda arama", "Oranlar sekmesinde oyuncu veya pazar adı yaz, sadece o seçenekler kalsın; gruplar açılıp kapanır."],
       ["🔕", "Sessiz bildirimler", "Bildirimler artık ekranı kaplamaz; yalnızca sarı çana dokununca görünür."],
+    ],
+  },
+  {
+    id: 15, date: "27 Ekim 2026", title: "Yeni: Son tercih işareti", sub: "Bu güncellemede gelenler",
+    items: [
+      ["❗", "Değişebilir", "En garanti tercih, resmi ilk 11'ler açıklanana kadar yeni bilgilerle (oran, eksik, kadro) değişebilir; bu sürede kutuda ünlem ve 'Değişebilir' yazar."],
+      ["✅", "Son tercih", "Resmi 11'ler açıklanınca model son bir kontrol yapar ve tercihini kilitler; kutuda tik ve 'Son tercih' yazar, maç başlayana kadar değişmez."],
     ],
   },
   {

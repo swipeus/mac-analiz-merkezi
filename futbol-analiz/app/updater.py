@@ -55,7 +55,8 @@ def enrich_day(store, matches):
             m["pred"]["kpick"] = pr.get("card_pick")    # kutudaki sabit kart çizgisi (3.5 Üst)
             m["pred"]["bodds"] = pr.get("box_odds")       # 2.5 Üst ve KG Var oranları
             bp = pr.get("best_pick")
-            m["pred"]["safe"] = {"label": bp["label"], "odds": bp.get("odds")} if bp else None
+            m["pred"]["safe"] = {"label": bp["label"], "odds": bp.get("odds"),
+                                 "final": bool(pr.get("best_final")) or bool((b["body"].get("status") or {}).get("started"))} if bp else None
             m["lineup_type"] = lu.get("type")
             m["absent"] = [len((lu.get(s) or {}).get("unavailable", [])) for s in ("home", "away")]
             m["updated"] = b["ts"]
@@ -96,6 +97,7 @@ class Updater:
         old = self.store.bundle_get(match_id)
         b = await collect.build_bundle(self.src, match_id, (old or {}).get("body", {}).get("odds"))
         karne.freeze(self.store, b, (old or {}).get("body"))
+        karne.lock_pick(self.store, b)
         sig = collect.signature(b)
         self.store.bundle_put(match_id, day, sig, b)
         karne.record(self.store, b)

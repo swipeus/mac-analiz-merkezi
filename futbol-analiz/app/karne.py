@@ -28,6 +28,24 @@ def export(store):
     return {"start": KARNE_START, "singles": singles, "coupons": coupons}
 
 
+def lock_pick(store, b):
+    """Resmi ilk 11'ler açıklandıktan sonraki ilk analizin garanti tercihi son karardır: maç başlayana kadar
+    yeni analizler onu değiştirmez (yalnızca oranı güncellenir). Başlamış maçlar zaten dondurulmuştur."""
+    pr = (b.get("analysis") or {}).get("prediction") or {}
+    st = b.get("status") or {}
+    if st.get("started") or st.get("finished"):
+        pr["best_final"] = bool(pr.get("best_pick"))
+        return
+    if not (b.get("lineup") or {}).get("confirmed") or not pr.get("best_pick"):
+        return
+    rec = store.pred_get(b["id"])
+    if rec and rec.get("final") and rec.get("pick"):
+        bp = {k: v for k, v in rec["pick"].items() if k != "o0"}
+        bp["odds"] = code_odds(b.get("odds"), bp["code"])[0] or bp.get("odds")
+        pr["best_pick"] = bp
+    pr["best_final"] = True
+
+
 def record(store, b):
     """Maç paketi her yenilendiğinde çağrılır."""
     mid = b["id"]
@@ -53,7 +71,7 @@ def record(store, b):
             # o0: tercihin ilk görülen oranı; maç başlayınca kalan "odds" kapanış oranıdır (kapanış farkı için)
             "pick": {**pr["best_pick"], "o0": code_odds(b.get("odds"), pr["best_pick"]["code"])[1]}, "score": pr["score_pick"],
             "p": {"1": pr.get("p_home"), "X": pr.get("p_draw"), "2": pr.get("p_away")}, "ms": pr.get("pick"),
-            "state": "pending",
+            "state": "pending", "final": bool(pr.get("best_final")),
         })
         return
 

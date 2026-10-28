@@ -2488,6 +2488,13 @@ const RELEASES = [
     ],
   },
   {
+    id: 19, date: "28 Ekim 2026", title: "Garanti tercihte yeni kural", sub: "Bu güncellemede gelenler",
+    items: [
+      ["🚫", "Favorinin gol altı yok", "Maçın favorisi olan takımın gol altı (ör. favori Trabzonspor için 'Trabzonspor gol 2.5 Alt') artık garanti tercih ve Banko kuponlarına girmiyor."],
+      ["🔽", "Daha seyrek", "Çifte şans 12 ve takım golü altı garanti tercihte daha seyrek seçiliyor."],
+    ],
+  },
+  {
     id: 18, date: "28 Ekim 2026", title: "Kombinelerde yeni düzen", sub: "Bu güncellemede gelenler",
     items: [
       ["✅", "Banko tek tema", "Banko ve En garantiler birleşti: her gün 5 Banko kuponu. Eski En garantiler kuponlarının sonuçları da karnede Banko altında."],

@@ -12,7 +12,7 @@ import time
 from collections import Counter
 from datetime import datetime, timezone
 
-from .analysis import SAFE_CODES, STAT_CODE, TOTAL_CODE, code_label, code_odds, early_hit, pick_hit, stat_ok
+from .analysis import SAFE_CODES, STAT_CODE, TOTAL_CODE, code_label, code_odds, early_hit, fav_side, fav_under, pick_hit, stat_ok
 
 STAKE = 1000           # kupon başına
 PER_THEME = 3          # her temada günlük kupon sayısı
@@ -135,7 +135,9 @@ def _one(pool, theme, relax, use, theme_use, seen):
     for b, cs in pool:
         # güvenli temalarda tercih başka hiçbir kupona girmemiş olmalı (ve sonra da girmez)
         limit = 1 if tk in SAFE_THEMES else MAX_USE
-        ok = [x for x in cs if sel(x[0]) and x[1] >= pmin - relax and omin <= x[2] <= omax
+        # Banko'ya favori takımın gol altı girmez
+        fav = fav_side(((b.get("analysis") or {}).get("prediction") or {}).get("probs") or {}) if tk in SAFE_THEMES else None
+        ok = [x for x in cs if sel(x[0]) and x[1] >= pmin - relax and omin <= x[2] <= omax and not fav_under(x[0], fav)
               and use[(b["id"], x[0])] < limit and (tk != "deger" or edge(x) >= -0.01 - relax / 4)]
         if ok:
             # bu temada henüz kullanılmamış tercihler önce: temanın üç kuponu birbirinin kopyası olmasın

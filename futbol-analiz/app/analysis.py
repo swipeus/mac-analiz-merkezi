@@ -524,11 +524,32 @@ def safe_ok(code):
     return len(legs) <= 3 and all(x in SAFE_CODES or TOTAL_CODE.match(x) or stat_ok(x) for x in legs)
 
 
+# garanti tercihte daha seyrek seçilmesi istenen türler (olasılık puanından düşülür)
+PICK_PENALTY = {"12": 0.05, "team_under": 0.03}
+
+
+def fav_side(pr):
+    """Maçın favorisi: kazanma olasılığı en yüksek ve en az %40 olan taraf ("h"/"a"), yoksa None."""
+    if pr.get("1", 0) >= max(pr.get("2", 0), pr.get("X", 0), 0.40):
+        return "h"
+    if pr.get("2", 0) >= max(pr.get("1", 0), pr.get("X", 0), 0.40):
+        return "a"
+    return None
+
+
+def fav_under(code, fav):
+    """Favori takımın gol altı (ör. favori Trabzonspor için "Trabzonspor gol 2.5 Alt"): favori gol bulmaya oynar,
+    tek bir açık maç bu tercihi yakar. Garanti tercihe ve Banko kuponlarına girmez."""
+    return bool(fav) and any(re.match(rf"^{fav}u\d", x) for x in code.split("&"))
+
+
 def safe_score(p, odds, code=None):
     """Önce yüksek olasılık; piyasanın ima ettiğinden iyi görülen (değerli) seçenekler biraz öne çıkar.
-    Karnede modelin sandığından zayıf çıkan tercih türleri biraz geri alınır."""
+    Karnede modelin sandığından zayıf çıkan tercih türleri biraz geri alınır; çifte şans 12 ve takım golü altı
+    daha seyrek seçilir."""
     edge = p * odds - 1
-    return p + 0.5 * max(-0.10, min(edge, 0.10)) + LESSON.get(pick_type(code), 0.0)
+    pen = PICK_PENALTY["12"] if code == "12" else PICK_PENALTY["team_under"] if re.match(r"^[ha]u\d", code or "") else 0.0
+    return p + 0.5 * max(-0.10, min(edge, 0.10)) + LESSON.get(pick_type(code), 0.0) - pen
 
 
 def code_label(code, home, away):
@@ -622,7 +643,8 @@ def make_picks(pr, odds, home, away):
             if s.get("code") and s["code"] in pr:
                 sel.append((s["code"], pr[s["code"]], s["odds"]))
     safe = None
-    cands = [c for c in sel if c[2] >= MIN_ODDS and c[1] >= 0.5 and safe_ok(c[0])]
+    fav = fav_side(pr)
+    cands = [c for c in sel if c[2] >= MIN_ODDS and c[1] >= 0.5 and safe_ok(c[0]) and not fav_under(c[0], fav)]
     if cands:
         code, p, o = max(cands, key=lambda c: (safe_score(c[1], c[2], c[0]), c[2]))
         safe = {"code": code, "p": round(p, 3), "odds": o}

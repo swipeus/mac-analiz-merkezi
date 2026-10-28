@@ -42,7 +42,7 @@ def lock_pick(store, b):
     if not (b.get("lineup") or {}).get("confirmed") or not pr.get("best_pick"):
         return
     rec = store.pred_get(b["id"])
-    if rec and rec.get("final") and rec.get("pick"):
+    if rec and (rec.get("locked") or rec.get("final") is True) and rec.get("pick"):  # "final" eski kayıtlarda kilit bayrağıydı
         bp = {k: v for k, v in rec["pick"].items() if k != "o0"}
         bp["odds"] = code_odds(b.get("odds"), bp["code"])[0] or bp.get("odds")
         pr["best_pick"] = bp
@@ -78,7 +78,7 @@ def record(store, b):
             # o0: tercihin ilk görülen oranı; maç başlayınca kalan "odds" kapanış oranıdır (kapanış farkı için)
             "pick": {**pr["best_pick"], "o0": code_odds(b.get("odds"), pr["best_pick"]["code"])[1]}, "score": pr["score_pick"],
             "p": {"1": pr.get("p_home"), "X": pr.get("p_draw"), "2": pr.get("p_away")}, "ms": pr.get("pick"),
-            "state": "pending", "final": bool(pr.get("best_final")), "referee": b.get("referee"),
+            "state": "pending", "locked": bool(pr.get("best_final")), "referee": b.get("referee"),
             # değerli oran tercihi: ayrı izlenir (garanti tercih karnesine karışmaz)
             "value": ({**pr["value_pick"], "o0": code_odds(b.get("odds"), pr["value_pick"]["code"])[1]}
                       if pr.get("value_pick") else None),
@@ -176,14 +176,15 @@ def backfill_referees(store):
     kaybın nedeni için). Dönüş: güncellenen kayıt sayısı."""
     n = 0
     for r in store.pred_all():
-        if r.get("referee") and (r.get("final") or {}).get("xg"):
+        fin = r.get("final") if isinstance(r.get("final"), dict) else None  # eski kayıtlarda kilit bayrağı (bool) olabilir
+        if r.get("referee") and (fin or {}).get("xg"):
             continue
         b = store.bundle_get(r["id"])
         body = (b or {}).get("body") or {}
         changed = False
         if body.get("referee") and not r.get("referee"):
             r["referee"], changed = body["referee"], True
-        if r.get("final") and not r["final"].get("xg") and (body.get("final") or {}).get("xg"):
+        if fin and not fin.get("xg") and (body.get("final") or {}).get("xg"):
             r["final"]["xg"], changed = body["final"]["xg"], True
         if changed:
             store.pred_put(r["id"], r)

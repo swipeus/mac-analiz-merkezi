@@ -735,8 +735,13 @@ a.hero-league small { color: var(--accent); font-weight: 700; }
 .llegend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: 12px; color: var(--muted); }
 .llegend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
 @media (max-width: 600px) {
-  .lrow { grid-template-columns: 24px minmax(0, 1fr) 24px 22px 22px 22px 30px 28px 34px; font-size: 12px; padding: 7px 2px; }
+  .lrow { grid-template-columns: 20px minmax(0, 1fr) 20px 20px 20px 20px 28px 26px 30px; column-gap: 2px; font-size: 12px; padding: 7px 2px; }
   .lrow .lgf { display: none; }
+  /* dar ekranda takım adına yer açılsın: favori yıldızı tabloda gizlenir (takım sayfasında duruyor) */
+  .lrow .tstar { display: none; }
+  .lrow .lteam { gap: 5px; }
+  .lrow .lteam img { width: 18px; height: 18px; }
+  .lhead .l5 { white-space: nowrap; font-size: 9px; letter-spacing: 0; }
 }
 .ktable { display: flex; flex-direction: column; }
 .krowp { display: grid; grid-template-columns: 28px 36px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 4px; border-bottom: 1px solid rgba(255,255,255,.04); cursor: pointer; }
@@ -1089,9 +1094,9 @@ body.on-moves footer.foot { display: block; }
 .vkarne .pos, .lessons .pos { color: #56d364; } .vkarne .neg, .lessons .neg { color: #ff7b72; }
 /* karneden öğrenilenler */
 .lessons { display: flex; flex-direction: column; }
-.lrow { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 4px 10px; padding: 7px 0; border-top: 1px solid var(--line); font-size: 13px; }
-.lrow:first-child { border-top: 0; }
-.lv { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; } .lv b { margin-left: 4px; }
+.lsrow { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 4px 10px; padding: 7px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.lsrow:first-child { border-top: 0; }
+.lsv { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; } .lsv b { margin-left: 4px; }
 .ltag { font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 999px; background: rgba(255,255,255,.06); color: var(--muted); white-space: nowrap; }
 .ltag.pos { background: rgba(46,160,67,.15); color: #56d364 !important; } .ltag.neg { background: rgba(218,54,51,.15); color: #ff7b72 !important; }
-@media (max-width: 480px) { .lrow { grid-template-columns: 1fr auto; } .lrow .lv { grid-column: 1 / -1; grid-row: 2; } }
+@media (max-width: 480px) { .lsrow { grid-template-columns: 1fr auto; } .lsrow .lsv { grid-column: 1 / -1; grid-row: 2; } }

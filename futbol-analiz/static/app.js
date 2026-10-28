@@ -1466,8 +1466,8 @@ function lessonsHtml() {
   return `<h3>🧠 Modelin karneden öğrendikleri</h3><div class="lessons">${rows.map(([t, r]) => {
     const d = Math.round((r.hit - r.model) * 100);
     const tag = r.lesson ? `<span class="ltag neg">geri alınıyor</span>` : r.proven ? `<span class="ltag pos">kanıtlandı</span>` : `<span class="ltag">izleniyor</span>`;
-    return `<div class="lrow"><span class="lt">${esc(cap(t))} <small class="muted">· ${r.n} sonuç</small></span>
-      <span class="lv">model %${Math.round(r.model * 100)} → gerçek %${Math.round(r.hit * 100)} <b class="${d >= 0 ? "pos" : "neg"}">${d >= 0 ? "+" : ""}${d}</b></span>${tag}</div>`;
+    return `<div class="lsrow"><span class="lst">${esc(cap(t))} <small class="muted">· ${r.n} sonuç</small></span>
+      <span class="lsv">model %${Math.round(r.model * 100)} → gerçek %${Math.round(r.hit * 100)} <b class="${d >= 0 ? "pos" : "neg"}">${d >= 0 ? "+" : ""}${d}</b></span>${tag}</div>`;
   }).join("")}</div>
   <p class="muted">Garanti tercih ve kupon ayaklarının sonuçlarından. Modelin sandığından zayıf çıkan türler garanti tercih seçiminde geri alınır; olasılıkları tutan (en az 15 sonuç) türler "kanıtlandı" sayılır ve değerli oran tercihi yalnızca bunlardan seçilir.</p>`;
 }

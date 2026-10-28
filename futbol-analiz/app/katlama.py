@@ -1,5 +1,6 @@
 """Katlama serisi: her gün tek kupon, kazanınca dönen paranın tamamı ertesi günün kuponuna yatırılır
-(1.000 → 2.000 → 4.000 ...). Kaybedince seri biter, ertesi gün 1.000 ₺ ile yeni seri başlar.
+(1.000 → 2.000 → 4.000 ...). 3 gün üst üste kazanınca seri kapanır: kârın yarısıyla yeni seri başlar, gerisi kenara
+alınır. Kaybedince seri biter, ertesi gün 1.000 ₺ ile yeni seri başlar.
 
 Kurallar: toplam oran 1.90-3.00, her tercihin model olasılığı en az %65, her maçtan tek tercih. Diğer kuponlardan
 bağımsızdır (aynı tercih başka kuponlarda da olabilir) ve karnenin kâr/zarar hesabına girmez. Kupon, maçlarından
@@ -89,36 +90,49 @@ def settle(store):
             store.kat_put(doc["date"], doc)
 
 
+CLOSE_AFTER = 3     # bu kadar gün üst üste kazanınca seri kapanır
+REINVEST = 0.5      # kapanan serinin kârının bu kadarı ile yeni seri başlar; gerisi (ve ana para) kenara alınır
+
+
 def export(store):
-    """Seri hesabı: her günün yatırılan ve dönen tutarı, seri numarası, kasa ve toplam."""
+    """Seri hesabı. Her gün kasanın tamamı yatırılır. 3 gün üst üste kazanınca seri kapanır: kârın yarısıyla yeni seri
+    başlar, ana para ve kârın diğer yarısı kenara alınır. Kaybedince seri biter, yeni seri cepten 1.000 ₺ ile başlar.
+    Toplam = kenardaki para + kasa - cepten konan para."""
     days, bank, series, streak, best = [], START_STAKE, 1, 0, 0
-    lost_series, pending_before = [], False
+    series_start, invested, saved = START_STAKE, START_STAKE, 0.0
+    closed, pending_before = [], False
     for doc in store.kat_all():
         if doc["date"] < START_DATE:
             continue
         c = doc["coupon"]
-        row = {"date": doc["date"], "locked": bool(doc.get("locked")), "coupon": c, "series": series}
-        if pending_before:  # önceki gün sonuçlanmadan yatırılacak tutar belli değil
-            row["stake"] = None
-        else:
-            row["stake"] = round(bank, 2)
+        row = {"date": doc["date"], "locked": bool(doc.get("locked")), "coupon": c, "series": series,
+               "stake": None if pending_before else round(bank, 2)}
         if c["state"] == "done" and not pending_before:
             if c.get("won"):
                 bank = round(bank * c["paid_odds"], 2)
                 streak += 1
                 best = max(best, streak)
                 row["ret"] = bank
+                if streak >= CLOSE_AFTER:  # seri hedefe ulaştı: kâr alınır
+                    profit = bank - series_start
+                    nxt = round(max(profit * REINVEST, START_STAKE), 2)
+                    take = round(bank - nxt, 2)
+                    saved += take
+                    row["closed"] = {"profit": round(profit, 2), "saved": take, "next": nxt}
+                    closed.append({"series": series, "result": "hedef", "start": series_start, "end": bank, "saved": take})
+                    bank, series_start, series, streak = nxt, nxt, series + 1, 0
             else:
                 row["ret"] = 0
-                lost_series.append({"series": series, "days": streak, "peak": row["stake"]})
-                bank, series, streak = START_STAKE, series + 1, 0
+                closed.append({"series": series, "result": "kayıp", "start": series_start, "end": 0, "saved": 0})
+                bank, series_start, series, streak = START_STAKE, START_STAKE, series + 1, 0
+                invested += START_STAKE  # yeni seri cepten
         elif c["state"] != "done":
             pending_before = True
         days.append(row)
-    invested = START_STAKE * series
-    return {"start": START_DATE, "start_stake": START_STAKE, "rules": {"odds": ODDS, "min_p": MIN_P},
-            "days": days[::-1], "bank": bank, "series": series, "streak": streak, "best": best,
-            "lost_series": lost_series, "invested": invested, "net": round(bank - invested, 2)}
+    return {"start": START_DATE, "start_stake": START_STAKE,
+            "rules": {"odds": ODDS, "min_p": MIN_P, "close_after": CLOSE_AFTER, "reinvest": REINVEST},
+            "days": days[::-1], "bank": bank, "series": series, "series_start": series_start, "streak": streak, "best": best,
+            "closed": closed, "saved": round(saved, 2), "invested": invested, "net": round(saved + bank - invested, 2)}
 
 
 def seed(store, data):

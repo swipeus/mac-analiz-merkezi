@@ -1180,3 +1180,7 @@ body.on-moves footer.foot { display: block; }
 .kathist summary { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; padding: 8px 0; cursor: pointer; list-style: none; font-size: 13px; }
 .kathist summary::-webkit-details-marker { display: none; }
 .kathist .pos { color: #56d364; } .kathist .neg { color: #ff7b72; }
+.katgoal { display: flex; gap: 4px; margin-top: 6px; }
+.katgoal i { flex: 1; height: 6px; border-radius: 3px; background: rgba(255,255,255,.1); }
+.katgoal i.on { background: #a371f7; }
+.katclose { font-size: 12px; color: #7ee2a8; background: rgba(46,160,67,.1); border-radius: 8px; padding: 5px 8px; margin: 0 0 8px; }

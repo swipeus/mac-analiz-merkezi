@@ -1263,22 +1263,26 @@ async function drawKatlama() {
   const open = (K.days || []).filter((d) => d.coupon.state !== "done");
   const done = (K.days || []).filter((d) => d.coupon.state === "done");
   const won = done.filter((d) => d.coupon.won).length;
-  const path = [K.start_stake].concat(done.filter((d) => d.series === K.series && d.coupon.won).slice().reverse().map((d) => d.ret));
+  const path = [K.series_start || K.start_stake].concat(done.filter((d) => d.series === K.series && d.coupon.won).slice().reverse().map((d) => d.ret));
+  const R = K.rules || {}, goal = R.close_after || 3;
   const summary = `<div class="card katsum" style="--c:#a371f7">${head("🔁", `Katlama serisi <span class="muted">· ${new Date(K.start + "T12:00:00").toLocaleDateString("tr-TR", { day: "numeric", month: "long" })}'den beri</span>`)}
     <div class="katk">
-      <div class="big"><span>Kasa</span><b>${tl(K.bank)}</b><small>${K.series}. seri · ${K.streak} gün üst üste</small></div>
-      <div><span>Toplam</span><b class="${K.net >= 0 ? "pos" : "neg"}">${tl(K.net, true)}</b><small>yatırılan ${tl(K.invested)}</small></div>
+      <div class="big"><span>Kasa (bu seride)</span><b>${tl(K.bank)}</b><small>${K.series}. seri · ${K.streak}/${goal} gün · hedefe ${goal - K.streak} kazanç kaldı</small>
+        <div class="katgoal">${Array.from({ length: goal }, (_, i) => `<i class="${i < K.streak ? "on" : ""}"></i>`).join("")}</div></div>
+      <div><span>Kenarda</span><b class="pos">${tl(K.saved || 0)}</b><small>kapanan serilerden alınan</small></div>
+      <div><span>Toplam</span><b class="${K.net >= 0 ? "pos" : "neg"}">${tl(K.net, true)}</b><small>cepten konan ${tl(K.invested)}</small></div>
       <div><span>Kupon</span><b>${won}/${done.length}</b><small>tuttu</small></div>
-      <div><span>En uzun seri</span><b>${K.best} gün</b><small>${(K.lost_series || []).length} seri bitti</small></div>
+      <div><span>Seriler</span><b>${(K.closed || []).filter((x) => x.result === "hedef").length} hedef · ${(K.closed || []).filter((x) => x.result === "kayıp").length} kayıp</b><small>en uzun ${K.best} gün</small></div>
     </div>
     ${path.length > 1 ? `<div class="katpath">${path.map((x, i) => `<span class="${i === path.length - 1 ? "now" : ""}">${shortTl(x).replace(/^\+/, "")} ₺</span>`).join("<i>→</i>")}</div>` : ""}
-    <p class="muted">Her gün tek kupon: toplam oran 1.90-3.00, her tercihin model olasılığı en az %65. ${tl(K.start_stake)} ile başlar; kazanınca dönen paranın tamamı ertesi günün kuponuna yatırılır (1.000 → 2.000 → 4.000 gibi). Kaybedince seri biter, ertesi gün ${tl(K.start_stake)} ile yeni seri başlar. Diğer kuponlardan bağımsızdır (aynı tercih başka kuponlarda da olabilir) ve karnenin kâr/zararına eklenmez. Kupon, maçlarından birinin resmi 11'i açıklanınca kilitlenir.</p></div>`;
+    <p class="muted">Her gün tek kupon: toplam oran 1.90-3.00, her tercihin model olasılığı en az %65. ${tl(K.start_stake)} ile başlar; kazanınca dönen paranın tamamı ertesi günün kuponuna yatırılır (1.000 → 2.000 → 4.000 gibi). <b>${goal} gün üst üste kazanınca seri kapanır:</b> kârın %${Math.round((R.reinvest || 0.5) * 100)}'si ile yeni seri başlar, ana para ve kârın kalanı kenara alınır (örnek: 1.000 → 8.000 olunca 4.500 kenara, yeni seri 3.500 ile). Kaybedince seri biter, ertesi gün cepten ${tl(K.start_stake)} ile yeni seri başlar. Diğer kuponlardan bağımsızdır (aynı tercih başka kuponlarda da olabilir) ve karnenin kâr/zararına eklenmez. Kupon, maçlarından birinin resmi 11'i açıklanınca kilitlenir.</p></div>`;
   const cards = open.map((d) => `<h3 class="kath">${esc(cap(fmt(d.date)))}</h3>` + couponCard({ ...d.coupon, kstake: d.stake, name: `Katlama · ${d.series}. seri` }, !d.locked)).join("");
   const hist = done.length ? `<div class="card" style="--c:#58a6ff">${head("📜", "Geçmiş")}${done.map((d) => {
     const c = d.coupon;
     return `<details class="kathist"><summary><span class="kst ${c.won ? "ok" : "no"}">${c.won ? "✓" : "✗"}</span>
       <span>${esc(cap(fmt(d.date)))} <small class="muted">· ${d.series}. seri · oran ${nf(c.paid_odds || c.odds, 2)}</small></span>
       <b class="${c.won ? "pos" : "neg"}">${d.stake != null ? `${shortTl(d.stake).replace(/^\+/, "")} → ${shortTl(d.ret || 0).replace(/^\+/, "")} ₺` : ""}</b></summary>
+      ${d.closed ? `<div class="katclose">🏁 Seri hedefe ulaştı: ${tl(d.closed.saved)} kenara alındı, yeni seri ${tl(d.closed.next)} ile başladı.</div>` : ""}
       ${couponCard({ ...c, kstake: d.stake, name: `Katlama · ${d.series}. seri` }, false)}</details>`;
   }).join("")}</div>` : "";
   box.innerHTML = summary + (cards || `<div class="card"><p class="muted">Bugün için katlama kuponu henüz yok. Kurallara uyan (oran 1.90-3.00, tercih başına %65+) yeterli maç olunca hazırlanır.</p></div>`) + hist;
@@ -2787,6 +2791,7 @@ const RELEASES = [
       ["🔁", "Günde tek kupon", "Kombineler'de yeni Katlama sekmesi: her gün oranı 1.90-3.00, tercih başına en az %65 güvenle tek kupon."],
       ["💰", "Para katlanır", "1.000 ₺ ile başlar; kazanınca dönen paranın tamamı ertesi güne yatırılır (1.000 → 2.000 → 4.000). Kaybedince 1.000 ₺ ile yeni seri."],
       ["📒", "Ayrı hesap", "Kasa, toplam, en uzun seri ve geçmiş ayrı tutulur; karnenin kâr/zararına eklenmez, diğer kuponlardan bağımsızdır."],
+      ["🏁", "3 günde kâr al", "3 gün üst üste kazanınca seri kapanır: kârın yarısıyla yeni seri başlar, ana para ve kârın diğer yarısı kenara alınır. Kaybedince 1.000 ₺ ile yeniden."],
     ],
   },
   {

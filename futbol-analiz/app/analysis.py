@@ -543,13 +543,13 @@ def fav_under(code, fav):
     return bool(fav) and any(re.match(rf"^{fav}u\d", x) for x in code.split("&"))
 
 
-def safe_score(p, odds, code=None):
+def safe_score(p, odds, code=None, league=None):
     """Önce yüksek olasılık; piyasanın ima ettiğinden iyi görülen (değerli) seçenekler biraz öne çıkar.
     Karnede modelin sandığından zayıf çıkan tercih türleri biraz geri alınır; çifte şans 12 ve takım golü altı
     daha seyrek seçilir."""
     edge = p * odds - 1
     pen = PICK_PENALTY["12"] if code == "12" else PICK_PENALTY["team_under"] if re.match(r"^[ha]u\d", code or "") else 0.0
-    return p + 0.5 * max(-0.10, min(edge, 0.10)) + LESSON.get(pick_type(code), 0.0) - pen
+    return p + 0.5 * max(-0.10, min(edge, 0.10)) + LESSON.get(pick_type(code), 0.0) - pen + LEAGUE_LESSON.get(league, 0.0)
 
 
 def code_label(code, home, away):
@@ -617,6 +617,7 @@ CARD_TIRED = 0.10  # 3.5 günden az dinlenen takımın kart beklentisi +%10 (ger
 # PROVEN: modelin olasılıklarının karnede tuttuğu türler; değerli oran tercihi yalnızca bunlardan seçilir
 LESSON = {}
 PROVEN = set()
+LEAGUE_LESSON = {}  # karnede garanti tercihleri zayıf giden liglerin puan cezası {lig id: negatif düzeltme}
 VALUE_ODDS = (1.60, 3.20)  # değerli tercihin oran aralığı
 VALUE_MIN_P = 0.42
 VALUE_EDGE = 0.05          # model olasılığı x oran - 1 en az %5
@@ -635,7 +636,7 @@ def code_odds(odds, code):
     return None, None
 
 
-def make_picks(pr, odds, home, away):
+def make_picks(pr, odds, home, away, league=None):
     """En garanti tercih (oran >= 1.30) ve olası sürpriz."""
     sel = []  # (kod, model olasılığı, oran)
     for m in (odds or {}).get("markets") or []:
@@ -646,7 +647,7 @@ def make_picks(pr, odds, home, away):
     fav = fav_side(pr)
     cands = [c for c in sel if c[2] >= MIN_ODDS and c[1] >= 0.5 and safe_ok(c[0]) and not fav_under(c[0], fav)]
     if cands:
-        code, p, o = max(cands, key=lambda c: (safe_score(c[1], c[2], c[0]), c[2]))
+        code, p, o = max(cands, key=lambda c: (safe_score(c[1], c[2], c[0], league), c[2]))
         safe = {"code": code, "p": round(p, 3), "odds": o}
     else:  # oran yoksa: adil oranı (1/olasılık) 1.30'un altında kalan seçenekler elenir
         model = [(c, pr[c]) for c in SAFE_CODES if c in pr and 1 / max(pr[c], 1e-9) >= MIN_ODDS]
@@ -973,7 +974,7 @@ def predict(b, prof_h, prof_a):
             f_ = CALIB.get(pick_type(c))
             if f_ and pr[c] is not None:
                 pr[c] = min(0.97, pr[c] * f_)
-    safe, surprise, value = make_picks(pr, odds, H, A)
+    safe, surprise, value = make_picks(pr, odds, H, A, b.get("league_id"))
     score_pick = coherent_score(smat, pr, lam_h, lam_a)
     cs_m = _odds_market(odds, "odds_correct_score")
     if cs_m:  # skor tahmininin oranı (karnede 10 ₺'lik skor bahsi için)

@@ -72,6 +72,10 @@ async function liveMatch(id) {
   const box = document.getElementById("liveBox"), lbox = document.getElementById("liveLineup");
   if (!box && !lbox) return;
   const parts = [], lineupParts = [];
+  if (st.started && lastB && lastB.id === id && typeof trackHtml === "function") {
+    // tercihlerin anlık durumu (canlı istatistikle); maç bitince sonuç ve neden
+    parts.push(trackHtml(lastB, trackCtx(d.home.score, d.away.score, !!st.finished, d.stats), live ? `Tercihlerin durumu <span class="muted">· ${esc(st.live || "canlı")}</span>` : "Maç sonu değerlendirmesi"));
+  }
   if (st.started) {
     const evs = d.events.slice().sort((a, b) => (b.min + (b.plus || 0) / 100) - (a.min + (a.plus || 0) / 100));
     const evHtml = evs.length ? evs.map((e) => {

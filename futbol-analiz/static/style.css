@@ -1124,3 +1124,43 @@ body.on-moves footer.foot { display: block; }
 .otiles:has(.otk) { padding-top: 6px; }
 .omkts { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
 @media (max-width: 420px) { .otile .oto { font-size: 16px; } .otiles { gap: 5px; } }
+
+/* tercih takibi (canlı ve maç sonu) */
+.trks { display: flex; flex-direction: column; gap: 6px; }
+.trkxg { margin: -4px 0 8px; font-size: 12px; }
+.trk { display: grid; grid-template-columns: 26px 1fr; gap: 8px; align-items: start; padding: 8px 10px; border-radius: 10px; background: var(--panel2); border: 1px solid var(--line); }
+.trk b { font-size: 13px; } .trk small { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+.tri { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 800; background: rgba(255,255,255,.07); }
+.trk.hit { border-color: rgba(46,160,67,.55); } .trk.hit .tri { background: #2ea043; color: #fff; }
+.trk.lost { border-color: rgba(218,54,51,.55); } .trk.lost .tri { background: #da3633; color: #fff; }
+.trk.open .tri { background: rgba(227,179,65,.18); color: #e3b341; }
+.why { font-size: 12px; margin: 4px 0 0; padding: 3px 8px; border-radius: 8px; background: rgba(255,255,255,.05); color: var(--muted); }
+.trk .why { display: inline-block; }
+.why.luck { color: #56d4dd; background: rgba(57,197,207,.1); } .why.close { color: #e3b341; background: rgba(227,179,65,.1); } .why.miss { color: #ff7b72; background: rgba(218,54,51,.1); }
+.krow .why { margin: 6px 0 2px; }
+/* maç listesi: tuttu / tutmadı */
+.pill.safe.won { border-color: #2ea043; background: rgba(46,160,67,.22); } .pill.safe.won i { color: #56d364; font-weight: 800; }
+.pill.safe.lost { border-color: rgba(218,54,51,.6); background: rgba(218,54,51,.12); color: #ff9b94; text-decoration: line-through; text-decoration-color: rgba(255,123,114,.5); }
+.pill.safe.lost i { color: #ff7b72; font-weight: 800; text-decoration: none; }
+.quickbar { margin: 0 2px 10px; }
+.quickbar .chipbtn small { color: var(--muted); font-weight: 600; margin-left: 2px; }
+/* haftalık rapor */
+.wlines { list-style: none; padding: 0; margin: 4px 0 8px; display: flex; flex-direction: column; gap: 5px; font-size: 14px; }
+/* hakem sayfası */
+.rflink { font-size: 12px; text-decoration: none; margin-left: auto; }
+.rfstats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-top: 8px; }
+.rfstats > div { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 3px; }
+.rfstats span { font-size: 12px; color: var(--muted); } .rfstats b { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.rfstats small { font-size: 11px; }
+.rfbar { position: relative; height: 6px; border-radius: 3px; background: rgba(255,255,255,.08); }
+.rfbar span { display: block; height: 100%; border-radius: 3px; background: #d29922; }
+.rfbar i { position: absolute; top: -3px; width: 2px; height: 12px; background: var(--text); opacity: .7; }
+.rfrow { display: grid; grid-template-columns: 64px 1fr auto auto; gap: 8px; align-items: center; padding: 7px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.rfrow:first-of-type { border-top: 0; } .rfk { font-size: 12px; white-space: nowrap; }
+/* kupon ilerlemesi */
+.kprog { display: flex; align-items: center; gap: 8px; margin: 8px 0 2px; }
+.kpb { flex: 1; display: flex; gap: 2px; height: 8px; }
+.kpb span { border-radius: 4px; } .kpb .h { background: #2ea043; } .kpb .m { background: #da3633; } .kpb .l { background: #f85149; animation: livepulse 1.6s ease-in-out infinite; }
+.kpb .v { background: #6e7681; } .kpb .w { background: rgba(255,255,255,.1); }
+.kprog small { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.klive { font-size: 12px; color: #f85149; margin: 2px 0 4px; }

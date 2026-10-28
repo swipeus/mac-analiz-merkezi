@@ -27,7 +27,8 @@ def export(store):
     coupons = [d for d in store.coupon_all() if d["date"] >= KARNE_START]
     rep = calib_table(store)[1]
     lessons(rep)  # rapora ders ve "kanıtlanmış" işaretlerini ekler
-    return {"start": KARNE_START, "singles": singles, "coupons": coupons, "lessons": rep}
+    return {"start": KARNE_START, "singles": singles, "coupons": coupons, "lessons": rep,
+            "league_lessons": league_lessons(store)[1]}
 
 
 def lock_pick(store, b):
@@ -55,6 +56,10 @@ def record(store, b):
     pr = (b.get("analysis") or {}).get("prediction") or {}
     old = store.pred_get(mid)
 
+    if old and b.get("referee") and old.get("referee") != b.get("referee"):  # hakem sayfası için
+        old["referee"] = b["referee"]
+        if old.get("state") != "pending":
+            store.pred_put(mid, old)
     if st.get("cancelled"):
         if old and old.get("state") == "pending":
             old["state"] = "void"
@@ -73,7 +78,7 @@ def record(store, b):
             # o0: tercihin ilk görülen oranı; maç başlayınca kalan "odds" kapanış oranıdır (kapanış farkı için)
             "pick": {**pr["best_pick"], "o0": code_odds(b.get("odds"), pr["best_pick"]["code"])[1]}, "score": pr["score_pick"],
             "p": {"1": pr.get("p_home"), "X": pr.get("p_draw"), "2": pr.get("p_away")}, "ms": pr.get("pick"),
-            "state": "pending", "final": bool(pr.get("best_final")),
+            "state": "pending", "final": bool(pr.get("best_final")), "referee": b.get("referee"),
             # değerli oran tercihi: ayrı izlenir (garanti tercih karnesine karışmaz)
             "value": ({**pr["value_pick"], "o0": code_odds(b.get("odds"), pr["value_pick"]["code"])[1]}
                       if pr.get("value_pick") else None),
@@ -164,6 +169,49 @@ def lessons(report):
             proven.add(t)
             r["proven"] = True
     return lesson, proven
+
+
+def backfill_referees(store):
+    """Hakem bilgisi olmayan eski kayıtlara, elde maç paketi varsa hakemi ve maç sonu xG'yi yazar (hakem sayfası ve
+    kaybın nedeni için). Dönüş: güncellenen kayıt sayısı."""
+    n = 0
+    for r in store.pred_all():
+        if r.get("referee") and (r.get("final") or {}).get("xg"):
+            continue
+        b = store.bundle_get(r["id"])
+        body = (b or {}).get("body") or {}
+        changed = False
+        if body.get("referee") and not r.get("referee"):
+            r["referee"], changed = body["referee"], True
+        if r.get("final") and not r["final"].get("xg") and (body.get("final") or {}).get("xg"):
+            r["final"]["xg"], changed = body["final"]["xg"], True
+        if changed:
+            store.pred_put(r["id"], r)
+            n += 1
+    return n
+
+
+LEAGUE_MIN_N = 10
+
+
+def league_lessons(store):
+    """Lig bazında ders: garanti tercihleri karnede modelin olasılığının belirgin altında kalan liglerin tercihleri
+    seçimde biraz geri alınır (küçültülmüş fark, en fazla 4 puan; iyi giden ligler öne alınmaz).
+    Dönüş: ({lig id: düzeltme}, rapor {lig id: {ad, n, model, hit, lesson?}})."""
+    by = {}
+    for r in store.pred_all():
+        if tr_day(r.get("utc")) >= KARNE_START and r.get("state") == "done" and r.get("pick_hit") is not None:
+            by.setdefault(r.get("league_id"), []).append((r["pick"]["p"], bool(r["pick_hit"]), r.get("league")))
+    out, rep = {}, {}
+    for lid, xs in by.items():
+        n = len(xs)
+        mp, hr = sum(p for p, _, _ in xs) / n, sum(h for _, h, _ in xs) / n
+        rep[lid] = {"name": xs[0][2], "n": n, "model": round(mp, 3), "hit": round(hr, 3)}
+        if n >= LEAGUE_MIN_N:
+            adj = round(max(-0.04, min(0.0, (hr - mp) * n / (n + 40))), 3)
+            if adj < 0:
+                out[lid] = rep[lid]["lesson"] = adj
+    return out, rep
 
 
 def seed(store, data):

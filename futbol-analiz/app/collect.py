@@ -565,6 +565,7 @@ async def build_bundle(src, match_id, prev_odds=None):
         "yellow": [fin_h.get("yellow"), fin_a.get("yellow")],
         "shots": [fin_h.get("shots"), fin_a.get("shots")],
         "sot": [fin_h.get("sot"), fin_a.get("sot")],
+        "xg": [fin_h.get("xg"), fin_a.get("xg")],  # kaybedilen tercihin nedeni (şans mı, hata mı) için
         "red": [hs_.get("numberOfHomeRedCards") or 0, hs_.get("numberOfAwayRedCards") or 0],
     } if hs_.get("started") else None
     info = facts.get("infoBox") or {}

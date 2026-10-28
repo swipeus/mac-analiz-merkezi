@@ -57,6 +57,10 @@ def enrich_day(store, matches):
             bp = pr.get("best_pick")
             m["pred"]["safe"] = {"label": bp["label"], "odds": bp.get("odds"),
                                  "final": bool(pr.get("best_final")) or bool((b["body"].get("status") or {}).get("started"))} if bp else None
+            rec = store.pred_get(m["id"]) or {}
+            if m["pred"]["safe"] and rec.get("state") == "done":  # maç listesinde ✓/✗
+                m["pred"]["safe"]["hit"] = rec.get("pick_hit")
+            m["pred"]["value"] = bool(pr.get("value_pick"))
             m["lineup_type"] = lu.get("type")
             m["absent"] = [len((lu.get(s) or {}).get("unavailable", [])) for s in ("home", "away")]
             m["updated"] = b["ts"]

@@ -204,8 +204,9 @@ async function renderDay(silent) {
     v.innerHTML = `<div class="loading">Hata: ${esc(e.message)}</div>`; return;
   }
   if (state.current || state.player || state.karne || state.kombine || state.lig || state.oranlar) return;
-  const ms = dayCache.matches.filter((m) => !state.off.has(m.league_id));
-  if (!ms.length) { v.innerHTML = `<div class="loading">Bu tarihte seçili liglerde maç yok.</div>`; return; }
+  const all = dayCache.matches.filter((m) => !state.off.has(m.league_id));
+  if (!all.length) { v.innerHTML = `<div class="loading">Bu tarihte seçili liglerde maç yok.</div>`; return; }
+  const ms = all.filter(QUICK[quick] ? QUICK[quick][2] : () => true);
   // Map: sunucunun lig sırasını korur (sayısal anahtarlı nesne sırayı bozar)
   const groups = new Map();
   ms.forEach((m) => { if (!groups.has(m.league_id)) groups.set(m.league_id, []); groups.get(m.league_id).push(m); });
@@ -229,7 +230,8 @@ async function renderDay(silent) {
   const mineHtml = mine.length ? `<section class="lg-block mine-block">
       <div class="lg-title"><span class="sorticon">★</span><b>Takımlarım</b><span>${mine.length} maç</span></div>
       <div class="mgrid">${mine.map((m) => cardHtml(m, true)).join("")}</div></section>` : "";
-  v.innerHTML = highlightsHtml(ms, dayCache.coupons || []) + stateLegend(ms) + mineHtml + body;
+  v.innerHTML = highlightsHtml(all, dayCache.coupons || []) + quickBar(all) + stateLegend(ms) + (ms.length ? mineHtml + body : `<div class="card"><p class="muted">Bu filtreye uyan maç yok.</p></div>`);
+  v.querySelectorAll("[data-quick]").forEach((x) => x.onclick = () => { quick = x.dataset.quick; safeSet("quick", quick); renderDay(true); });
   v.querySelectorAll("[data-id]").forEach((r) => r.onclick = () => location.hash = "#/mac/" + r.dataset.id);
   v.querySelectorAll("[data-go]").forEach((r) => r.onclick = () => location.hash = r.dataset.go);
   if (typeof liveTick === "function") setTimeout(liveTick, 50);  // kartlara anlık skorları uygula
@@ -292,6 +294,23 @@ function probBoxes(items, mid) {
     <span class="pbl">${BOX_ICON[ic] || ico(ic)} ${esc(l)}</span><b>${v != null ? pc(v) : "—"}</b>${odds ? `<small class="pbo">${nf(odds, 2)}</small>` : ""}
     <span class="pbb"><span style="width:${v != null ? Math.round(v * 100) : 0}%"></span></span></div>`).join("")}</div>`;
 }
+// maç listesinde tek dokunuşla filtre
+const QUICK = {
+  all: ["Tümü", "", () => true],
+  final: ["Kesinleşenler", "✅", (m) => m.pred && m.pred.safe && m.pred.safe.final && !m.finished],
+  value: ["Değerli oranlı", "💎", (m) => m.pred && m.pred.value],
+  live: ["Canlı", "🔴", (m) => m.started && !m.finished],
+  mine: ["Takımlarım", "★", (m) => isMine(m.home.id) || isMine(m.away.id)],
+  done: ["Bitenler", "🏁", (m) => m.finished],
+};
+let quick = safeGet("quick") || "all";
+if (!QUICK[quick]) quick = "all";
+function quickBar(ms) {
+  return `<div class="chiprow quickbar">${Object.entries(QUICK).map(([k, [l, ic, f]]) => {
+    const n = k === "all" ? ms.length : ms.filter(f).length;
+    return k !== "all" && !n && quick !== k ? "" : `<button class="chipbtn ${quick === k ? "on" : ""}" data-quick="${k}">${ic ? ic + " " : ""}${l} <small>${n}</small></button>`;
+  }).join("")}</div>`;
+}
 // maç kartının sol kenar rengi: maçın ve tahminin durumu
 const STATE_LABEL = { live: "Canlı", done: "Maç bitti", final: "Resmi 11'ler açıklandı · tercih kesinleşti", open: "Resmi 11'ler bekleniyor · tercih değişebilir", wait: "Analiz hazırlanıyor", off: "İptal" };
 function matchState(m) {
@@ -324,7 +343,7 @@ function cardHtml(m, sorted) {
       <div class="probbar"><span style="width:${p.p_home * 100}%"></span><span style="width:${p.p_draw * 100}%"></span><span style="width:${p.p_away * 100}%"></span></div>
       <span class="pa">${pc(p.p_away)}</span></div>
     <div class="pills">
-      ${p.safe ? `<span class="pill safe${p.safe.final ? "" : " tbd"}" title="${p.safe.final ? "Son tercih (resmi 11'ler sonrası)" : "Resmi 11'ler açıklanınca kesinleşir, değişebilir"}"><i>${p.safe.final ? "✅" : "!"}</i>${esc(p.safe.label.replace(/ \(.*\)$/, ""))}${p.safe.odds ? ` @${nf(p.safe.odds, 2)}` : ""}</span>` : ""}
+      ${p.safe ? `<span class="pill safe${p.safe.hit === true ? " won" : p.safe.hit === false ? " lost" : p.safe.final ? "" : " tbd"}" title="${p.safe.hit === true ? "Tuttu" : p.safe.hit === false ? "Tutmadı" : p.safe.final ? "Son tercih (resmi 11'ler sonrası)" : "Resmi 11'ler açıklanınca kesinleşir, değişebilir"}"><i>${p.safe.hit === true ? "✓" : p.safe.hit === false ? "✗" : p.safe.final ? "✅" : "!"}</i>${esc(p.safe.label.replace(/ \(.*\)$/, ""))}${p.safe.odds ? ` @${nf(p.safe.odds, 2)}` : ""}</span>` : ""}
     </div>
     ${probBoxes(boxItems(p.over25, p.btts, p.cpick, p.kpick, p.bodds), m.id)}` : `<div class="pending">Analiz hazırlanıyor…</div>`;
   const stc = matchState(m);
@@ -405,6 +424,14 @@ async function renderMatch(id, silent, refresh) {
   v.innerHTML = matchHtml(b);
   bindMatch();
   if (silent) window.scrollTo(0, y);
+  // başlamış maçta kupon ayaklarının durumu için maçın gününün kuponları (liste açılmadan gelindiyse)
+  const dk = trDay(b.utc);
+  if (b.status && b.status.started && !(dayCache && dayCache.date === dk) && !(couponDay && couponDay.date === dk)) {
+    api("/api/day?date=" + dk).then((d) => {
+      couponDay = d;
+      if (state.current === id && matchTab === "ozet") { $(".mtab-body").innerHTML = matchTabBody(lastB); bindOdds(); }
+    }).catch(() => {});
+  }
 }
 const REFRESH_LABEL = () => STATIC ? "Yeni veri var mı?" : "Şimdi yenile";
 function bindMatch() {
@@ -463,7 +490,7 @@ function matchHtml(b) {
   const chips = [
     b.round && chip("🗓️", esc(b.round) + ". hafta"),
     b.venue && chip("🏟️", esc(b.venue)),
-    b.referee && chip(WHISTLE, "Hakem: " + esc(b.referee)),
+    b.referee && chip(WHISTLE, `<a class="tlink" href="#/hakem/${b.id}" title="Hakem sayfası">Hakem: ${esc(b.referee)}</a>`),
     w && chip(weatherIcon(w.description), `${w.temperature}°C · ${esc(cap(trWeather(w.description)))}${w.windSpeed != null ? ` · Rüzgar ${w.windSpeed} m/s` : ""}`),
   ].filter(Boolean).join("");
   const conf = { "Yüksek": "#3fb950", "Orta": "#d29922", "Düşük": "#f85149" }[P.confidence] || "#8b98a8";
@@ -522,7 +549,7 @@ function matchTabBody(b) {
     case "haber":
       return `${newsFilterBar()}<div class="grid2">${newsHtml(b.news.home, H, "home-c")}${newsHtml(b.news.away, W, "away-c")}</div>${extrasHtml(b)}`;
     default:
-      return `${newsAlertsHtml(b)}${commentaryHtml(A, b)}${predictionHtml(b)}${refereeHtml(b)}`;
+      return `${b.status && b.status.finished ? trackHtml(b, finalCtx(b), "Maç sonu değerlendirmesi") : ""}${newsAlertsHtml(b)}${commentaryHtml(A, b)}${predictionHtml(b)}${refereeHtml(b)}`;
   }
 }
 function predictionHtml(b) {
@@ -1128,6 +1155,16 @@ const karneCouponList = (k) => (k.coupons || []).flatMap((d) => d.coupons.map((c
 let couponTab = "banko";
 const legStatus = (l) => l.void ? `<span class="kst wait">↩ İade</span>` : l.hit === true ? `<span class="kst ok">✓</span>`
   : l.hit === false ? `<span class="kst no">✗</span>` : "";
+// kuponun ilerlemesi: tutan, tutmayan, canlı ve bekleyen ayaklar tek çubukta
+function couponBar(c) {
+  const n = c.legs.length, k = (s) => c.legs.filter((l) => legState(l) === s).length;
+  const hit = k("hit"), miss = k("miss"), live = k("live"), vd = k("void");
+  if (!hit && !miss && !live) return "";
+  const seg = (x, cls) => x ? `<span class="${cls}" style="flex:${x}"></span>` : "";
+  return `<div class="kprog" title="${hit} tuttu · ${miss} tutmadı · ${live} canlı · ${n - hit - miss - live - vd} bekliyor">
+    <div class="kpb">${seg(hit, "h")}${seg(miss, "m")}${seg(live, "l")}${seg(vd, "v")}${seg(n - hit - miss - live - vd, "w")}</div>
+    <small>${hit}/${n} tuttu${miss ? ` · ${miss} tutmadı` : ""}${live ? ` · ${live} canlı` : ""}</small></div>`;
+}
 // zaman çizelgesindeki nokta: bekliyor, canlı, tuttu, tutmadı, iade
 const legState = (l) => l.void ? "void" : l.hit === true ? "hit" : l.hit === false ? "miss" : l.live ? "live" : "wait";
 // paylaşım için kuponlar id ile saklanır
@@ -1170,9 +1207,11 @@ function couponCard(c, draft, open = true, kd = "") {
     <div class="klegs ktl">${c.legs.map((l) => `<div class="ktr ${legState(l)}"><div class="ktime">${esc(timeOf(l.utc))}</div><span class="kdot"></span><div class="kleg ${l.hit === true ? "hit" : l.hit === false ? "miss" : ""}" data-mid="${l.mid}">
       <div class="klt"><img src="${teamLogo(l.home.id)}" alt="" onerror="this.remove()"><span>${esc(l.home.name)} – ${esc(l.away.name)}</span>
         ${l.result ? `<b class="kres">${l.result[0]}-${l.result[1]}</b>` : l.live ? `<b class="kres live">● ${esc(l.live.min || "")} ${l.live.score[0]}-${l.live.score[1]}</b>` : ""}</div>
+      ${l.live && l.hit == null ? (() => { const p = pickProgress(l.code, trackCtx(l.live.score[0], l.live.score[1], false, null), l.home.name, l.away.name); return p ? `<div class="klive">📡 ${esc(p.txt)}</div>` : ""; })() : ""}
       <div class="klp"><span class="kpick">${esc(l.label)}</span><small>${pc(l.p)}</small><b>${nf(l.odds, 2)}</b>${legStatus(l)}</div>
       <div class="kpbar"><span style="width:${Math.round(l.p * 100)}%"></span></div>
     </div></div>`).join("")}</div>
+    ${couponBar(c)}
     <div class="kfoot ksum"><span>Tutma ihtimali <b>${pc(c.p)}</b></span>
       <span class="kstake ${done ? (c.won ? "pos" : "neg") : ""}">${tl(COUPON_STAKE)} → ${done ? (c.won ? tl(ret) + ` (${tl(couponProfit(c), true)})` : `0 ₺ (${tl(-COUPON_STAKE, true)})`) : tl(ret)}</span>${status}</div>
     <div class="kshare"><button class="kbtn" data-share="copy" data-cid="${esc(c.id)}">📋 Kopyala</button>${shareBtn("k:" + c.id, `${c.icon || "🧩"} ${c.name} · ${nf(c.odds, 2)}`, couponText(c))}</div>
@@ -1230,7 +1269,7 @@ function themeStats() {
 }
 
 /* ---------- model karnesi ---------- */
-let karneRows = [], karneCoupons = [], karneStart = null, karneTab = "pick", calMonth = null, karneLessons = null;
+let karneRows = [], karneCoupons = [], karneStart = null, karneTab = "pick", calMonth = null, karneLessons = null, karneLeagueLessons = null;
 const karneOpen = new Set();  // açılan gün kartları (yenilemede kapanmasın)
 async function renderKarne(silent) {
   const v = $("#view");
@@ -1241,6 +1280,8 @@ async function renderKarne(silent) {
   if (!state.karne) return;
   karneRows = Array.isArray(k) ? k : k.singles || [];
   karneLessons = Array.isArray(k) ? null : k.lessons || null;
+  karneLeagueLessons = Array.isArray(k) ? null : k.league_lessons || null;
+  karneCache = k;
   karneStart = Array.isArray(k) ? null : k.start;
   karneCoupons = Array.isArray(k) ? [] : karneCouponList(k);
   drawKarne();
@@ -1432,7 +1473,7 @@ function singlesKarneHtml(s) {
     return `<details class="card kday ogrp" style="--c:#58a6ff" data-kd="${karneTab}:${k}" ${karneOpen.has(karneTab + ":" + k) ? "open" : ""}><summary>${head("🗓️", `${cap(title)} <span class="muted">· ${g.length} maç · ${d.length ? `${hits}/${d.length} tuttu` : "sonuç bekleniyor"}</span>${d.length && dayPl != null ? `<span class="kpl ${dayPl >= 0 ? "pos" : "neg"}">${tl(dayPl, true)}</span>` : ""}`)}</summary>
       ${g.map(karneRow).join("")}</details>`;
   }).join("") : `<div class="card"><p class="muted">Bu hafta için kayıtlı tahmin yok. Oklarla diğer haftalara bakabilirsin.</p></div>`;
-  return top + weekBar(wh, wn, pick ? wpl : null) + list;
+  return top + weekBar(wh, wn, pick ? wpl : null) + weekReport() + list;
 }
 // isabet halkaları: [etiket, tutan, toplam, (kâr/zarar)]
 function ringsHtml(items) {
@@ -1474,6 +1515,7 @@ function lessonsHtml() {
     return `<div class="lsrow"><span class="lst">${esc(cap(t))} <small class="muted">· ${r.n} sonuç</small></span>
       <span class="lsv">model %${Math.round(r.model * 100)} → gerçek %${Math.round(r.hit * 100)} <b class="${d >= 0 ? "pos" : "neg"}">${d >= 0 ? "+" : ""}${d}</b></span>${tag}</div>`;
   }).join("")}</div>
+  ${(() => { const ll = Object.values(karneLeagueLessons || {}).filter((x) => x.lesson); return ll.length ? `<p class="muted">Ligler: ${ll.map((x) => `<b>${esc(x.name)}</b> (model %${Math.round(x.model * 100)} → gerçek %${Math.round(x.hit * 100)})`).join(", ")} garanti tercih seçiminde geri alınıyor.</p>` : ""; })()}
   <p class="muted">Garanti tercih ve kupon ayaklarının sonuçlarından. Modelin sandığından zayıf çıkan türler garanti tercih seçiminde geri alınır; olasılıkları tutan (en az 15 sonuç) türler "kanıtlandı" sayılır ve değerli oran tercihi yalnızca bunlardan seçilir.</p>`;
 }
 // gün gün birikimli kâr/zarar çizgisi (tek seri); üzerine gelince o günün değeri
@@ -1552,7 +1594,7 @@ function couponKarneHtml(s) {
     return `<details class="kdgrp" data-kd="kupon:${k}" ${karneOpen.has("kupon:" + k) ? "open" : ""}><summary class="kdayh">🗓️ ${cap(title)} <span class="muted">· ${g.length} kupon · ${d.length ? `${d.filter((c) => c.won).length}/${d.length} tuttu` : "sonuç bekleniyor"}</span>${d.length ? `<span class="kpl ${pl >= 0 ? "pos" : "neg"}">${tl(pl, true)}</span>` : ""}</summary>
       ${g.map((c) => couponCard(c, c.draft, karneOpen.has("c:" + c.id), "c:" + c.id)).join("")}</details>`;
   }).join("") : `<div class="card"><p class="muted">Bu hafta için kupon yok. Oklarla diğer haftalara bakabilirsin.</p></div>`;
-  return top + weekBar(wd.filter((c) => c.won).length, wd.length, wd.reduce((a, c) => a + couponProfit(c), 0)) + list;
+  return top + weekBar(wd.filter((c) => c.won).length, wd.length, wd.reduce((a, c) => a + couponProfit(c), 0)) + weekReport() + list;
 }
 // gün gün toplam kâr/zarar (üç karne birlikte)
 function dailyPl() {
@@ -1627,6 +1669,7 @@ function karneRow(r) {
       <div class="mid">${mid}</div>
       <span class="kt r">${esc(r.away.name)}<img src="${teamLogo(r.away.id)}" alt="" onerror="this.remove()"></span>
     </div>
+    ${pick && done && hit === false && r.final ? (() => { const w = lossReason(r.pick.code, finalCtx({ final: r.final, home: { score: r.result[0] }, away: { score: r.result[1] }, status: { finished: true } }), r.home.name, r.away.name); return w ? `<div class="why ${w.kind}">${REASON_TAG[w.kind]} · ${esc(w.txt.replace(/^[^:]+: /, ""))}</div>` : ""; })() : ""}
     <div class="kfoot"><span class="muted kl">${esc(lgName(r.league_id, r.league))}${pick ? cornerNote(r) : ""}</span>${tip}${odds ? `<span class="kstake ${prof != null ? (prof >= 0 ? "pos" : "neg") : ""}">${stake} ₺ → ${prof != null ? tl(prof, true) : "@" + nf(odds, 2)}</span>` : ""}${status}</div>
   </div>`;
 }
@@ -2037,7 +2080,7 @@ function refereeHtml(b) {
   const r = b.referee_stats;
   if (!b.referee || !r || !r.matches) return "";
   const cmp = (v, avg) => avg ? (v >= avg * 1.15 ? `<span class="neg">ortalamanın üstünde</span>` : v <= avg * 0.85 ? `<span class="pos">ortalamanın altında</span>` : "lig ortalamasında") : "";
-  return `<div class="card" style="--c:#d29922">${head(WHISTLE, `Hakem: ${esc(b.referee)} <span class="muted">· bu sezon ${r.matches} maç</span>`)}
+  return `<div class="card" style="--c:#d29922">${head(WHISTLE, `Hakem: <a class="tlink" href="#/hakem/${b.id}">${esc(b.referee)}</a> <span class="muted">· bu sezon ${r.matches} maç</span>`, `<a class="muted rflink" href="#/hakem/${b.id}">hakem sayfası ›</a>`)}
     <div class="pred">
       ${r.yellow_pm != null ? kpi("🟨", "#d29922", "Maç başı sarı kart", nf(r.yellow_pm, 2), r.yellow_avg ? `Lig ort. ${nf(r.yellow_avg, 2)}` : "") : ""}
       ${r.red != null ? kpi("🟥", "#f85149", "Kırmızı kart", String(r.red), `${r.matches} maçta toplam`) : ""}
@@ -2046,6 +2089,213 @@ function refereeHtml(b) {
     </div>${r.yellow_pm && r.yellow_avg ? `<p class="muted">Kart sıklığı ${cmp(r.yellow_pm, r.yellow_avg)}. Kart ve penaltı tercihlerinde dikkate alınabilir.</p>` : ""}</div>`;
 }
 
+
+/* ---------- tercih takibi: canlıda durum, maç sonunda tuttu mu ve neden ---------- */
+const num = (v) => { const x = parseFloat(String(v ?? "").replace("%", "")); return Number.isFinite(x) ? x : null; };
+// canlı/maç sonu bağlamı: skor ve korner, kart, şut istatistikleri ([ev, dep])
+function trackCtx(hs, as, fin, stats) {
+  const pair = (k) => stats && stats[k] ? [num(stats[k][0]), num(stats[k][1])] : null;
+  const y = pair("yellow"), r = pair("red") || [0, 0];
+  return { hs: hs ?? 0, as: as ?? 0, fin, corners: pair("corners"), shots: pair("shots"), sot: pair("sot"), red: r,
+    cards: y ? [y[0] + (r[0] || 0), y[1] + (r[1] || 0)] : null, xg: pair("xg") };
+}
+// maç sonu paketindeki "final" alanından bağlam
+const finalCtx = (b) => {
+  const f = b.final || {};
+  const st = {};
+  ["corners", "shots", "sot", "red", "xg"].forEach((k) => { if (f[k]) st[k] = f[k]; });
+  if (f.yellow) st.yellow = f.yellow;
+  return trackCtx(b.home.score, b.away.score, !!(b.status || {}).finished, st);
+};
+const ST_NAME = { k: "kart", s: "şut", t: "isabetli şut" };
+// bir tercihin o anki durumu: {st: "hit" | "lost" | "open" | "void", txt}
+function pickProgress(code, c, H, W) {
+  if (!code) return null;
+  if (code.includes("&")) {
+    const parts = code.split("&").map((x) => pickProgress(x, c, H, W));
+    if (parts.some((p) => !p)) return null;
+    if (parts.some((p) => p.st === "lost")) return { st: "lost", txt: parts.filter((p) => p.st === "lost").map((p) => p.txt).join(" · ") };
+    if (parts.every((p) => p.st === "hit")) return { st: "hit", txt: "Bütün ayaklar tuttu" };
+    return { st: "open", txt: parts.filter((p) => p.st !== "hit").map((p) => p.txt).join(" · ") };
+  }
+  const t = c.hs + c.as, sc = `${c.hs}-${c.as}`;
+  const res = { "1": c.hs > c.as, "X": c.hs === c.as, "2": c.hs < c.as, "1X": c.hs >= c.as, "X2": c.hs <= c.as, "12": c.hs !== c.as };
+  if (code in res) return c.fin ? { st: res[code] ? "hit" : "lost", txt: `Skor ${sc}` } : { st: "open", txt: `Şu an ${res[code] ? "tutuyor" : "tutmuyor"} (${sc})` };
+  if (code === "dnb1" || code === "dnb2") {
+    if (c.fin && c.hs === c.as) return { st: "void", txt: "Berabere, iade" };
+    const ok = code === "dnb1" ? c.hs > c.as : c.as > c.hs;
+    return c.fin ? { st: ok ? "hit" : "lost", txt: `Skor ${sc}` } : { st: "open", txt: `Şu an ${ok ? "tutuyor" : c.hs === c.as ? "berabere (iade)" : "tutmuyor"} (${sc})` };
+  }
+  if (code === "btts_yes") {
+    if (c.hs > 0 && c.as > 0) return { st: "hit", txt: `İki takım da gol attı (${sc})` };
+    if (c.fin) return { st: "lost", txt: `Skor ${sc}` };
+    return { st: "open", txt: `${c.hs === 0 && c.as === 0 ? "İki takımın da" : c.hs === 0 ? H + " takımının" : W + " takımının"} golü lazım (${sc})` };
+  }
+  if (code === "btts_no") {
+    if (c.hs > 0 && c.as > 0) return { st: "lost", txt: `İki takım da gol attı (${sc})` };
+    if (c.fin) return { st: "hit", txt: `Skor ${sc}` };
+    return { st: "open", txt: `Şu an tutuyor (${sc})` };
+  }
+  // alt/üst: toplam gol, takım golü, toplam korner, kart/şut/isabetli şut
+  let m = code.match(/^([ou])(\d+(?:\.\d+)?)$/), v = null, what = "gol", line, ou;
+  if (m) { v = t; ou = m[1]; line = +m[2]; }
+  else if ((m = code.match(/^([ha])([ou])(\d+(?:\.\d+)?)$/))) { v = m[1] === "h" ? c.hs : c.as; what = `${m[1] === "h" ? H : W} golü`; ou = m[2]; line = +m[3]; }
+  else if ((m = code.match(/^c([ou])(\d+(?:\.\d+)?)$/))) { if (!c.corners) return null; v = c.corners[0] + c.corners[1]; what = "korner"; ou = m[1]; line = +m[2]; }
+  else if ((m = code.match(/^([kst])([ha]?)([ou])(\d+(?:\.\d+)?)$/))) {
+    const arr = m[1] === "k" ? c.cards : m[1] === "s" ? c.shots : c.sot;
+    if (!arr) return null;
+    v = m[2] === "h" ? arr[0] : m[2] === "a" ? arr[1] : arr[0] + arr[1];
+    what = m[2] ? `${m[2] === "h" ? H : W} ${{ k: "kartı", s: "şutu", t: "isabetli şutu" }[m[1]]}` : ST_NAME[m[1]]; ou = m[3]; line = +m[4];
+  }
+  if (v != null) {
+    const need = Math.floor(line) + 1 - v;  // üst için kaç tane daha
+    if (ou === "o") return v > line ? { st: "hit", txt: `${cap(what)} ${v}, çizgi geçildi` }
+      : c.fin ? { st: "lost", txt: `${cap(what)} ${v}, çizgi ${line}` } : { st: "open", txt: `${need} ${what} daha lazım (şu an ${v})` };
+    return v > line ? { st: "lost", txt: `${cap(what)} ${v}, çizgi ${line} aşıldı` }
+      : c.fin ? { st: "hit", txt: `${cap(what)} ${v}, çizgi ${line}` } : { st: "open", txt: `Tutuyor; ${need} ${what} daha olursa yanar (şu an ${v})` };
+  }
+  if (/^cm[12X]$/.test(code)) {
+    if (!c.corners) return null;
+    const [x, y] = c.corners, ok = code === "cm1" ? x > y : code === "cm2" ? y > x : x === y;
+    return c.fin ? { st: ok ? "hit" : "lost", txt: `Korner ${x}-${y}` } : { st: "open", txt: `Şu an ${ok ? "tutuyor" : "tutmuyor"} (korner ${x}-${y})` };
+  }
+  if (code === "rc_yes" || code === "rc_no") {
+    const red = c.red[0] + c.red[1];
+    if (code === "rc_yes") return red ? { st: "hit", txt: "Kırmızı kart çıktı" } : c.fin ? { st: "lost", txt: "Kırmızı kart çıkmadı" } : { st: "open", txt: "Henüz kırmızı kart yok" };
+    return red ? { st: "lost", txt: "Kırmızı kart çıktı" } : c.fin ? { st: "hit", txt: "Kırmızı kart çıkmadı" } : { st: "open", txt: "Şu an tutuyor" };
+  }
+  return null;
+}
+// tutmayan tercihin nedeni: şanssızlık (oyun tercihi destekledi), kıl payı ya da model yanıldı
+function lossReason(code, c, H, W) {
+  if (!code || code.includes("&")) return null;
+  const red = (c.red || [0, 0])[0] + (c.red || [0, 0])[1];
+  const redTxt = red ? ` Maçta ${red} kırmızı kart çıktı.` : "";
+  const goalish = /^(1|X|2|1X|X2|12|dnb[12]|btts_(yes|no)|[ou]\d|[ha][ou]\d)/.test(code);
+  if (goalish && c.xg && c.xg[0] != null) {
+    // oyunun "hak ettiği" skor: xG; maç sonucunda 0.35 xG'den küçük fark beraberlik sayılır
+    const [x, y] = c.xg, d = x - y;
+    const fair = { hs: x, as: y };
+    const res = { "1": d > 0.35, "X": Math.abs(d) <= 0.35, "2": d < -0.35, "1X": d >= -0.35, "X2": d <= 0.35, "12": Math.abs(d) > 0.35, dnb1: d > 0.35, dnb2: d < -0.35,
+      btts_yes: x >= 0.8 && y >= 0.8, btts_no: x < 0.8 || y < 0.8 };
+    let ok = res[code];
+    let m;
+    if (ok === undefined && (m = code.match(/^([ou])(\d+(?:\.\d+)?)$/))) ok = m[1] === "o" ? x + y > +m[2] : x + y < +m[2];
+    if (ok === undefined && (m = code.match(/^([ha])([ou])(\d+(?:\.\d+)?)$/))) { const v = m[1] === "h" ? fair.hs : fair.as; ok = m[2] === "o" ? v > +m[3] : v < +m[3]; }
+    const xgt = `xG ${nf(x, 1)}-${nf(y, 1)}`;
+    if (ok) return { kind: "luck", txt: `Şanssız: oyun tercihi destekledi (${xgt}) ama skor ${c.hs}-${c.as}.${redTxt}`, short: `oyun tercihi destekledi (${xgt}).${redTxt}` };
+    return { kind: "miss", txt: `Model yanıldı: oyun da tercihin tersine gitti (${xgt}).${redTxt}`, short: `oyun da tersine gitti (${xgt}).${redTxt}` };
+  }
+  const p = pickProgress(code, { ...c, fin: true }, H, W);
+  const m = code.match(/(\d+(?:\.\d+)?)$/);
+  if (p && m) {
+    const v = +(p.txt.match(/(\d+)(?=,)/) || [])[1];
+    if (Number.isFinite(v) && Math.abs(v - +m[1]) <= 1) return { kind: "close", txt: `Kıl payı: ${p.txt}.${redTxt}`, short: redTxt.trim() };
+    return { kind: "miss", txt: `Model yanıldı: ${p.txt}.${redTxt}`, short: redTxt.trim() };
+  }
+  return redTxt ? { kind: "miss", txt: redTxt.trim(), short: redTxt.trim() } : null;
+}
+const REASON_TAG = { luck: "🍀 Şanssız", close: "🤏 Kıl payı", miss: "❌ Model yanıldı" };
+// maç sayfasında tercihlerin durumu (canlıda anlık, bitince sonuç ve neden)
+function trackHtml(b, c, title) {
+  const P = b.analysis.prediction, H = b.home.name, W = b.away.name;
+  const rows = [];
+  const add = (ic, name, x) => {
+    if (!x) return;
+    const p = pickProgress(x.code, c, H, W);
+    if (!p) return;
+    const why = p.st === "lost" && c.fin ? lossReason(x.code, c, H, W) : null;
+    rows.push(`<div class="trk ${p.st}"><span class="tri">${p.st === "hit" ? "✓" : p.st === "lost" ? "✗" : p.st === "void" ? "↩" : "⏳"}</span>
+      <div><b>${ic} ${name}: ${esc(x.label)}</b>${x.odds ? ` <small class="muted">@${nf(x.odds, 2)}</small>` : ""}<small>${esc(p.txt)}</small>
+      ${why ? `<small class="why ${why.kind}">${REASON_TAG[why.kind]}${why.short ? " · " + esc(why.short) : ""}</small>` : ""}</div></div>`);
+  };
+  add("✅", "Garanti", P.best_pick);
+  add("💎", "Değerli", P.value_pick);
+  add("⚡", "Sürpriz", P.surprise);
+  const sp = (P.score_pick || {}).score;
+  if (sp) {
+    const [a, d] = sp.split("-").map(Number), exact = a === c.hs && d === c.as;
+    const sameRes = Math.sign(a - d) === Math.sign(c.hs - c.as);
+    rows.push(`<div class="trk ${c.fin ? (exact ? "hit" : "lost") : "open"}"><span class="tri">${c.fin ? (exact ? "✓" : "✗") : "⏳"}</span>
+      <div><b>🎲 Skor tahmini: ${esc(sp)}</b><small>${c.fin ? (exact ? "Tam isabet" : `Sonuç ${c.hs}-${c.as}${sameRes ? " · maç sonucu doğru" : ""}`) : `Şu an ${c.hs}-${c.as}`}</small></div></div>`);
+  }
+  // bu maçın kupon ayakları (maçın gününün kuponları)
+  const dk = trDay(b.utc), dc = dayCache && dayCache.date === dk ? dayCache : couponDay && couponDay.date === dk ? couponDay : null;
+  ((dc && dc.coupons) || []).map(normCoupon).forEach((cp) => cp.legs.filter((l) => l.mid === b.id).forEach((l) => {
+    const p = pickProgress(l.code, c, H, W);
+    if (p) rows.push(`<div class="trk ${p.st}"><span class="tri">${p.st === "hit" ? "✓" : p.st === "lost" ? "✗" : "⏳"}</span><div><b>${cp.icon || "🧩"} ${esc(cp.name)} ayağı: ${esc(l.label)}</b><small>${esc(p.txt)}</small></div></div>`);
+  }));
+  if (!rows.length) return "";
+  return `<div class="card trkcard" style="--c:${c.fin ? "#a371f7" : "#f85149"}">${head(c.fin ? "🏁" : "📡", title)}${c.xg && c.xg[0] != null ? `<p class="muted trkxg">xG ${nf(c.xg[0], 2)} – ${nf(c.xg[1], 2)}</p>` : ""}<div class="trks">${rows.join("")}</div></div>`;
+}
+
+/* ---------- hakem sayfası ---------- */
+let karneCache = null;
+let couponDay = null;  // maç sayfası doğrudan açıldığında maçın gününün kuponları
+async function getKarne() { if (!karneCache) { try { karneCache = await api("/api/karne"); } catch { karneCache = {}; } } return karneCache; }
+async function renderReferee(mid) {
+  const v = $("#view");
+  v.innerHTML = skel("page");
+  let b, k;
+  try { [b, k] = await Promise.all([api(`/api/match/${mid}`), getKarne()]); } catch (e) { v.innerHTML = `<div class="card"><p>${esc(e.message)}</p></div>`; return; }
+  if (state.hakem !== mid) return;
+  const r = b.referee_stats || {}, name = b.referee;
+  const rows = (Array.isArray(k) ? k : k.singles || []).filter((x) => x.referee === name && x.state === "done").sort((a, c) => (c.utc || "").localeCompare(a.utc || ""));
+  const cards = rows.filter((x) => x.final && x.final.yellow && x.final.yellow[0] != null).map((x) => x.final.yellow[0] + x.final.yellow[1] + (x.final.red || [0, 0]).reduce((a, c) => a + c, 0));
+  const bar = (val, avg, max) => `<div class="rfbar"><span style="width:${Math.min(100, val / max * 100)}%"></span><i style="left:${Math.min(100, avg / max * 100)}%" title="Lig ortalaması"></i></div>`;
+  const tone = r.yellow_pm && r.yellow_avg ? (r.yellow_pm >= r.yellow_avg * 1.15 ? ["sert", "neg", "Kart çıkarmaya eğilimli: kart üst tercihleri için olumlu."] : r.yellow_pm <= r.yellow_avg * 0.85 ? ["yumuşak", "pos", "Az kart gösteriyor: kart alt tercihleri için olumlu."] : ["dengeli", "", "Lig ortalamasına yakın."]) : null;
+  v.innerHTML = `<div class="card" style="--c:#d29922">${head(WHISTLE, `${esc(name)} <span class="muted">· hakem</span>`)}
+      ${tone ? `<p><span class="ltag ${tone[1]}">${tone[0]}</span> <span class="muted">${tone[2]}</span></p>` : ""}
+      <div class="rfstats">
+        ${r.yellow_pm != null ? `<div><span>Maç başı sarı kart</span><b>${nf(r.yellow_pm, 2)}</b>${r.yellow_avg ? `${bar(r.yellow_pm, r.yellow_avg, Math.max(r.yellow_pm, r.yellow_avg) * 1.4)}<small class="muted">lig ortalaması ${nf(r.yellow_avg, 2)}</small>` : ""}</div>` : ""}
+        ${r.fouls_pm != null ? `<div><span>Maç başı faul</span><b>${nf(r.fouls_pm, 1)}</b>${r.fouls_avg ? `${bar(r.fouls_pm, r.fouls_avg, Math.max(r.fouls_pm, r.fouls_avg) * 1.4)}<small class="muted">lig ortalaması ${nf(r.fouls_avg, 1)}</small>` : ""}</div>` : ""}
+        <div><span>Maç</span><b>${r.matches ?? "—"}</b><small class="muted">bu sezon</small></div>
+        <div><span>Kırmızı kart</span><b>${r.red ?? "—"}</b><small class="muted">${r.matches && r.red != null ? `maç başı ${nf(r.red / r.matches, 2)}` : ""}</small></div>
+        <div><span>Penaltı</span><b>${r.pens ?? "—"}</b><small class="muted">${r.pens_pm != null ? `maç başı ${nf(r.pens_pm, 2)}` : ""}</small></div>
+      </div></div>
+    <div class="card" style="--c:#58a6ff">${head("📅", `Sitede kayıtlı maçları <span class="muted">· ${rows.length} maç${cards.length ? ` · ortalama ${nf(cards.reduce((a, c) => a + c, 0) / cards.length, 1)} kart` : ""}</span>`)}
+      ${rows.length ? rows.map((x) => {
+        const f = x.final || {}, y = f.yellow || [], rd = f.red || [0, 0];
+        return `<div class="rfrow"><span class="muted">${dateOf(x.utc)}</span><span>${esc(x.home.name)} <b>${x.result[0]}-${x.result[1]}</b> ${esc(x.away.name)}</span>
+          <span class="rfk">${y[0] != null ? `🟨 ${y[0] + y[1]}${rd[0] + rd[1] ? ` 🟥 ${rd[0] + rd[1]}` : ""}` : ""}</span>
+          <span class="kst ${x.pick_hit ? "ok" : x.pick_hit === false ? "no" : "wait"}" title="Garanti tercih: ${esc(x.pick.label)}">${x.pick_hit ? "✓" : x.pick_hit === false ? "✗" : "↩"}</span></div>`;
+      }).join("") : `<p class="muted">Bu hakemin yönettiği maçlar karneye kaydedildikçe burada listelenir.</p>`}</div>
+    <div class="card"><a class="kbtn" href="#/mac/${mid}">‹ Maça dön: ${esc(b.home.name)} – ${esc(b.away.name)}</a></div>`;
+}
+
+/* ---------- haftalık rapor (karne) ---------- */
+function weekReport() {
+  const [a, z, mon, sun] = weekRange(karneWeek);
+  const inW = (k) => k >= a && k <= z;
+  const rows = (karneRows || []).filter((r) => inW(trDay(r.utc)));
+  const sg = rows.filter(pickDecided), cps = karneCoupons.filter((c) => c.state === "done" && inW(c.date));
+  if (!sg.length && !cps.length) return "";
+  const spl = sg.filter((r) => r.pick.odds).reduce((x, r) => x + rowProfit(r), 0), cpl = cps.reduce((x, c) => x + couponProfit(c), 0);
+  const sc = rows.filter((r) => r.state === "done"), exact = sc.filter((r) => r.score_hit).length;
+  const val = rows.filter((r) => r.value && r.state === "done" && r.value_hit != null);
+  const vpl = val.reduce((x, r) => x + (r.value_hit ? STAKE * (r.value.odds - 1) : -STAKE), 0);
+  const group = (key) => { const g = {}; sg.forEach((r) => { const k = key(r); (g[k] ||= { n: 0, h: 0 }); g[k].n++; if (r.pick_hit) g[k].h++; }); return Object.entries(g).filter(([, x]) => x.n >= 2).sort((p, q) => q[1].h / q[1].n - p[1].h / p[1].n || q[1].n - p[1].n); };
+  const types = group((r) => pickType(r.pick)), lgs = group((r) => lgName(r.league_id, r.league));
+  const best = types[0], worst = types.length > 1 ? types[types.length - 1] : null, bestL = lgs[0];
+  const why = sg.filter((r) => r.pick_hit === false && r.final).map((r) => lossReason(r.pick.code, { ...finalCtx({ final: r.final, home: { score: r.result[0] }, away: { score: r.result[1] }, status: { finished: true } }) }, r.home.name, r.away.name)).filter(Boolean);
+  const luck = why.filter((w) => w.kind === "luck").length, close = why.filter((w) => w.kind === "close").length, miss = why.filter((w) => w.kind === "miss").length;
+  const fmt = (d) => d.toLocaleDateString("tr-TR", { day: "numeric", month: "long" });
+  const rate = (x) => `${x.h}/${x.n} (%${Math.round(x.h / x.n * 100)})`;
+  const lines = [
+    sg.length ? `✅ Garanti tercih: ${sg.filter((r) => r.pick_hit).length}/${sg.length} · ${tl(spl, true)}` : "",
+    cps.length ? `🧩 Kupon: ${cps.filter((c) => c.won).length}/${cps.length} · ${tl(cpl, true)}` : "",
+    sc.length ? `🎲 Skor tam isabet: ${exact}/${sc.length}` : "",
+    val.length ? `💎 Değerli oran: ${val.filter((r) => r.value_hit).length}/${val.length} · ${tl(vpl, true)}` : "",
+    best ? `📈 En iyi tür: ${best[0]} ${rate(best[1])}` : "",
+    worst && worst[0] !== best[0] ? `📉 En zayıf tür: ${worst[0]} ${rate(worst[1])}` : "",
+    bestL ? `🏆 En iyi lig: ${bestL[0]} ${rate(bestL[1])}` : "",
+    why.length ? `🔎 Tutmayanlar: ${luck} şanssız, ${close} kıl payı, ${miss} model hatası` : "",
+  ].filter(Boolean);
+  const text = [`📊 HAFTALIK KARNE`, `🗓️ ${fmt(mon)} – ${fmt(sun)}`, SH_LINE, ...lines].join("\n");
+  return `<div class="card wrep" style="--c:#39c5cf">${head("📊", `Haftanın raporu <span class="muted">· ${fmt(mon)} – ${fmt(sun)}</span>`)}
+    <ul class="wlines">${lines.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>
+    <div class="kshare">${shareBtn("w:" + a, `📊 Haftalık karne · ${fmt(mon)}`, text)}</div></div>`;
+}
 
 /* ---------- takım sayfası ve karşılaştırma ---------- */
 const teamCache = new Map();
@@ -2289,24 +2539,27 @@ function route() {
   const shm = location.hash.startsWith("#/paylas");
   const tm = location.hash.match(/^#\/takim\/(\d+)/);
   const xm = location.hash.match(/^#\/karsilastir\/(\d+)\/(\d+)/);
+  const hm = location.hash.match(/^#\/hakem\/(\d+)/);
   const h = location.hash || "#/";
   if (navStack.length > 1 && navStack[navStack.length - 2] === h) navStack.pop();
   else if (navStack[navStack.length - 1] !== h) navStack.push(h);
   // maç, oyuncu ve karne sayfalarında üst barda yalnızca Geri butonu görünür
-  document.body.classList.toggle("in-match", !!(mm || pm || km || cm || lm || om || shm || tm || xm));
+  document.body.classList.toggle("in-match", !!(mm || pm || km || cm || lm || om || shm || tm || xm || hm));
   document.body.classList.toggle("on-moves", !!om);  // sayfa altı yazıları sadece oranlar sayfasında
   state.player = pm ? +pm[1] : null;
   state.karne = km;
   state.kombine = cm;
   state.lig = lm ? +lm[1] : null;
-  state.oranlar = om || shm || !!tm || !!xm;  // paylaşım, takım ve karşılaştırma sayfalarında da gün listesi arka planda çizilmesin
+  state.oranlar = om || shm || !!tm || !!xm || !!hm;  // paylaşım, takım ve karşılaştırma sayfalarında da gün listesi arka planda çizilmesin
   state.takim = tm ? +tm[1] : null;
   state.cmp = xm ? [+xm[1], +xm[2]] : null;
-  const navKey = om ? "oranlar" : km ? "karne" : cm ? "kombine" : (mm || pm || lm || tm || xm) ? "" : "home";
+  state.hakem = hm ? +hm[1] : null;
+  const navKey = om ? "oranlar" : km ? "karne" : cm ? "kombine" : (mm || pm || lm || tm || xm || hm) ? "" : "home";
   document.querySelectorAll("#bottomNav [data-nav]").forEach((a) => a.classList.toggle("on", a.dataset.nav === navKey));
   if (shm) { state.current = null; window.scrollTo(0, 0); renderShare(); }
   else if (tm) { state.current = null; window.scrollTo(0, 0); renderTeam(state.takim); }
   else if (xm) { state.current = null; window.scrollTo(0, 0); renderCompare(...state.cmp); }
+  else if (hm) { state.current = null; window.scrollTo(0, 0); renderReferee(state.hakem); }
   else if (lm) { state.current = null; window.scrollTo(0, 0); renderLeague(state.lig); }
   else if (om) { state.current = null; window.scrollTo(0, 0); renderMoves(); }
   else if (cm) { state.current = null; window.scrollTo(0, 0); renderCoupons(); }
@@ -2393,7 +2646,7 @@ function startPolling() {
       const evs = await getData("events.json");
       evs.filter((e) => e.id > lastEv).reverse().forEach((ev) => addFeed(ev, true));
       if (evs.length) { lastEv = Math.max(lastEv, evs[0].id); safeSet("lastEventId", String(lastEv)); }
-      /^#\/(paylas|takim|karsilastir)/.test(location.hash) ? null : state.lig ? renderLeague(state.lig) : state.oranlar ? renderMoves() : state.kombine ? (dayCache = null, renderCoupons()) : state.karne ? renderKarne(true) : state.player ? renderPlayer(state.player, true) : state.current ? renderMatch(state.current, true) : renderDay(true);
+      /^#\/(paylas|takim|karsilastir|hakem)/.test(location.hash) ? null : state.lig ? renderLeague(state.lig) : state.oranlar ? renderMoves() : state.kombine ? (dayCache = null, renderCoupons()) : state.karne ? renderKarne(true) : state.player ? renderPlayer(state.player, true) : state.current ? renderMatch(state.current, true) : renderDay(true);
     } catch { /* bir sonraki turda tekrar dener */ }
   };
 
@@ -2490,6 +2743,19 @@ const RELEASES = [
       ["📊", "Daha fazla pazar", "Yarılar, handikaplar, korner/kart/şut/ofsayt/faul toplamları, takım bazlı alt/üst ve dakika aralıkları."],
       ["🔍", "Oranlarda arama", "Oranlar sekmesinde oyuncu veya pazar adı yaz, sadece o seçenekler kalsın; gruplar açılıp kapanır."],
       ["🔕", "Sessiz bildirimler", "Bildirimler artık ekranı kaplamaz; yalnızca sarı çana dokununca görünür."],
+    ],
+  },
+  {
+    id: 20, date: "28 Ekim 2026", title: "Yeni: Tercih takibi ve haftalık rapor", sub: "Bu güncellemede gelenler",
+    items: [
+      ["📡", "Canlı tercih takibi", "Canlı sekmesinde garanti, değerli, sürpriz ve skor tahmini ile bu maçın kupon ayaklarının anlık durumu: '1 gol daha lazım', 'tutuyor; 2 korner daha olursa yanar'."],
+      ["🏁", "Maç sonu değerlendirmesi", "Biten maçlarda özetin başında hangi tercihin tuttuğu; maç listesinde garanti tercihin yanında ✓/✗."],
+      ["🔎", "Neden tutmadı?", "Tutmayan tercihlerde not: şanssız (oyun tercihi destekledi, xG), kıl payı ya da model yanıldı."],
+      ["📊", "Haftanın raporu", "Karnede seçili haftanın özeti: isabet, kâr/zarar, en iyi/zayıf tür ve lig, tutmayanların nedeni. Paylaşıma eklenebilir."],
+      ["🌍", "Lig dersleri", "Karnede garanti tercihleri belirgin şekilde zayıf giden liglerin tercihleri seçimde biraz geri alınır."],
+      ["🧑‍⚖️", "Hakem sayfası", "Hakem adına dokun: kart ve faul eğilimi (lig ortalamasıyla), kırmızı kart, penaltı ve sitede kayıtlı maçları."],
+      ["⚡", "Hızlı filtreler", "Maç listesinin üstünde: kesinleşenler, değerli oranlı, canlı, takımlarım, bitenler."],
+      ["🧩", "Kupon ilerlemesi", "Kuponda kaç ayağın tuttuğu ince bir çubukta; canlı ayakta '1 gol daha lazım' gibi durum."],
     ],
   },
   {

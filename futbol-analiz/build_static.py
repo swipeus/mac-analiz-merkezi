@@ -54,6 +54,8 @@ async def main(out):
     log.info("kalibrasyon: %s", analysis.CALIB or "gerek yok")
     analysis.LESSON, analysis.PROVEN = karne.lessons(calib_report)
     log.info("karne dersleri: %s · kanıtlanmış türler: %s", analysis.LESSON, sorted(analysis.PROVEN))
+    analysis.LEAGUE_LESSON = karne.league_lessons(store)[0]
+    log.info("lig dersleri: %s", analysis.LEAGUE_LESSON or "yok")
     await up.cycle()
     store.prune()
 
@@ -121,6 +123,7 @@ async def main(out):
     for lp in await leagues.all_pages(src):
         write(f"league-{lp['id']}.json", lp)
     kupon.settle(store)
+    log.info("karneye hakem/xG eklendi: %s kayıt", karne.backfill_referees(store))
     write("karne.json", karne.export(store))
     write("meta.json", {
         "updated": time.time(),

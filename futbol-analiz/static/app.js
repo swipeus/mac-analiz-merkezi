@@ -276,7 +276,7 @@ function openOddsAt(mid, code) {
 }
 function focusOdds() {
   if (!oddsFocus) return;
-  const row = document.querySelector(".orow.focus");
+  const row = document.querySelector(".otile.focus");
   oddsFocus = null;
   if (!row) return;
   const g = row.closest("details"); if (g) g.open = true;
@@ -628,7 +628,7 @@ function oddsHtml(b) {
       ${pickCard("val", "💎", "Değerli oran", P.value_pick, "Oranı 1.60-3.20 arasında, modelin piyasadan en az %5 daha olası gördüğü ve türü karnede kendini kanıtlamış tercih. Karnede ayrı izlenir.")}
       ${pickCard("sur", "⚡", "Olası sürpriz", P.surprise, "Oranı yüksek ama modelin piyasadan daha olası gördüğü seçenek. Karnede yer almaz.")}
     </div>
-    <p class="muted">Model gol beklentisini istatistiklerle bahis oranlarını harmanlayarak hesaplar${P.lam_market ? ` (piyasa: ${nf(P.lam_market[0], 2)} – ${nf(P.lam_market[1], 2)} gol, istatistik: ${nf(P.lam_model[0], 2)} – ${nf(P.lam_model[1], 2)})` : ""}. Tablolarda: oran, oranın ima ettiği olasılık (marjı temizlenmiş), modelin olasılığı ve <b>değer</b> (model olasılığı × oran − 1; yeşil = model piyasadan iyimser). Kombinelerde model olasılığı, ayakların aynı anda tutma ihtimalidir. 1.30 altındaki oranlar tercih dışıdır.</p>
+    <p class="muted">Model gol beklentisini istatistiklerle bahis oranlarını harmanlayarak hesaplar${P.lam_market ? ` (piyasa: ${nf(P.lam_market[0], 2)} – ${nf(P.lam_market[1], 2)} gol, istatistik: ${nf(P.lam_model[0], 2)} – ${nf(P.lam_model[1], 2)})` : ""}. Kutularda oran, açılıştan beri yönü (<b class="up">▲</b> yükseldi, <b class="down">▼</b> düştü) ve altında modelin olasılığı; yeşil <em>+%</em> model piyasadan iyimser demek (değer = model olasılığı × oran − 1). Kutuya dokununca/üzerine gelince piyasa olasılığı ve açılış oranı. Garanti tercih yeşil, değerli oran turkuaz, sürpriz sarı çerçeveli. Kombinelerde model olasılığı, ayakların aynı anda tutma ihtimalidir. 1.30 altındaki oranlar tercih dışıdır.</p>
     <input id="oddsSearch" class="osearch" type="search" placeholder="Pazar, oyuncu veya seçenek ara (ör. Gibbs-White, korner, KG)" autocomplete="off"></div>`;
   const groups = ODDS_GROUPS.map((g) => {
     const ms = o.markets.filter((m) => m.group === g);
@@ -649,7 +649,7 @@ function bindOdds() {
       g.querySelectorAll(".omkt").forEach((m) => {
         const title = m.querySelector(".omh b").textContent.toLocaleLowerCase("tr");
         let hit = 0;
-        m.querySelectorAll(".orow:not(.ohead)").forEach((r) => {
+        m.querySelectorAll(".otile").forEach((r) => {
           const ok = !t || title.includes(t) || r.textContent.toLocaleLowerCase("tr").includes(t);
           r.style.display = ok ? "" : "none"; hit += ok;
         });
@@ -662,28 +662,33 @@ function bindOdds() {
 }
 let BOX = new Set();  // o an açık maçın kutu tercihleri (oranlar sekmesinde kalın yazılır)
 function marketHtml(m, probs, safe, sur, b) {
-  // "1" / "2" seçeneklerinin yanına takım adı
-  const lab = (l) => l === "1" ? `1 · ${b.home.name}` : l === "2" ? `2 · ${b.away.name}` : l;
-  const many = m.selections.length > 8;
+  // pazar = başlık + seçenek kutuları (oran, açılıştan beri yön oku, altında modelin olasılığı)
+  const val = (b.analysis.prediction.value_pick || {}).code;
+  const n = m.selections.length;
+  const sub = (l) => l === "1" ? b.home.name : l === "2" ? b.away.name : l === "X" ? "Beraberlik" : "";
   // eski kayıtlarda "ip" yok: küçük pazarlarda burada hesaplanır
   const inv = m.selections.map((s) => 1 / s.odds), tot = inv.reduce((a, x) => a + x, 0);
-  const old = m.selections.length >= 2 && !/^(k:|prepack)/.test(m.key) && !m.selections.some((s) => s.ip != null);
-  const rows = m.selections.map((s, i) => {
+  const old = n >= 2 && !/^(k:|prepack)/.test(m.key) && !m.selections.some((s) => s.ip != null);
+  const longest = Math.max(...m.selections.map((s) => (s.label || "").length));
+  // Üst/Alt çiftleri (Üst 0.5, Alt 0.5, Üst 1.5...) iki sütunda yan yana kalsın
+  const pairs = n % 2 === 0 && m.selections.every((s, i) => /^(Üst|Alt|Over|Under|Evet|Hayır|Yes|No)(\s|$)/i.test(s.label || "") && (i % 2 === 0 || (s.label || "").split(" ")[0] !== (m.selections[i - 1].label || "").split(" ")[0]));
+  const cols = n === 2 || pairs ? 2 : n === 3 ? 3 : longest > 16 ? 2 : longest > 8 ? 3 : 4;
+  const tiles = m.selections.map((s, i) => {
     const mp = s.code != null ? probs[s.code] : null;
-    const ip = s.ip != null ? s.ip : old && !many && tot ? inv[i] / tot : null;
-    const val = mp != null ? mp * s.odds - 1 : null;
-    const cls = s.code && s.code === safe ? "safe" : s.code && s.code === sur ? "sur" : "";
-    const bx = s.code && BOX.has(s.code) ? "bx" : "", fc = s.code && s.code === oddsFocus ? "focus" : "";
-    return `<div class="orow ${cls} ${bx} ${fc} ${s.odds < 1.3 ? "low" : ""}">
-      <span class="ol">${esc(lab(s.label))}${cls === "safe" ? ` <i class="otag safe">Garanti</i>` : cls === "sur" ? ` <i class="otag sur">Sürpriz</i>` : ""}</span>
-      <span class="oo">${s.o0 && s.o0 !== s.odds ? `<i class="omv ${s.odds < s.o0 ? "down" : "up"}" title="Açılış ${nf(s.o0, 2)}">${s.odds < s.o0 ? "▼" : "▲"}</i>` : ""}${nf(s.odds, 2)}</span>
-      <span class="op">${ip != null ? pc(ip) : ""}</span>
-      <span class="om">${mp != null ? pc(mp) : ""}</span>
-      <span class="ov ${val == null ? "" : val > 0.05 ? "pos" : val < -0.1 ? "neg" : ""}">${val == null ? "" : (val > 0 ? "+" : "") + Math.round(val * 100) + "%"}</span></div>`;
+    const ip = s.ip != null ? s.ip : old && n <= 8 && tot ? inv[i] / tot : null;
+    const v = mp != null ? mp * s.odds - 1 : null;
+    const tag = s.code && s.code === safe ? "safe" : s.code && s.code === val ? "val" : s.code && s.code === sur ? "sur" : "";
+    const cls = [tag, s.code && BOX.has(s.code) ? "bx" : "", s.code && s.code === oddsFocus ? "focus" : "", s.odds < 1.3 ? "low" : ""].join(" ");
+    const mv = s.o0 && Math.abs(s.o0 - s.odds) >= 0.01 ? `<i class="omv ${s.odds > s.o0 ? "up" : "down"}" title="Açılış ${nf(s.o0, 2)}">${s.odds > s.o0 ? "▲" : "▼"}</i>` : "";
+    const tip = [ip != null ? `Piyasa ${pc(ip)}` : "", mp != null ? `Model ${pc(mp)}` : "", v != null ? `Değer ${v > 0 ? "+" : ""}${Math.round(v * 100)}%` : "", s.o0 ? `Açılış ${nf(s.o0, 2)}` : ""].filter(Boolean).join(" · ");
+    return `<div class="otile ${cls}" title="${esc(tip)}">
+      ${tag ? `<i class="otk ${tag}">${{ safe: "✅ Garanti", val: "💎 Değerli", sur: "⚡ Sürpriz" }[tag]}</i>` : ""}
+      <span class="otl">${esc(s.label)}${sub(s.label) ? `<small>${esc(sub(s.label))}</small>` : ""}</span>
+      <b class="oto">${mv}${nf(s.odds, 2)}</b>
+      <span class="otm">${mp != null ? `model ${pc(mp)}${v != null && v > 0.05 ? ` <em>+${Math.round(v * 100)}%</em>` : ""}` : ip != null ? `piyasa ${pc(ip)}` : ""}</span></div>`;
   }).join("");
-  return `<div class="omkt"><div class="omh"><b>${esc(m.title)}</b><small class="muted">${m.selections.length > 3 ? m.selections.length + " seçenek" : ""}</small></div>
-    <div class="orow ohead"><span class="ol">Seçenek</span><span class="oo">Oran</span><span class="op">Piyasa</span><span class="om">Model</span><span class="ov">Değer</span></div>
-    <div class="${many ? "oscroll" : ""}">${rows}</div></div>`;
+  return `<div class="omkt"><div class="omh"><b>${esc(m.title)}</b><small class="muted">${n > 3 ? n + " seçenek" : ""}</small></div>
+    <div class="otiles ${n > 12 ? "oscroll" : ""}" style="--cols:${cols}">${tiles}</div></div>`;
 }
 
 const ICON_PATHS = {
@@ -996,7 +1001,7 @@ const NEWS_RX = {
   mac: /maç öncesi|maçı öncesi|önizleme|basın toplantı|açıklama|derbi|karşı karşıya|preview|press conference|predict|ahead of|clash/,
   transfer: /transfer|sözleşme|imza|teklif|takipte|ilgileniyor|kiralık|bonservis|ayrılık|ocak ayında|devre arası|sign|contract|loan|bid|target|deal|move for|january|searching|in hunt|race to/,
 };
-const NEWS_JUNK = /(^|[\s|])canlı([\s:|]|$)|canlı anlatım|canlı gol|skor\s*:|sona erdi|maç sonucu:|dakika tamamlandı|maçında gol:|podcast|le pagelle|player ratings|kimdir\?|burç|hava durumu|(^|\s)live(\s|:|$)|as it happened|primavera|u1[79]|u2[013]|kadın takım|women|turist|kruvaziyer|iddaa programı|saat kaçta|hangi kanalda|canlı izle|borsa|kardashian|kırmızı halı|fahişe|ihanet|aldat|sevgilisi|partneri|magazin|elbise|bikini|düğün|boşan|ünlü oyuncu|dizi /;
+const NEWS_JUNK = /(^|[\s|])canlı([\s:|]|$)|canlı anlatım|canlı gol|skor\s*:|sona erdi|maç sonucu:|dakika tamamlandı|maçında gol:|podcast|le pagelle|player ratings|kimdir\?|burç|hava durumu|(^|\s)live(\s|:|$)|as it happened|primavera|\bu1[79]\b|\bu2[013]\b|kadın takım|women|turist|kruvaziyer|iddaa programı|saat kaçta|hangi kanalda|canlı izle|borsa|kardashian|kırmızı halı|fahişe|ihanet|aldat|sevgilisi|partneri|magazin|elbise|bikini|düğün|boşan|ünlü oyuncu|dizi /;
 let newsCat = (() => { try { return localStorage.getItem("newsCat") || "all"; } catch { return "all"; } })();
 const newsWords = (t) => new Set((t || "").toLocaleLowerCase("tr").replace(/[^\p{L}\p{N} ]/gu, " ").split(/\s+/).filter((w) => w.length > 2));
 function newsAbout(t, name) {

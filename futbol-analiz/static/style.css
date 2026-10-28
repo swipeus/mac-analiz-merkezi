@@ -1100,3 +1100,27 @@ body.on-moves footer.foot { display: block; }
 .ltag { font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 999px; background: rgba(255,255,255,.06); color: var(--muted); white-space: nowrap; }
 .ltag.pos { background: rgba(46,160,67,.15); color: #56d364 !important; } .ltag.neg { background: rgba(218,54,51,.15); color: #ff7b72 !important; }
 @media (max-width: 480px) { .lsrow { grid-template-columns: 1fr auto; } .lsrow .lsv { grid-column: 1 / -1; grid-row: 2; } }
+
+/* oranlar: seçenek kutuları */
+.otiles { display: grid; grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr)); gap: 6px; }
+.otiles.oscroll { max-height: 340px; overflow-y: auto; padding-right: 2px; }
+.otile { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 64px;
+  padding: 8px 6px 7px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); text-align: center; font-variant-numeric: tabular-nums; }
+.otile .otl { font-size: 12px; color: var(--muted); line-height: 1.25; overflow-wrap: anywhere; }
+.otile .otl small { display: block; font-size: 10px; opacity: .8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.otile .oto { font-size: 17px; font-weight: 800; display: inline-flex; align-items: center; gap: 4px; }
+.otile .otm { font-size: 10px; color: var(--muted); min-height: 12px; }
+.otile .otm em { font-style: normal; color: #3fb950; font-weight: 800; }
+.otile .omv { font-style: normal; font-size: 10px; }
+.omv.up, b.up { color: #3fb950; } .omv.down, b.down { color: #f85149; }
+.otile.low .oto { color: var(--muted); }
+.otile.safe { border: 2px solid #2ea043; background: color-mix(in srgb, #2ea043 12%, var(--panel)); }
+.otile.val { border: 2px solid #39c5cf; background: color-mix(in srgb, #39c5cf 10%, var(--panel)); }
+.otile.sur { border: 2px solid #e3b341; background: color-mix(in srgb, #e3b341 10%, var(--panel)); }
+.otile.bx .oto { color: #79c0ff; }
+.otile.focus { box-shadow: 0 0 0 2px #58a6ff; animation: ofocus 1.2s ease-in-out 3; }
+.otk { position: absolute; top: -8px; left: 50%; transform: translateX(-50%); font-style: normal; font-size: 9px; font-weight: 800; padding: 1px 6px; border-radius: 999px; white-space: nowrap; }
+.otk.safe { background: #2ea043; color: #fff; } .otk.val { background: #39c5cf; color: #0d1117; } .otk.sur { background: #e3b341; color: #0d1117; }
+.otiles:has(.otk) { padding-top: 6px; }
+.omkts { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+@media (max-width: 420px) { .otile .oto { font-size: 16px; } .otiles { gap: 5px; } }

@@ -149,6 +149,12 @@ def team_list():
     return list(seen.values())
 
 
+@app.get("/api/katlama")
+def katlama_series():
+    from . import katlama
+    return katlama.export(store)
+
+
 @app.get("/api/karne")
 def karne_rows():
     from . import karne

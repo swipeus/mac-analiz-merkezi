@@ -1164,3 +1164,19 @@ body.on-moves footer.foot { display: block; }
 .kpb .v { background: #6e7681; } .kpb .w { background: rgba(255,255,255,.1); }
 .kprog small { font-size: 11px; color: var(--muted); white-space: nowrap; }
 .klive { font-size: 12px; color: #f85149; margin: 2px 0 4px; }
+
+/* katlama serisi */
+.katk { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin: 6px 0 10px; }
+.katk > div { background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.katk > div.big { grid-column: 1 / -1; border-color: rgba(163,113,247,.55); background: color-mix(in srgb, #a371f7 10%, var(--panel2)); }
+.katk span { font-size: 12px; color: var(--muted); } .katk b { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.katk .big b { font-size: 28px; } .katk small { font-size: 11px; color: var(--muted); }
+.katk .pos { color: #56d364; } .katk .neg { color: #ff7b72; }
+.katpath { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 0 0 8px; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.katpath span { padding: 2px 8px; border-radius: 999px; background: rgba(46,160,67,.14); color: #7ee2a8; }
+.katpath span.now { background: #2ea043; color: #fff; } .katpath i { font-style: normal; color: var(--muted); }
+.kath { margin: 14px 4px 6px; }
+.kathist { border-top: 1px solid var(--line); }
+.kathist summary { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; padding: 8px 0; cursor: pointer; list-style: none; font-size: 13px; }
+.kathist summary::-webkit-details-marker { display: none; }
+.kathist .pos { color: #56d364; } .kathist .neg { color: #ff7b72; }

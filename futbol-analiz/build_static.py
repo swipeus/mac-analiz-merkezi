@@ -14,7 +14,7 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from app import analysis, karne, kupon, leagues, players, teams
+from app import analysis, karne, katlama, kupon, leagues, players, teams
 from app.config import DB_PATH, LEAGUES, STATIC_DIR, TR_TZ
 from app.crypto_box import derive_key, seal, unseal
 from app.sources import Sources
@@ -47,6 +47,9 @@ async def main(out):
             if r.status_code == 200:
                 log.info("karne yayındakiyle birleştirildi: %s kayıt", karne.seed(store, unseal(key, r.json())))
                 store.cache_put("karne:synced", True)
+            r = await src.client.get(pages.rstrip("/") + f"/data/katlama.json?t={int(time.time())}")
+            if r.status_code == 200:
+                log.info("katlama yayındakiyle birleştirildi: %s gün", katlama.seed(store, unseal(key, r.json())))
         except Exception as e:  # noqa: BLE001
             log.warning("karne geri yüklenemedi: %s", e)
     # karneden tür bazında kalibrasyon (yeterli veri ve belirgin sapma varsa olasılıklar düzeltilir)
@@ -85,6 +88,8 @@ async def main(out):
             move_bodies += bodies
         # günün kombineleri: bugün ve yarın için (dünün kuponları kilitli, sadece gösterilir)
         doc = kupon.update_day(store, day_key(d), bodies) if d >= now - timedelta(hours=1) else store.coupon_get(day_key(d))
+        if d >= now - timedelta(hours=1):  # katlama serisi: günde tek kupon
+            katlama.update_day(store, day_key(d), bodies)
         write(f"day-{day_key(d)}.json", {"date": day_key(d), "matches": matches,
                                          "coupons": (doc or {}).get("coupons") or [], "coupons_locked": bool((doc or {}).get("locked"))})
         days.append(day_key(d))
@@ -125,6 +130,8 @@ async def main(out):
     kupon.settle(store)
     log.info("karneye hakem/xG eklendi: %s kayıt", karne.backfill_referees(store))
     write("karne.json", karne.export(store))
+    katlama.settle(store)
+    write("katlama.json", katlama.export(store))
     write("meta.json", {
         "updated": time.time(),
         "days": days,

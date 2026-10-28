@@ -75,6 +75,10 @@ async function staticApi(path) {
     try { return await getData("karne.json"); }
     catch (e) { if (e.message === "NOTFOUND") return []; throw e; }
   }
+  if (path === "/api/katlama") {
+    try { return await getData("katlama.json"); }
+    catch (e) { if (e.message === "NOTFOUND") throw new Error("Katlama serisi bir sonraki güncellemede başlayacak."); throw e; }
+  }
   if (path === "/api/teams") {
     try { return await getData("teams.json"); }
     catch (e) { if (e.message === "NOTFOUND") return []; throw e; }
@@ -1193,7 +1197,8 @@ async function copyCoupon(id, btn) {
 function couponCard(c, draft, open = true, kd = "") {
   COUPON_BY_ID.set(c.id, c);
   const done = c.state === "done";
-  const ret = COUPON_STAKE * (done && c.won ? c.paid_odds || c.odds : c.odds);
+  const stake = c.kstake !== undefined ? c.kstake : COUPON_STAKE;  // katlamada o günün kasası (null: henüz belli değil)
+  const ret = (stake || 0) * (done && c.won ? c.paid_odds || c.odds : c.odds);
   const color = THEME_COLOR[themeOf(c)] || "#e3b341";
   const status = done ? (c.won ? `<span class="kst ok">✓ Kazandı</span>` : `<span class="kst no">✗ Kaybetti</span>`)
     : draft ? `<span class="kst wait tbd" title="Kupondaki maçlardan ilkinin resmi 11'i açıklanınca son kontrol yapılır ve kupon kesinleşir.">! Değişebilir</span>`
@@ -1213,7 +1218,7 @@ function couponCard(c, draft, open = true, kd = "") {
     </div></div>`).join("")}</div>
     ${couponBar(c)}
     <div class="kfoot ksum"><span>Tutma ihtimali <b>${pc(c.p)}</b></span>
-      <span class="kstake ${done ? (c.won ? "pos" : "neg") : ""}">${tl(COUPON_STAKE)} → ${done ? (c.won ? tl(ret) + ` (${tl(couponProfit(c), true)})` : `0 ₺ (${tl(-COUPON_STAKE, true)})`) : tl(ret)}</span>${status}</div>
+      ${stake == null ? `<span class="kstake">Tutar önceki kupon sonuçlanınca belli olur</span>` : `<span class="kstake ${done ? (c.won ? "pos" : "neg") : ""}">${tl(stake)} → ${done ? (c.won ? tl(ret) + ` (${tl(ret - stake, true)})` : `0 ₺ (${tl(-stake, true)})`) : tl(ret)}</span>`}${status}</div>
     <div class="kshare"><button class="kbtn" data-share="copy" data-cid="${esc(c.id)}">📋 Kopyala</button>${shareBtn("k:" + c.id, `${c.icon || "🧩"} ${c.name} · ${nf(c.odds, 2)}`, couponText(c))}</div>
   </details>`;
 }
@@ -1234,7 +1239,7 @@ function drawCoupons() {
   const title = new Date(state.date + "T12:00:00").toLocaleDateString("tr-TR", { weekday: "long", day: "numeric", month: "long" });
   const intro = `<div class="card" style="--c:#a371f7">${head("🧩", `Günün kombineleri <span class="muted">· ${cap(title)}</span>`)}
     <details class="kinfo"><summary>Kuponlar nasıl hazırlanıyor? ›</summary><p class="muted">Model her gün beş temada kupon hazırlar: Banko 5, Gol şöleni, Kornerler, Kartlar ve Değerli oranlar üçer kupon. Her kupon 2-5 maçtan oluşur ve her maçtan tek tercih içerir. Banko'daki bir tercih başka hiçbir kupona girmez; diğer temalarda aynı tercih en fazla iki kuponda olur. Çifte şans 12 ve en çok korner güvenli kuponlara alınmaz. Az maçlı günlerde tema başına daha az kupon çıkar; tutma ihtimali %20'nin altındaki kupon kurulmaz (Banko'da %35). Toplam oranlar: Banko 2-3.5, Kartlar 2-6 (yalnızca kart tercihleri), Gol şöleni ve Kornerler 2.5-6, Değerli oranlar 3-6 (tercih başına en az %58, kupon en az %25). Kuponlar en güncel verilerle yenilenir; bu sürede kuponda <b>! Değişebilir</b> yazar. Kuponlardaki maçlardan ilkinin resmi ilk 11'i açıklanınca model son kontrolü yapar ve kuponları kilitler (<b>✓ Son hali</b>); karneye bu hâliyle kupon başına 1.000 ₺ ile yazılır.</p></details></div>`;
-  const tabs = COUPON_THEMES;
+  const tabs = COUPON_THEMES.concat([["katlama", "🔁", "Katlama"]]);
   const hot = hotTheme();
   if (!tabs.some(([k]) => k === couponTab)) couponTab = "banko";
   const list = cs.filter((c) => themeOf(c) === couponTab);
@@ -1244,8 +1249,39 @@ function drawCoupons() {
   ${hot ? `<div class="hotnote">🔥 Son 14 günde en çok kazandıran tema: <b>${hot.ic} ${esc(hot.name)}</b> · ${hot.h}/${hot.n} kupon tuttu, <span class="kpl ${hot.pl >= 0 ? "pos" : "neg"}">${tl(hot.pl, true)}</span></div>` : ""}`;
   const empty = cs.length ? `<div class="card"><p class="muted">Bu temada bugün kupon çıkmadı: kurallara (oran aralığı, tercih başına yüksek olasılık, aynı tercihin en fazla iki kuponda olması) uyan yeterli maç yok.</p></div>`
     : `<div class="card"><p class="muted">Bu gün için henüz kombine yok. Kombineler, oranları açıklanmış ve başlamamış en az 2 maç olduğunda hazırlanır.</p></div>`;
-  v.innerHTML = intro + bar + (list.length ? list.map((c) => couponCard(c, !dayCache.coupons_locked)).join("") : empty);
+  v.innerHTML = intro + bar + (couponTab === "katlama" ? `<div id="katBox">${skel("list")}</div>` : list.length ? list.map((c) => couponCard(c, !dayCache.coupons_locked)).join("") : empty);
   v.querySelectorAll("[data-ct]").forEach((b) => b.onclick = () => { couponTab = b.dataset.ct; drawCoupons(); });
+  if (couponTab === "katlama") drawKatlama();
+}
+/* ---------- katlama serisi: günde tek kupon, kazanınca dönen paranın tamamı ertesi güne ---------- */
+async function drawKatlama() {
+  const box = $("#katBox");
+  let K;
+  try { K = await api("/api/katlama"); } catch (e) { box.innerHTML = `<div class="card"><p class="muted">${esc(e.message)}</p></div>`; return; }
+  if (!$("#katBox")) return;
+  const fmt = (d) => new Date(d + "T12:00:00").toLocaleDateString("tr-TR", { day: "numeric", month: "long", weekday: "long" });
+  const open = (K.days || []).filter((d) => d.coupon.state !== "done");
+  const done = (K.days || []).filter((d) => d.coupon.state === "done");
+  const won = done.filter((d) => d.coupon.won).length;
+  const path = [K.start_stake].concat(done.filter((d) => d.series === K.series && d.coupon.won).slice().reverse().map((d) => d.ret));
+  const summary = `<div class="card katsum" style="--c:#a371f7">${head("🔁", `Katlama serisi <span class="muted">· ${new Date(K.start + "T12:00:00").toLocaleDateString("tr-TR", { day: "numeric", month: "long" })}'den beri</span>`)}
+    <div class="katk">
+      <div class="big"><span>Kasa</span><b>${tl(K.bank)}</b><small>${K.series}. seri · ${K.streak} gün üst üste</small></div>
+      <div><span>Toplam</span><b class="${K.net >= 0 ? "pos" : "neg"}">${tl(K.net, true)}</b><small>yatırılan ${tl(K.invested)}</small></div>
+      <div><span>Kupon</span><b>${won}/${done.length}</b><small>tuttu</small></div>
+      <div><span>En uzun seri</span><b>${K.best} gün</b><small>${(K.lost_series || []).length} seri bitti</small></div>
+    </div>
+    ${path.length > 1 ? `<div class="katpath">${path.map((x, i) => `<span class="${i === path.length - 1 ? "now" : ""}">${shortTl(x).replace(/^\+/, "")} ₺</span>`).join("<i>→</i>")}</div>` : ""}
+    <p class="muted">Her gün tek kupon: toplam oran 1.90-3.00, her tercihin model olasılığı en az %65. ${tl(K.start_stake)} ile başlar; kazanınca dönen paranın tamamı ertesi günün kuponuna yatırılır (1.000 → 2.000 → 4.000 gibi). Kaybedince seri biter, ertesi gün ${tl(K.start_stake)} ile yeni seri başlar. Diğer kuponlardan bağımsızdır (aynı tercih başka kuponlarda da olabilir) ve karnenin kâr/zararına eklenmez. Kupon, maçlarından birinin resmi 11'i açıklanınca kilitlenir.</p></div>`;
+  const cards = open.map((d) => `<h3 class="kath">${esc(cap(fmt(d.date)))}</h3>` + couponCard({ ...d.coupon, kstake: d.stake, name: `Katlama · ${d.series}. seri` }, !d.locked)).join("");
+  const hist = done.length ? `<div class="card" style="--c:#58a6ff">${head("📜", "Geçmiş")}${done.map((d) => {
+    const c = d.coupon;
+    return `<details class="kathist"><summary><span class="kst ${c.won ? "ok" : "no"}">${c.won ? "✓" : "✗"}</span>
+      <span>${esc(cap(fmt(d.date)))} <small class="muted">· ${d.series}. seri · oran ${nf(c.paid_odds || c.odds, 2)}</small></span>
+      <b class="${c.won ? "pos" : "neg"}">${d.stake != null ? `${shortTl(d.stake).replace(/^\+/, "")} → ${shortTl(d.ret || 0).replace(/^\+/, "")} ₺` : ""}</b></summary>
+      ${couponCard({ ...c, kstake: d.stake, name: `Katlama · ${d.series}. seri` }, false)}</details>`;
+  }).join("")}</div>` : "";
+  box.innerHTML = summary + (cards || `<div class="card"><p class="muted">Bugün için katlama kuponu henüz yok. Kurallara uyan (oran 1.90-3.00, tercih başına %65+) yeterli maç olunca hazırlanır.</p></div>`) + hist;
 }
 // son 14 günde en çok kazandıran tema (en az 3 sonuçlanmış kupon)
 function hotTheme() {
@@ -2743,6 +2779,14 @@ const RELEASES = [
       ["📊", "Daha fazla pazar", "Yarılar, handikaplar, korner/kart/şut/ofsayt/faul toplamları, takım bazlı alt/üst ve dakika aralıkları."],
       ["🔍", "Oranlarda arama", "Oranlar sekmesinde oyuncu veya pazar adı yaz, sadece o seçenekler kalsın; gruplar açılıp kapanır."],
       ["🔕", "Sessiz bildirimler", "Bildirimler artık ekranı kaplamaz; yalnızca sarı çana dokununca görünür."],
+    ],
+  },
+  {
+    id: 21, date: "28 Ekim 2026", title: "Yeni: Katlama serisi", sub: "Bu güncellemede gelenler",
+    items: [
+      ["🔁", "Günde tek kupon", "Kombineler'de yeni Katlama sekmesi: her gün oranı 1.90-3.00, tercih başına en az %65 güvenle tek kupon."],
+      ["💰", "Para katlanır", "1.000 ₺ ile başlar; kazanınca dönen paranın tamamı ertesi güne yatırılır (1.000 → 2.000 → 4.000). Kaybedince 1.000 ₺ ile yeni seri."],
+      ["📒", "Ayrı hesap", "Kasa, toplam, en uzun seri ve geçmiş ayrı tutulur; karnenin kâr/zararına eklenmez, diğer kuponlardan bağımsızdır."],
     ],
   },
   {

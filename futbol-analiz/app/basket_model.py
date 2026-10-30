@@ -323,13 +323,15 @@ def record(store, g, pr, pick, opts=None):
 
 def build_coupons(date, cands, kept=()):
     """cands: [(oyun, seçenekler)]; aynı temada bir maç tek kuponda kullanılır, aynı kupon iki temada çıkmaz.
-    Aynı tercih en fazla MAX_USE kupona girer; kept: kilitlenmiş kuponlar, bu sayıma dahildir."""
+    Aynı tercih en fazla MAX_USE kupona girer; kept: kilitlenmiş kuponlar, bütün sayımlara dahildir ve numaraları korunur."""
     limit = MAX_USE if date >= MAX_USE_FROM else 99
-    out, seen = [], set()
+    out, seen = [], {frozenset((l["mid"], l["code"]) for l in c["legs"]) for c in kept}
     use = collections.Counter((l["mid"], l["code"]) for c in kept for l in c["legs"])
     for key, name, icon, ok, pmin, (lo, hi), (tot_lo, tot_hi), quota in THEMES:
-        used, n = set(), 0
-        while n < quota:
+        mine = [c for c in kept if c["theme"] == key]
+        used = {l["mid"] for c in mine for l in c["legs"]}
+        nums, n = {int(c["id"].rsplit("-", 1)[1]) for c in mine}, 0
+        while len(nums) < quota:
             pool = []  # kullanım sayısı her kuponda değişir
             for g, opts in cands:
                 good = [x for x in opts if ok(x["code"]) and x["p"] >= pmin and lo <= x["odds"] <= hi and use[(g["id"], x["code"])] < limit]
@@ -352,7 +354,8 @@ def build_coupons(date, cands, kept=()):
                 continue
             seen.add(sig)
             use.update((g["id"], x["code"]) for x, g in legs)
-            n += 1
+            n = min(i for i in range(1, quota + 1) if i not in nums)
+            nums.add(n)
             prob = 1.0
             for x, _ in legs:
                 prob *= x["p"]
@@ -370,8 +373,8 @@ def update_coupons(store, date, cands):
     kept = [c for c in doc["coupons"] if c.get("state") == "done" or any(soon(l) for l in c["legs"])]
     cands = [(g, o) for g, o in cands if not soon(g)]  # kilit süresine girmiş maç yeni kupona alınmaz
     if cands:
-        taken = {c["id"] for c in kept}
-        kept += [c for c in build_coupons(date, cands, kept) if c["id"] not in taken]
+        kept += build_coupons(date, cands, kept)
+        kept.sort(key=lambda c: ([t[0] for t in THEMES].index(c["theme"]), int(c["id"].rsplit("-", 1)[1])))
     doc["coupons"] = kept
     store.bk_put("coupons", date, doc)
     return doc

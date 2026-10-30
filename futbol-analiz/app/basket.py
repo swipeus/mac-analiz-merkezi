@@ -1,6 +1,6 @@
-"""Basketbol: NBA (ESPN), EuroLeague (resmi servis) ve Türkiye Basketbol Süper Ligi (TBF resmi servisi).
+"""Basketbol: NBA (ESPN) ve EuroLeague (resmi servis).
 
-Üç kaynak tek biçime çevrilir: maç, takım özeti, oyuncu ortalaması ve maç kutusu (box score). Biten günlerin ve
+İki kaynak tek biçime çevrilir: maç, takım özeti, oyuncu ortalaması ve maç kutusu (box score). Biten günlerin ve
 maçların özeti kalıcı saklanır; böylece her turda yalnızca yakın günler yeniden çekilir.
 Her lig ayrı işlenir: birinin kaynağı düşerse diğerleri ve futbol tarafı etkilenmez.
 """
@@ -20,24 +20,16 @@ ESPN_WEB = "https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba"
 EL_API = "https://feeds.incrowdsports.com/provider/euroleague-feeds/v2/competitions/E/seasons/{s}/games?limit=500"
 EL_FEED = "https://feeds.incrowdsports.com/provider/euroleague-feeds/v3/competitions/E"
 EL_BOX = "https://live.euroleague.net/api/Boxscore?gamecode={c}&seasoncode={s}"
-TBF = "https://miniappapi.tbf.org.tr/webapi-service/api"
 
 # sezon değişince güncellenir
 ESPN_SEASON = 2027
 EL_SEASON = "E2026"
-BSL_ID, BSL_SEASON = 22214, 174
-EL_PRIOR, BSL_PRIOR = "E2025", 20728
-PRIOR = {"nba": ("2025-10-20", 245), "bsl": ("2025-09-20", 270)}
+EL_PRIOR = "E2025"
+NBA_PRIOR = ("2025-10-20", 245)
 
 LEAGUES = {
     "nba": {"name": "NBA", "start": "2026-10-20"},
     "el": {"name": "EuroLeague", "start": None},
-    "bsl": {"name": "Türkiye Basketbol Süper Ligi", "start": "2026-09-20"},
-}
-LOGO = {
-    "nba": "https://a.espncdn.com/i/teamlogos/leagues/500/nba.png",
-    "el": "https://media-cdn.incrowdsports.com/23610a1b-1c2e-4d2a-8fe4-ac2f8e400632.svg",
-    "bsl": "https://tbf.org.tr/assets/images/sites-logo/bslrenkli.svg",
 }
 LIVE_TTL = 120
 SOON_TTL = 600
@@ -338,90 +330,32 @@ async def load_el(src, store, now):
     return {"games": games, "players": await _el_players(src, store), "injuries": {}, "groups": {}, "rank": {}}
 
 
-# ---------- Türkiye Basketbol Süper Ligi (TBF) ----------
-def _bsl_game(m):
-    def team(x):
-        return side(_int(x.get("id")), tr_title(x.get("name")), None, x.get("logoUrl"), _int(x.get("score")))
-    h, a = team(m["homeTeam"]), team(m["awayTeam"])
-    sid = _int(m.get("matchStatusId"))
-    state = "post" if sid == 1 else "live" if h["score"] is not None and sid not in (1, 4) else "pre"
-    return game(_int(m.get("matchId")), "bsl", m["matchDate"] + "+03:00", h, a, state, "Canlı" if state == "live" else None,
-                None, tr_title(m.get("venueName") or m.get("salonAdi") or ""), m.get("week"))
-
-
-async def _bsl_day(src, store, day, now):
-    async def make():
-        d = await src.fetch_json(f"{TBF}/Match/get-daily-matches?MatchDate={day}")
-        return [_bsl_game(m) for g in d.get("data") or [] for m in g.get("matches", [])
-                if (m.get("activityCode") or "").lower() == "bsl" and _int(m.get("activityId")) == BSL_ID]
-    return await cached(store, f"bk:bsl:d:{day}", day_ttl(day, now), make)
-
-
-def _bsl_row(p):
-    return {"id": p.get("playerId"), "name": tr_title(p.get("playerName")) if (p.get("playerName") or "").isupper() else p.get("playerName"),
-            "start": bool(p.get("isStarter")), "min": to_min(p.get("minutesPlayed")), "pts": p.get("points") or 0,
-            "reb": p.get("totalRebounds") or 0, "ast": p.get("assists") or 0, "stl": p.get("steals") or 0,
-            "blk": p.get("blocks") or 0, "to": p.get("turnovers") or 0, "pf": p.get("fouls") or 0,
-            "fg": f"{p.get('successfulShots', 0)}-{p.get('shotAttempts', 0)}",
-            "tp": f"{p.get('threePointShots', 0)}-{p.get('threePointShotAttempts', 0)}", "eff": p.get("efficiency")}
-
-
-async def _bsl_box(src, store, g):
-    gid = g["id"].split("-", 1)[1]
-
-    async def make():
-        d = (await src.fetch_json(f"{TBF}/Match/mac-istatistik?matchId={gid}")).get("data") or {}
-        h = await src.fetch_json(f"{TBF}/Match/mac-header?matchId={gid}")
-        hd = h.get("data") or {}
-        refs = [tr_title(hd.get(k)) for k in ("mainReferee", "firstAssistantReferee", "secondAssistantReferee") if hd.get(k)]
-        return {"home": [_bsl_row(p) for p in (d.get("homeTopFive") or []) + (d.get("homeBenchPlayers") or [])],
-                "away": [_bsl_row(p) for p in (d.get("awayTopFive") or []) + (d.get("awayBenchPlayers") or [])], "refs": refs}
-    return await cached(store, f"bk:box:{g['id']}", None if g["state"] == "post" else LIVE_TTL, make)
-
-
-async def load_bsl(src, store, now):
-    days = list(date_range(LEAGUES["bsl"]["start"], now.date() + timedelta(days=3)))
-    games = []
-    for rows in await asyncio.gather(*[_bsl_day(src, store, d, now) for d in days]):
-        games += rows
-
-    async def make():
-        d = await src.fetch_json(f"{TBF}/League/get-standings-table?leagueId={BSL_ID}&seasonId={BSL_SEASON}")
-        return {str(_int(r.get("takimIslemId"))): r.get("sira") for g in d.get("data") or [] for r in g.get("standings", [])}
-    rank = await cached(store, "bk:bsl:rank", 1800, make)
-    return {"games": games, "players": {}, "injuries": {}, "groups": {}, "rank": rank}
-
-
 async def prior_games(src, store, lg):
     """Geçen sezonun oynanmış maçları (takım gücünün sezon başı için): özet saklanır."""
     async def make():
-        rows = []
         if lg == "el":
             d = await src.fetch_json(EL_API.format(s=EL_PRIOR))
-            rows = [_el_game(g) for g in d.get("data", []) if g.get("home") and g.get("away")]
-        else:
-            start, n = PRIOR[lg]
-            d0 = datetime.strptime(start, "%Y-%m-%d").date()
+            return bm.compact([_el_game(g) for g in d.get("data", []) if g.get("home") and g.get("away")])
+        start, n = NBA_PRIOR
+        d0 = datetime.strptime(start, "%Y-%m-%d").date()
 
-            async def one(i):
-                day = d0 + timedelta(days=i)
-                try:
-                    if lg == "nba":
-                        d = await src.fetch_json(f"{ESPN}/scoreboard?dates={day.strftime('%Y%m%d')}")
-                        return [_espn_game(e) for e in d.get("events", []) if (e.get("season") or {}).get("type") in (2, 3, 5)]
-                    d = await src.fetch_json(f"{TBF}/Match/get-daily-matches?MatchDate={day.isoformat()}")
-                    return [_bsl_game(m) for g in d.get("data") or [] for m in g.get("matches", []) if _int(m.get("activityId")) == BSL_PRIOR]
-                except Exception as e:  # noqa: BLE001
-                    log.warning("geçen sezon günü alınamadı %s %s: %s", lg, day, e)
-                    return []
-            for part in await asyncio.gather(*[one(i) for i in range(n)]):
-                rows += part
-        return bm.compact(rows, key_name=lg == "bsl")
+        async def one(i):
+            day = d0 + timedelta(days=i)
+            try:
+                d = await src.fetch_json(f"{ESPN}/scoreboard?dates={day.strftime('%Y%m%d')}")
+                return [_espn_game(e) for e in d.get("events", []) if (e.get("season") or {}).get("type") in (2, 3, 5)]
+            except Exception as e:  # noqa: BLE001
+                log.warning("geçen sezon günü alınamadı %s: %s", day, e)
+                return []
+        rows = []
+        for part in await asyncio.gather(*[one(i) for i in range(n)]):
+            rows += part
+        return bm.compact(rows)
     return await cached(store, f"bk:prior:{lg}", 30 * 86400, make)
 
 
-LOADERS = {"nba": load_nba, "el": load_el, "bsl": load_bsl}
-BOXES = {"nba": _nba_box, "el": _el_box, "bsl": _bsl_box}
+LOADERS = {"nba": load_nba, "el": load_el}
+BOXES = {"nba": _nba_box, "el": _el_box}
 
 
 # ---------- özetler ----------
@@ -470,23 +404,6 @@ def standings(lg, table, groups, rank):
     return [{"group": g, "rows": [r for r in rows if groups.get(r["id"]) == g]} for g in ("Doğu", "Batı")]
 
 
-def bsl_season_players(boxes):
-    """TBF'de takım başına toplu liste açık değil: maç kutularından sezon ortalaması çıkarılır."""
-    agg = {}
-    for tid, row in boxes:
-        if row["min"] <= 0:
-            continue
-        a = agg.setdefault(tid, {}).setdefault(row["id"], {"id": row["id"], "name": row["name"], "gp": 0, "min": 0, "pts": 0,
-                                                           "reb": 0, "ast": 0, "stl": 0, "blk": 0})
-        a["gp"] += 1
-        for k in ("min", "pts", "reb", "ast", "stl", "blk"):
-            a[k] += row[k]
-    out = {}
-    for tid, ps in agg.items():
-        out[tid] = [{**p, **{k: round(p[k] / p["gp"], 1) for k in ("min", "pts", "reb", "ast", "stl", "blk")}} for p in ps.values()]
-    return out
-
-
 def absences(players, last_box):
     """Önemli oyuncu son maçın kutusunda yoksa (ya da hiç oynamadıysa) bilgi olarak yazılır."""
     if not last_box:
@@ -518,7 +435,7 @@ def rest_days(table_row, utc):
 
 
 NEWS_HIT = re.compile(r"sakat|ameliyat|sezonu kapat|forma giye|kadroda yok|kadro dışı|yok|injur", re.I)
-NEWS_BASKET = re.compile(r"basket|pota|euroleague|bsl|nba|beko|tarfin|mct|boa", re.I)
+NEWS_BASKET = re.compile(r"basket|pota|euroleague|nba|beko|tarfin|mct|boa", re.I)
 # futbol takımı da olan kulüplerde başlıkta basketbol geçmesi aranır
 NEWS_FOOTBALL = re.compile(r"galatasaray|fenerbah|beşiktaş|besiktas|trabzon|bursaspor|real madrid|barcelona|bayern|monaco|"
                            r"panathinaikos|olympiacos|partizan|zvezda|paris|virtus|maccabi|hapoel|dubai", re.I)
@@ -547,7 +464,7 @@ async def build(src, store, write, now):
             except Exception as e:  # noqa: BLE001
                 log.warning("geçen sezon alınamadı %s: %s", lg, e)
                 prior = []
-            rating = bm.fit(prior + bm.compact(games, key_name=lg == "bsl"), now.timestamp() / 86400)
+            rating = bm.fit(prior + bm.compact(games), now.timestamp() / 86400)
             # maç kutuları: yeniler önce; geçmiş sezon maçları tur başına sınırlı
             need = [g for g in sorted(games, key=lambda x: x["utc"], reverse=True) if g["state"] in ("post", "live")]
             if lg == "nba":  # NBA'de oyuncu ortalaması hazır; yalnızca gösterilecek günlerin kutuları gerekir
@@ -563,9 +480,6 @@ async def build(src, store, write, now):
                 if hit:
                     boxes[g["id"]] = hit[1]
             players = d["players"]
-            if lg == "bsl":
-                players = bsl_season_players([(g[sd]["id"], r) for g in need if g["id"] in boxes
-                                              for sd in ("home", "away") for r in boxes[g["id"]].get(sd, [])])
             last_box = {}  # takımın son maçındaki kutu satırları
             for g in sorted(need, key=lambda x: x["utc"]):
                 if g["id"] in boxes:
@@ -582,9 +496,11 @@ async def build(src, store, write, now):
                     pr = bm.predict(lg, g, rating, ev)
                     opts = bm.options(pr, ev, g["home"]["short"], g["away"]["short"])
                     pick = bm.best_pick(opts)
-                    rec = bm.record(store, g, pr, pick)
+                    rec = bm.record(store, g, pr, pick, opts)
                     if g["state"] == "pre" and opts:
                         day_cands[dk].append((g, opts))
+                    if g["state"] != "pre" and rec and rec.get("pred"):
+                        pr, opts = rec["pred"], rec.get("options") or []
                     model = {"pred": pr, "options": opts, "rec": rec}
                     all_cards[dk].append({**card(g, table), "pred": short_pred(g, pr, rec)})
                     write(f"bk-match-{g['id']}.json", {**await bundle(src, g, lg, d, table, games, roster, boxes.get(g["id"]), last_box), **model})
@@ -601,7 +517,7 @@ async def build(src, store, write, now):
             lead = lambda k: sorted((p for p in allp if (p.get("gp") or 0) >= min_gp), key=lambda p: -(p.get(k) or 0))[:10]  # noqa: E731
             write(f"bk-league-{lg}.json", {"lg": lg, "name": info["name"], "table": standings(lg, table, d["groups"], d["rank"]),
                                            "leaders": {"pts": lead("pts"), "reb": lead("reb"), "ast": lead("ast")}})
-            out_lg.append({"id": lg, "name": info["name"], "logo": LOGO[lg]})
+            out_lg.append({"id": lg, "name": info["name"]})
             bm.settle(store, games)
             log.info("basketbol %s: %s maç, %s oynandı, %s kutu", lg, len(games), sum(g["state"] == "post" for g in games), len(boxes))
         except Exception as e:  # noqa: BLE001
@@ -620,11 +536,13 @@ def short_pred(g, pr, rec):
     if g["state"] == "pre":
         if not pr:
             return None
-        return {"p_home": pr["p_home"], "p_away": pr["p_away"], "total": pr["total"], "safe": (rec or {}).get("pick")}
+        return {"p_home": pr["p_home"], "p_away": pr["p_away"], "total": pr["total"], "margin": pr["margin"], "safe": (rec or {}).get("pick"),
+                "boxes": (rec or {}).get("boxes") or []}
     if not rec:
         return None
     return {"p_home": rec.get("p_home"), "p_away": round(1 - rec["p_home"], 3) if rec.get("p_home") is not None else None,
-            "safe": rec.get("pick"), "hit": rec.get("hit"), "done": rec.get("state") == "done"}
+            "total": (rec.get("pred") or {}).get("total"), "margin": (rec.get("pred") or {}).get("margin"),
+            "safe": rec.get("pick"), "hit": rec.get("hit"), "done": rec.get("state") == "done", "boxes": rec.get("boxes") or []}
 
 
 async def bundle(src, g, lg, d, table, games, roster, box, last_box):

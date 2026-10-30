@@ -1193,7 +1193,8 @@ body.on-home footer.foot { display: block; }
 .sports a.on { color: var(--text); background: var(--panel2); border-color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
 .sports a[data-sport="bk"].on { border-color: #f0883e; box-shadow: inset 0 -2px 0 #f0883e; }
 body.in-match .sports, body.locked .sports { display: none; }
-body.sport-bk #toolbar, body.sport-bk .top .right, body.sport-bk #bottomNav { display: none; }
+body.sport-bk #toolbar, body.sport-bk .top .right { display: none; }
+@media (max-width: 700px) { .bknav { display: none !important; } }
 .bkq { display: flex; justify-content: center; gap: 6px; flex-wrap: wrap; }
 .bkq span { font-size: 11px; color: var(--muted); background: var(--panel2); border-radius: 6px; padding: 1px 6px; font-variant-numeric: tabular-nums; }
 .bkq.big { margin-bottom: 10px; }

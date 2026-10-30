@@ -2598,6 +2598,7 @@ function route() {
   state.hakem = hm ? +hm[1] : null;
   const navKey = om ? "oranlar" : km ? "karne" : cm ? "kombine" : (mm || pm || lm || tm || xm || hm) ? "" : "home";
   document.querySelectorAll("#bottomNav [data-nav]").forEach((a) => a.classList.toggle("on", a.dataset.nav === navKey));
+  bkNavSync(bk);
   document.body.classList.toggle("on-home", navKey === "home" && !bk);  // sayfa altı yazısı sadece futbol ana sayfasında
   if (bk) { state.current = null; renderBasket(); }
   else if (shm) { state.current = null; window.scrollTo(0, 0); renderShare(); }
@@ -2789,7 +2790,7 @@ const RELEASES = [
   {
     id: 22, date: "30 Ekim 2026", title: "Yeni: Basketbol", sub: "Bu güncellemede gelenler",
     items: [
-      ["🏀", "Futbol ve Basketbol", "En üstteki kutucuklardan iki bölüm arasında geçebilirsin. Basketbolda NBA, EuroLeague ve Türkiye Süper Ligi var."],
+      ["🏀", "Futbol ve Basketbol", "En üstteki kutucuklardan iki bölüm arasında geçebilirsin. Basketbolda NBA ve EuroLeague var."],
       ["📊", "Maç sayfası", "Sezon karşılaştırması, son maçlar, oyuncu ortalamaları, sakatlıklar, eksikler ve maç istatistiği."],
       ["🏆", "Lig ve takım sayfaları", "Puan durumu, sayı, ribaund ve asist liderleri, takım kadrosu ve fikstür."],
       ["🎯", "En garanti tercih ve kupon", "Takım gücü ve piyasa çizgisiyle tahmin, her maça en garanti tercih, günlük kuponlar ve ayrı basketbol karnesi."],

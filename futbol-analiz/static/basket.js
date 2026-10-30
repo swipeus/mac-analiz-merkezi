@@ -1,10 +1,10 @@
 "use strict";
-/* Basketbol bölümü: NBA, EuroLeague, Türkiye Basketbol Süper Ligi. Veriler bk-*.json dosyalarından gelir (build_static).
+/* Basketbol bölümü: NBA ve EuroLeague. Veriler bk-*.json dosyalarından gelir (build_static).
    Sayfalar: #/basket (maçlar), #/basket/mac/<id>, #/basket/lig/<lig>, #/basket/takim/<lig>/<id> */
 
 const BK = { day: null, tab: "ozet", lg: "all", cday: null };
-const BK_LG = { nba: "NBA", el: "EuroLeague", bsl: "Türkiye Basketbol Süper Ligi" };
-const BK_LOGO = { nba: "🏀", el: "🇪🇺", bsl: "🇹🇷" };
+const BK_LG = { nba: "NBA", el: "EuroLeague" };
+const BK_LOGO = { nba: "🏀", el: "🇪🇺" };
 
 async function bkGet(name, missing) {
   if (!STATIC) throw new Error("Basketbol bölümü yalnızca yayındaki sitede çalışır.");
@@ -12,11 +12,20 @@ async function bkGet(name, missing) {
   catch (e) { if (e.message === "NOTFOUND") throw new Error(missing); throw e; }
 }
 const bkNum = (x, d = 1) => x == null ? "—" : nf(x, d);
-const bkCrest = (t, size = 56) => {
+// futboldaki gibi: favori takımın logosunun üstünde yıldız
+const bkCrest = (t, size, isFav, pct) => {
   const ini = (t.short || t.name || "?").split(" ").map((w) => w[0]).join("").replace(/[^\p{L}\p{N}]/gu, "").slice(0, 3);
-  return `<div class="crest" style="width:${size}px;height:${size}px">${t.logo ? `<img src="${esc(t.logo)}" alt="" loading="lazy" referrerpolicy="no-referrer" style="width:${Math.round(size * 0.72)}px;height:${Math.round(size * 0.72)}px"
+  return `<div class="crest ${isFav ? "fav" : ""}"${size ? ` style="width:${size}px;height:${size}px"` : ""}>
+    ${isFav ? `<span class="star" title="Favori · kazanma olasılığı ${pc(pct)}">★</span>` : ""}
+    ${t.logo ? `<img src="${esc(t.logo)}" alt="" loading="lazy" referrerpolicy="no-referrer"${size ? ` style="width:${Math.round(size * 0.72)}px;height:${Math.round(size * 0.72)}px"` : ""}
     onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'fb',textContent:'${esc(ini)}'}))">` : `<span class="fb">${esc(ini)}</span>`}</div>`;
 };
+const bkFav = (p) => {
+  if (!p || p.p_home == null) return null;
+  const h = Math.round(p.p_home * 100), a = Math.round(p.p_away * 100);
+  return h === a ? null : h > a ? "home" : "away";
+};
+const bkBoxes = (p) => (p && p.boxes && p.boxes.length ? probBoxes(p.boxes.map((x) => [x.ic, x.label, x.p, null, x.odds])) : "");
 const bkTeamLink = (lg, t, txt) => `<a href="#/basket/takim/${lg}/${encodeURIComponent(t.id)}">${esc(txt || t.short || t.name)}</a>`;
 const bkDots = (s) => [...(s || "")].map((c) => `<span class="bkf ${c === "G" ? "w" : "l"}">${c}</span>`).join("");
 
@@ -24,20 +33,44 @@ const bkNav = (on) => `<div class="bknav">${[["mac", "#/basket", "🏀 Maçlar"]
   `<a class="${k === on ? "on" : ""}" href="${h}">${l}</a>`).join("")}</div>`;
 
 /* ---------- maç listesi ---------- */
-function bkCard(m) {
-  const live = m.state === "live", done = m.state === "post";
+function bkCard(m, withLeague) {
+  const live = m.state === "live", done = m.state === "post", p = m.pred, fav = bkFav(p);
   const top = live ? `<span class="badge-live">CANLI ${esc(m.clock || "")}</span>` : done ? `<span class="when">Maç sonu</span>` : `<span></span>`;
   const mid = live || done
     ? `<div class="sc">${m.home.score ?? 0} - ${m.away.score ?? 0}</div><div class="sub">${live ? "devam ediyor" : "skor"}</div>`
     : `<div class="ko">${esc(timeOf(m.utc))}</div><div class="sub">başlama</div>`;
   const quarters = m.q && m.q[0] && m.q[0].length ? `<div class="bkq">${m.q[0].map((x, i) => `<span>${x ?? "–"}-${(m.q[1] || [])[i] ?? "–"}</span>`).join("")}</div>` : "";
-  const tm = (t) => `<div class="tm">${bkCrest(t)}<div class="nm">${esc(t.short)}</div>${t.rec ? `<small class="muted">${esc(t.rec)}</small>` : ""}</div>`;
-  const p = m.pred;
-  const bar = p && p.p_home != null ? `<div class="probs"><span class="ph">${pc(p.p_home)}</span><div class="probbar"><span style="width:${p.p_home * 100}%"></span><span style="width:0"></span><span style="width:${p.p_away * 100}%"></span></div><span class="pa">${pc(p.p_away)}</span></div>` : "";
-  const safe = p && p.safe ? `<div class="bksafe ${p.hit === true ? "won" : p.hit === false ? "lost" : ""}"><span>${p.hit === true ? "✓" : p.hit === false ? "✗" : "✅"} ${esc(p.safe.label)}</span><b>${pc(p.safe.p)} · ${nf(p.safe.odds, 2)}</b></div>` : "";
-  return `<div class="mcard ${live ? "is-live" : ""} st-${live ? "live" : done ? "done" : "open"}" data-bk="${esc(m.id)}">
-    <div class="mtop">${top}<div class="mtags">${m.round ? `<span class="tag">${esc(typeof m.round === "number" ? m.round + ". hafta" : m.round)}</span>` : ""}</div></div>
-    <div class="mteams">${tm(m.home)}<div class="mid">${mid}</div>${tm(m.away)}</div>${quarters}${bar}${safe}
+  const tm = (t, sd) => `<div class="tm">${bkCrest(t, null, fav === sd, p && p["p_" + sd])}<div class="nm">${esc(t.short)}</div>${t.rec ? `<small class="muted">${esc(t.rec)}</small>` : ""}</div>`;
+  const s = p && p.safe, started = m.state !== "pre";
+  const bottom = p && p.p_home != null ? `
+    <div class="probs"><span class="ph">${pc(p.p_home)}</span><div class="probbar"><span style="width:${p.p_home * 100}%"></span><span style="width:0"></span><span style="width:${p.p_away * 100}%"></span></div><span class="pa">${pc(p.p_away)}</span></div>
+    <div class="pills">${s ? `<span class="pill safe${p.hit === true ? " won" : p.hit === false ? " lost" : started ? "" : " tbd"}" title="${p.hit === true ? "Tuttu" : p.hit === false ? "Tutmadı" : started ? "Son tercih" : "Maç başlayana kadar değişebilir"}"><i>${p.hit === true ? "✓" : p.hit === false ? "✗" : started ? "✅" : "!"}</i>${esc(s.label.replace(/ \(.*\)$/, ""))} @${nf(s.odds, 2)}</span>` : ""}</div>
+    ${bkBoxes(p)}` : (done ? "" : `<div class="pending">Oranlar bekleniyor…</div>`);
+  const tag = m.round ? `<span class="tag">${esc(typeof m.round === "number" ? m.round + ". hafta" : m.round)}</span>` : "";
+  return `<div class="mcard ${live ? "is-live" : ""} st-${live ? "live" : done ? "done" : p && p.safe ? "open" : "wait"}" data-bk="${esc(m.id)}">
+    <div class="mtop">${top}<div class="mtags">${withLeague ? `<span class="tag">${BK_LOGO[m.lg]} ${BK_LG[m.lg]}</span>` : tag}</div></div>
+    <div class="mteams">${tm(m.home, "home")}<div class="mid">${mid}</div>${tm(m.away, "away")}</div>${quarters}${bottom}
+  </div>`;
+}
+// liste başındaki öne çıkanlar: kuponlar, en net favori, en çok sayı, en dengeli maç
+function bkHighlights(ms, coupons) {
+  const open = ms.filter((m) => m.state === "pre" && m.pred && m.pred.p_home != null);
+  const kTile = coupons.length ? `<div class="hl kombi" data-go="#/basket/kupon"><div class="ic">🧩</div>
+    <div class="hlb"><div class="k">Günün kuponları</div><div class="t">${coupons.length} kupon hazır ›</div>
+    <div class="s">${[...new Set(coupons.map((c) => c.icon))].map((ic) => `${ic} ${coupons.filter((c) => c.icon === ic).length}`).join(" · ")}</div></div></div>` : "";
+  if (open.length < 2) return kTile ? `<div class="highlights">${kTile}</div>` : "";
+  const pick = (score) => open.reduce((a, b) => (score(b) > score(a) ? b : a));
+  const favM = pick((m) => Math.max(m.pred.p_home, m.pred.p_away));
+  const totM = pick((m) => m.pred.total || 0), evenM = pick((m) => -Math.abs(m.pred.p_home - m.pred.p_away));
+  const side = bkFav(favM.pred) || "home", opp = side === "home" ? favM.away : favM.home;
+  const tile = (cls, ic, k, m, t, x) => `<div class="hl ${cls}" data-bk="${esc(m.id)}"><div class="ic">${ic}</div>
+    <div class="hlb"><div class="k">${k}</div><div class="t">${t}</div><div class="s">${esc(x)}</div></div></div>`;
+  const tl2 = (t) => `<span class="hlt">${t.logo ? `<img src="${esc(t.logo)}" alt="" onerror="this.remove()">` : ""}${esc(t.short)}</span>`;
+  const pair = (m) => `${tl2(m.home)}<span class="hlv">-</span>${tl2(m.away)}`;
+  return `<div class="highlights">${kTile}
+    ${tile("fav", "★", "En net favori", favM, tl2(favM[side]), `Rakip: ${opp.short} · kazanma ${pc(favM.pred["p_" + side])}`)}
+    ${tile("goal", "🏀", "En çok sayı beklentisi", totM, pair(totM), `Toplam ${nf(totM.pred.total, 1)} sayı`)}
+    ${tile("even", "⚖", "En dengeli maç", evenM, pair(evenM), `1 ${pc(evenM.pred.p_home)} · 2 ${pc(evenM.pred.p_away)}`)}
   </div>`;
 }
 async function renderBasketHome() {
@@ -54,18 +87,19 @@ async function renderBasketHome() {
   if (location.hash !== "#/basket") return;
   const present = Object.keys(BK_LG).filter((k) => D.matches.some((m) => m.lg === k));
   const lgBar = present.length > 1 ? `<div class="chiprow quickbar"><button class="chipbtn ${BK.lg === "all" ? "on" : ""}" data-bkl="all">Tümü <small>${D.matches.length}</small></button>${present.map((k) =>
-    `<button class="chipbtn ${BK.lg === k ? "on" : ""}" data-bkl="${k}">${BK_LOGO[k]} ${k === "bsl" ? "Türkiye" : BK_LG[k]} <small>${D.matches.filter((m) => m.lg === k).length}</small></button>`).join("")}</div>` : "";
+    `<button class="chipbtn ${BK.lg === k ? "on" : ""}" data-bkl="${k}">${BK_LOGO[k]} ${BK_LG[k]} <small>${D.matches.filter((m) => m.lg === k).length}</small></button>`).join("")}</div>` : "";
   const shown = Object.keys(BK_LG).filter((k) => (BK.lg === "all" || BK.lg === k));
   const sections = shown.map((k) => {
     const list = D.matches.filter((m) => m.lg === k);
     return list.length ? `<section class="lg-block"><a class="lg-title" href="#/basket/lig/${k}"><span class="sorticon">${BK_LOGO[k]}</span><b>${BK_LG[k]}</b><span>${list.length} maç</span></a>
-      <div class="mgrid">${list.map(bkCard).join("")}</div></section>` : "";
+      <div class="mgrid">${list.map((m) => bkCard(m)).join("")}</div></section>` : "";
   }).join("");
   const leagues = `<div class="bkleagues">${Object.keys(BK_LG).map((k) => `<a class="bklg" href="#/basket/lig/${k}">${BK_LOGO[k]} ${BK_LG[k]} <small>puan durumu</small></a>`).join("")}</div>`;
-  v.innerHTML = bar + lgBar + (sections || `<div class="card"><p class="muted">Bu tarihte maç yok.</p></div>`) + leagues;
+  v.innerHTML = bar + bkHighlights(D.matches, D.coupons || []) + lgBar + (sections || `<div class="card"><p class="muted">Bu tarihte maç yok.</p></div>`) + leagues;
   bkBindDays();
   v.querySelectorAll("[data-bkl]").forEach((b) => b.onclick = () => { BK.lg = b.dataset.bkl; renderBasketHome(); });
   v.querySelectorAll("[data-bk]").forEach((c) => c.onclick = () => location.hash = "#/basket/mac/" + c.dataset.bk);
+  v.querySelectorAll("[data-go]").forEach((c) => c.onclick = () => location.hash = c.dataset.go);
 }
 function bkBindDays() {
   $("#view").querySelectorAll("[data-bkd]").forEach((b) => b.onclick = () => { BK.day = b.dataset.bkd; renderBasketHome(); });
@@ -116,19 +150,33 @@ const bkBox = (rows, title) => `<div class="card">${head("📋", title)}<div cla
   ${rows.filter((p) => p.min > 0).sort((a, b) => b.pts - a.pts).map((p) => `<tr><td class="l">${p.start ? "▪ " : ""}${esc(p.name)}</td><td>${nf(p.min, 0)}</td><td><b>${p.pts}</b></td><td>${p.reb}</td><td>${p.ast}</td><td>${esc(p.fg || "")}</td><td>${esc(p.tp || "")}</td><td>${p.pf}</td></tr>`).join("")}
   </tbody></table></div></div>`;
 function bkPredict(b) {
-  const P = b.pred, R = b.rec, pick = (R && R.pick) || null, H = b.home.short, A = b.away.short;
-  const ph = P ? P.p_home : R && R.p_home;
-  if (ph == null) return "";
-  const pa = 1 - ph;
-  const bars = `<div class="bigbar"><div style="flex:${ph};background:var(--home)">${esc(H)} ${pc(ph)}</div><div style="flex:${pa};background:var(--away)">${pc(pa)} ${esc(A)}</div></div>`;
+  const P = b.pred, R = b.rec, pick = (R && R.pick) || null, H = b.home, A = b.away;
+  if (!P) return "";
+  const seg = (v, c, t, txt) => `<div style="flex:${v};background:${c}" title="${esc(t)}">${txt}</div>`;
+  const ml = (b.options || []).filter((o) => o.group === "Maç sonucu");
+  let mk = null;
+  if (ml.length === 2) { const t = 1 / ml[0].odds + 1 / ml[1].odds; mk = [1 / ml[0].odds / t, 1 / ml[1].odds / t]; }
+  const bars = `<div class="obars"><div class="obl"><span>Model</span></div><div class="bigbar">${seg(P.p_home, "var(--home)", H.short + " kazanır", "1 " + pc(P.p_home))}${seg(P.p_away, "var(--away)", A.short + " kazanır", "2 " + pc(P.p_away))}</div>
+    ${mk ? `<div class="obl"><span>Piyasa</span></div><div class="bigbar mkbar">${seg(mk[0], "var(--home)", "Piyasa: " + H.short, pc(mk[0]))}${seg(mk[1], "var(--away)", "Piyasa: " + A.short, pc(mk[1]))}</div>` : ""}</div>`;
+  const side = (t) => `<div class="shs">${t.logo ? `<img src="${esc(t.logo)}" alt="" onerror="this.remove()">` : ""}<span>${esc(t.short)}</span></div>`;
+  const score = P.total ? `<div class="shero"><div class="shk">${ico("🎲")} Skor tahmini</div>
+    <div class="shrow">${side(H)}<div class="shsc"><b>${Math.round((P.total + P.margin) / 2)}</b><i>-</i><b>${Math.round((P.total - P.margin) / 2)}</b></div>${side(A)}</div></div>` : "";
   const started = b.state !== "pre";
-  const badge = R && R.state === "done" ? (R.hit === true ? `<span class="bkbdg ok">✓ Tuttu</span>` : R.hit === false ? `<span class="bkbdg no">✗ Tutmadı</span>` : `<span class="bkbdg">İade</span>`)
-    : started ? `<span class="bkbdg ok">✓ Son tercih</span>` : `<span class="bkbdg warn">! Değişebilir</span>`;
-  const safe = pick ? `<div class="bkpick"><div><small>En garanti tercih</small><b>${esc(pick.label)}</b></div><div class="bkpv"><b>${pc(pick.p)}</b><small>oran ${nf(pick.odds, 2)}</small></div>${badge}</div>`
-    : `<p class="muted">Bu maç için oran bülteninde uygun seçenek yok; tahmin yalnızca takım gücünden hesaplandı.</p>`;
-  const score = P && P.total ? `<div class="bkexp"><div><small>Beklenen skor</small><b>${Math.round((P.total + P.margin) / 2)} - ${Math.round((P.total - P.margin) / 2)}</b></div>
-    <div><small>Beklenen toplam</small><b>${nf(P.total, 1)}</b></div>${P.mkt_margin != null ? `<div><small>Piyasa farkı</small><b>${P.mkt_margin > 0 ? "+" : ""}${nf(P.mkt_margin, 1)}</b></div>` : ""}${P.model_margin != null ? `<div><small>Model farkı</small><b>${P.model_margin > 0 ? "+" : ""}${nf(P.model_margin, 1)}</b></div>` : ""}</div>` : "";
-  return `<div class="card" style="--c:#2ea043">${head("🎯", "Tahmin")}${bars}${safe}${score}</div>`;
+  const badge = R && R.state === "done" ? (R.hit === true ? `<span class="fbadge ok">✓ Tuttu</span>` : R.hit === false ? `<span class="fbadge wait">✗ Tutmadı</span>` : `<span class="fbadge">İade</span>`)
+    : started ? `<span class="fbadge ok" title="Maç başladı, tercih artık değişmez.">✓ Son tercih</span>` : `<span class="fbadge wait" title="Maç başlayana kadar değişebilir.">! Değişebilir</span>`;
+  const fav = bkFav(P), who = fav ? b[fav].short : null;
+  const sum = who ? `${who} favori (%${Math.round(P["p_" + fav] * 100)}).${P.total ? ` Beklenen toplam ${nf(P.total, 1)} sayı.` : ""}` : "Maç dengeli görünüyor.";
+  const sg = (z) => (z > 0 ? "+" : "") + nf(z, 1);
+  return `<div class="card" style="--c:#a371f7">${head("🎯", `Tahmin ve model özeti${started ? ` <span class="muted">· maç öncesi tahmin, başlama düdüğünde donduruldu 🔒</span>` : ""}`)}
+    <div class="summary">${esc(sum)}${pick ? "" : " Bu maç için oran yok; tahmin yalnızca takım gücünden hesaplandı."}</div>
+    ${bars}${score}<div class="pbwide">${bkBoxes({ boxes: (R && R.boxes) || [] })}</div>
+    ${pick ? `<div class="bigpicks">${bigPick("safe", "✅", "En garanti tercih", pick, badge)}</div>` : ""}
+    <div class="pred">
+      ${P.total ? kpi("🏀", "#3fb950", "Sayı beklentisi", `${nf((P.total + P.margin) / 2, 1)} – ${nf((P.total - P.margin) / 2, 1)}`, `Toplam ${nf(P.total, 1)}`) : ""}
+      ${P.mkt_margin != null ? kpi("⚖", "#58a6ff", "Piyasa farkı", sg(P.mkt_margin), P.mkt_total != null ? `Toplam ${nf(P.mkt_total, 1)}` : "") : ""}
+      ${P.model_margin != null ? kpi("🧠", "#a371f7", "Model farkı", sg(P.model_margin), P.model_total != null ? `Toplam ${nf(P.model_total, 1)}` : "") : ""}
+      ${kpi("🛏️", "#d29922", "Dinlenme", `${b.home.rest ?? "—"} – ${b.away.rest ?? "—"} gün`, "Son maçtan beri")}
+    </div></div>`;
 }
 function bkOdds(b) {
   const pick = (b.rec && b.rec.pick) || {};
@@ -161,11 +209,14 @@ async function renderBasketMatch(id) {
   if (location.hash !== "#/basket/mac/" + id) return;
   const live = b.state === "live", done = b.state === "post";
   const q = b.q && b.q[0] && b.q[0].length ? `<div class="bkq big">${b.q[0].map((x, i) => `<span><small>${i < 4 ? i + 1 + ". Ç" : "UZ"}</small>${x ?? "–"}-${(b.q[1] || [])[i] ?? "–"}</span>`).join("")}</div>` : "";
-  const hero = `<div class="hero"><div class="hero-league"><a href="#/basket/lig/${b.lg}">${BK_LOGO[b.lg]} ${esc(b.lg_name)}</a>${b.round ? ` · ${esc(typeof b.round === "number" ? b.round + ". hafta" : b.round)}` : ""}</div>
-    <div class="teams"><a class="team" href="#/basket/takim/${b.lg}/${encodeURIComponent(b.home.id)}">${bkCrest(b.home, 78)}${esc(b.home.short)}</a>
+  const fav = bkFav(b.pred), pr = b.pred || {};
+  const chips = [b.round && chip("🗓️", esc(typeof b.round === "number" ? b.round + ". hafta" : b.round)), b.venue && chip("🏟️", esc(b.venue)),
+    b.refs && b.refs.length && chip(WHISTLE, `Hakem: ${esc(b.refs.join(", "))}`)].filter(Boolean).join("");
+  const team = (t, sd) => `<div class="team">${bkCrest(t, 84, fav === sd, pr["p_" + sd])}<span><a class="tlink" href="#/basket/takim/${b.lg}/${encodeURIComponent(t.id)}" title="Takım sayfası">${esc(t.short)}</a></span>${t.rec ? bkDots(t.rec.l5) : ""}</div>`;
+  const hero = `<div class="hero"><a class="hero-league" href="#/basket/lig/${b.lg}" title="Puan durumu"><b>${BK_LOGO[b.lg]} ${esc(b.lg_name)}</b><small>· puan durumu ›</small></a>
+    <div class="teams">${team(b.home, "home")}
       <div class="score ${live ? "live" : ""}">${live || done ? `${b.home.score ?? 0} - ${b.away.score ?? 0}<small>${esc(live ? (b.clock || "Canlı") : "Maç sonu")}</small>` : `${esc(timeOf(b.utc))}<small>${esc(dateOf(b.utc))}</small>`}</div>
-      <a class="team" href="#/basket/takim/${b.lg}/${encodeURIComponent(b.away.id)}">${bkCrest(b.away, 78)}${esc(b.away.short)}</a></div>${q}
-    <div class="meta">${b.venue ? `<span>📍 ${esc(b.venue)}</span>` : ""}${b.refs && b.refs.length ? `<span>${WHISTLE} ${esc(b.refs.join(", "))}</span>` : ""}</div></div>`;
+      ${team(b.away, "away")}</div>${q}<div class="chips">${chips}</div></div>`;
   const draw = () => {
     v.innerHTML = hero + bkTabs(b) + `<div class="mtab-body">${bkBody(b)}</div>`;
     v.querySelectorAll("[data-bkt]").forEach((x) => x.onclick = () => { BK.tab = x.dataset.bkt; draw(); });
@@ -248,6 +299,19 @@ async function renderBasketKarne() {
     ${T.n ? `<div class="bkexp"><div><small>Tutan</small><b>${T.hit}/${T.n}</b></div><div><small>Oran</small><b>${pc(T.pct)}</b></div><div><small>Beklenen</small><b>${pc(T.exp)}</b></div><div><small>Kâr/zarar</small><b class="${T.pl >= 0 ? "pos" : "neg"}">${tl(T.pl, true)}</b></div></div>
     <p class="muted">Tercih başına ${tl(K.stake)} oynanmış gibi hesaplanır. Kuponlar: ${K.coupons.won}/${K.coupons.n} tuttu. Futbol karnesinden ayrıdır.</p>` : `<p class="muted">Henüz sonuçlanmış tercih yok. En garanti tercihler maçlar bittikçe burada toplanacak.</p>`}</div>
     ${lg ? `<div class="card">${head("🏆", "Lige göre")}${lg}</div>` : ""}${ty ? `<div class="card">${head("🧩", "Tercih türüne göre")}${ty}</div>` : ""}${rows ? `<div class="card">${head("📅", "Son tercihler")}${rows}</div>` : ""}`;
+}
+
+/* ---------- alt menü: basketbolda aynı dört düğme basketbol sayfalarına gider ---------- */
+const BK_NAV = { home: ["#/basket", "Maçlar"], kombine: ["#/basket/kupon", "Kuponlar"], karne: ["#/basket/karne", "Karne"], oranlar: ["#/basket/lig/nba", "Puan durumu"] };
+const FB_NAV = { home: ["#/", "Maçlar"], kombine: ["#/kombine", "Kombineler"], karne: ["#/karne", "Karne"], oranlar: ["#/oranlar", "Oranlar"] };
+function bkNavSync(bk) {
+  const h = location.hash;
+  document.querySelectorAll("#bottomNav [data-nav]").forEach((a) => {
+    const [href, label] = (bk ? BK_NAV : FB_NAV)[a.dataset.nav];
+    a.setAttribute("href", href);
+    a.querySelector("span").textContent = label;
+    if (bk) a.classList.toggle("on", a.dataset.nav === (h.startsWith("#/basket/kupon") ? "kombine" : h.startsWith("#/basket/karne") ? "karne" : h.startsWith("#/basket/lig") ? "oranlar" : h === "#/basket" ? "home" : ""));
+  });
 }
 
 /* ---------- yönlendirme (app.js route çağırır) ---------- */

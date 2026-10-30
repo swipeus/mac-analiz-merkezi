@@ -2,7 +2,7 @@
 
 Maç farkı ve toplam sayı normal dağılımla hesaplanır. Ortalama: takım gücü (hücum/savunma, ağırlıklı en küçük kareler,
 geçen sezon + bu sezon) ile piyasa çizgisinin karışımı. Parametreler geçen sezonun yürüyen pencere testinden:
-NBA 995, EuroLeague 302, BSL 195 maç; piyasasız kazananı bilme %68, %65, %70.
+NBA 995, EuroLeague 302 maç; piyasasız kazananı bilme %68 ve %65.
 """
 import collections
 import logging
@@ -21,9 +21,9 @@ FIT_LAMBDA = 8           # güç puanını lig ortalamasına çeken ağırlık (
 FIT_HALF_LIFE = 120      # gün; eski maçların ağırlığı yarıya iner
 FIT_ITERS = 20
 MARKET_W = 0.8           # piyasa çizgisi varken ağırlığı
-SIGMA = {"nba": (12.5, 18.5), "el": (11.5, 16.5), "bsl": (12.0, 17.0)}   # fark ve toplam için maç içi sapma (piyasalı)
+SIGMA = {"nba": (12.5, 18.5), "el": (11.5, 16.5)}   # fark ve toplam için maç içi sapma (piyasalı)
 # piyasa yokken: fark için test edilen en iyi değer, toplam için modelin gerçek hatası
-SIGMA_ALONE = {"nba": (10.0, 21.5), "el": (10.0, 18.0), "bsl": (11.0, 18.0)}
+SIGMA_ALONE = {"nba": (10.0, 21.5), "el": (10.0, 18.0)}
 TEAM_SIGMA = 11.5        # takım toplamı sapması
 
 MIN_ODDS, MAX_ODDS = 1.15, 2.30   # en garanti tercihin oran aralığı
@@ -42,14 +42,14 @@ def Phi(x):
 
 
 # ---------- takım gücü ----------
-def compact(games, key_name=False):
+def compact(games):
     """Oynanmış maçlar: (gün, ev, konuk, ev sayısı, konuk sayısı)."""
     out = []
     for g in games:
         h, a = g["home"], g["away"]
         if g["state"] == "post" and h["score"] is not None and a["score"] is not None:
             t = datetime.fromisoformat(g["utc"].replace("Z", "+00:00")).timestamp() / 86400
-            out.append([t, h["name"] if key_name else h["id"], a["name"] if key_name else a["id"], h["score"], a["score"]])
+            out.append([t, h["id"], a["id"], h["score"], a["score"]])
     return out
 
 
@@ -188,8 +188,7 @@ def _center(ladder):
 # ---------- tahmin ----------
 def predict(lg, g, rating, ev):
     """Beklenen fark ve toplam; piyasa varsa onunla karışır."""
-    key = (lambda t: t["name"]) if lg == "bsl" else (lambda t: t["id"])
-    a, b = key(g["home"]), key(g["away"])
+    a, b = g["home"]["id"], g["away"]["id"]
     mm = mt = None
     if rating:
         o, d = rating["o"], rating["d"]
@@ -280,13 +279,33 @@ def _doc_id(g):
     return g["id"]
 
 
-def record(store, g, pr, pick):
+def boxes(opts, pr):
+    """Maç kartındaki kutular: piyasanın ortasına en yakın çizgiler."""
+    if not opts or not pr:
+        return []
+    near = lambda rows, target: min(rows, key=lambda x: abs(float(re.search(r"[\d.]+$", x["code"])[0]) - target)) if rows else None  # noqa: E731
+    m, t = pr["margin"], pr["total"] or 0
+    fav = "h" if m >= 0 else "a"
+    picks = [("🏀", near([x for x in opts if re.match(r"^o\d", x["code"])], t), "{} Üst"),
+             ("⚖", near([x for x in opts if x["code"].startswith(fav + "-")], abs(m)), None),
+             ("🏠", near([x for x in opts if x["code"].startswith("ho")], (t + m) / 2), "Ev {} Üst"),
+             ("✈️", near([x for x in opts if x["code"].startswith("ao")], (t - m) / 2), "Dep. {} Üst")]
+    out = []
+    for ic, x, fmt in picks:
+        if x:
+            line = re.search(r"[\d.]+$", x["code"])[0]
+            out.append({"ic": ic, "label": fmt.format(line) if fmt else x["label"], "p": x["p"], "odds": x["odds"]})
+    return out
+
+
+def record(store, g, pr, pick, opts=None):
     """Maç başlayana kadar tahmin güncellenir, başlayınca donar; bitince sonuçlanır."""
     old = store.bk_get("pred", g["id"])
     if g["state"] == "pre":
         if pick:
             store.bk_put("pred", g["id"], {"id": g["id"], "lg": g["lg"], "utc": g["utc"], "home": g["home"]["short"], "away": g["away"]["short"],
-                                           "pick": pick, "p_home": pr["p_home"], "state": "pending"})
+                                           "pick": pick, "p_home": pr["p_home"], "state": "pending", "pred": pr, "options": opts,
+                                           "boxes": boxes(opts, pr)})
         return store.bk_get("pred", g["id"])
     if g["state"] == "off" and old and old["state"] == "pending":
         old["state"] = "void"
@@ -386,10 +405,11 @@ def karne(store):
         return {"n": n, "hit": h, "pct": round(h / n, 3) if n else None, "exp": round(sum(r["pick"]["p"] for r in xs) / n, 3) if n else None, "pl": round(pl)}
     coupons = [c for d in sorted(store.bk_all("coupons"), key=lambda d: d["date"], reverse=True) for c in d["coupons"]]
     cd = [c for c in coupons if c.get("state") == "done"]
-    return {"stake": STAKE, "total": tally(done), "by_lg": {k: tally([r for r in done if r["lg"] == k]) for k in ("nba", "el", "bsl")},
+    slim = [{k: v for k, v in r.items() if k != "options"} for r in rows]  # karne dosyası küçük kalsın
+    return {"stake": STAKE, "total": tally(done), "by_lg": {k: tally([r for r in done if r["lg"] == k]) for k in ("nba", "el")},
             "by_type": {k: tally([r for r in done if pick_type(r["pick"]["code"]) == k]) for k in ("Maç sonucu", "Handikap", "Toplam sayı", "Takım toplamı")},
             "coupons": {"n": len(cd), "won": sum(1 for c in cd if c.get("won"))},
-            "recent": rows[:60], "store": {"pred": rows, "coupons": store.bk_all("coupons")}}
+            "recent": slim[:60], "store": {"pred": slim, "coupons": store.bk_all("coupons")}}
 
 
 def seed(store, doc):

@@ -1,4 +1,4 @@
-"""Basketbol modeli, Nesine oranları, en garanti tercih, kuponlar ve karne.
+"""Basketbol modeli, Unibet oranları, en garanti tercih, kuponlar ve karne.
 
 Maç farkı ve toplam sayı normal dağılımla hesaplanır. Ortalama: takım gücü (hücum/savunma, ağırlıklı en küçük kareler,
 geçen sezon + bu sezon) ile piyasa çizgisinin karışımı. Parametreler geçen sezonun yürüyen pencere testinden:
@@ -14,7 +14,9 @@ from datetime import datetime, timezone
 
 log = logging.getLogger("basket")
 
-NESINE = "https://cdnbulten.nesine.com/api/bulten/getprebultenfull"
+KAMBI = "https://eu-offering-api.kambicdn.com/offering/v2018/ub"
+KAMBI_Q = "lang=en_GB&market=GB"
+KAMBI_PATHS = ("nba", "nba_cup", "euroleague")
 FIT_LAMBDA = 8           # güç puanını lig ortalamasına çeken ağırlık (maç sayısı cinsinden)
 FIT_HALF_LIFE = 120      # gün; eski maçların ağırlığı yarıya iner
 FIT_ITERS = 20
@@ -79,7 +81,7 @@ def fit(rows, now):
     return {"L": L, "h": h, "o": dict(o), "d": dict(d)}
 
 
-# ---------- Nesine ----------
+# ---------- Unibet (Kambi) ----------
 def _fold(s):
     s = (s or "").lower().translate(str.maketrans({"ı": "i", "ş": "s", "ğ": "g", "ç": "c", "ö": "o", "ü": "u"}))
     return re.sub(r"[^a-z0-9 ]", " ", unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode())
@@ -96,38 +98,61 @@ def _sim(a, b):
     return hit / min(len(x), len(y))
 
 
-async def nesine_events(src, store):
-    """Basketbol bülteni özet olarak saklanır: ham dosya 13 MB."""
-    hit = store.cache_get("bk:nesine")
+def _outcomes(bo):
+    return {o.get("type"): o for o in bo.get("outcomes", []) if o.get("status", "OPEN") == "OPEN" and o.get("odds")}
+
+
+def _kambi_markets(raw, home, away):
+    """Tam maç pazarları (uzatmalar dahil): hepsi ev sahibine göre, oranlar ondalık."""
+    mk = {"ml": None, "sp": [], "tot": [], "ht": [], "at": []}
+    for bo in raw.get("betOffers", []):
+        name = (bo.get("criterion") or {}).get("englishLabel") or ""
+        if "Including Overtime" not in name:
+            continue
+        o = _outcomes(bo)
+        one, two, over, under = o.get("OT_ONE"), o.get("OT_TWO"), o.get("OT_OVER"), o.get("OT_UNDER")
+        if name.startswith("Moneyline") and one and two:
+            mk["ml"] = [one["odds"] / 1000, two["odds"] / 1000]
+        elif name.startswith("Point Spread") and one and two and one.get("line") is not None:
+            mk["sp"].append([one["line"] / 1000, one["odds"] / 1000, two["odds"] / 1000])
+        elif over and under and over.get("line") is not None:
+            row = [over["line"] / 1000, under["odds"] / 1000, over["odds"] / 1000]
+            if name.startswith("Total Points -"):
+                mk["tot"].append(row)
+            elif name.startswith(f"Total Points by {home} "):
+                mk["ht"].append(row)
+            elif name.startswith(f"Total Points by {away} "):
+                mk["at"].append(row)
+    return mk
+
+
+async def odds_events(src, store):
+    """Başlamamış NBA ve EuroLeague maçlarının oranları; özet saklanır."""
+    hit = store.cache_get("bk:kambi")
     if hit and time.time() - hit[0] < 300:
         return hit[1]
-    try:
-        d = await src.fetch_json(NESINE)
-    except Exception as e:  # noqa: BLE001
-        log.warning("Nesine bülteni alınamadı: %s", e)
-        return hit[1] if hit else []
     out = []
-    for e in d.get("sg", {}).get("EA", []):
-        if e.get("GT") != 2:
+    for path in KAMBI_PATHS:
+        try:
+            d = await src.fetch_json(f"{KAMBI}/listView/basketball/{path}/all/all/matches.json?{KAMBI_Q}&useCombined=true")
+        except Exception as e:  # noqa: BLE001
+            log.warning("Unibet listesi alınamadı %s: %s", path, e)
             continue
-        mk = {"ml": None, "sp": [], "tot": [], "ht": [], "at": []}
-        for m in e.get("MA", []):
-            o = {x["N"]: x["O"] for x in m.get("OCA", [])}
-            t, line = m.get("MTID"), m.get("SOV")
-            if 1 not in o or 2 not in o:
+        for e in d.get("events", []):
+            ev = e.get("event") or {}
+            if ev.get("state") != "NOT_STARTED" or not ev.get("homeName"):
                 continue
-            if t == 142:
-                mk["ml"] = [o[1], o[2]]
-            elif t == 144:
-                mk["sp"].append([line, o[1], o[2]])
-            elif t == 149:      # 1: alt, 2: üst
-                mk["tot"].append([line, o[1], o[2]])
-            elif t == 150:
-                mk["ht"].append([line, o[1], o[2]])
-            elif t == 151:
-                mk["at"].append([line, o[1], o[2]])
-        out.append({"id": e.get("C"), "lc": e.get("LC"), "home": e.get("HN"), "away": e.get("AN"), "ts": (e.get("ESD") or 0) / 1000, "mk": mk})
-    store.cache_put("bk:nesine", out)
+            try:
+                raw = await src.fetch_json(f"{KAMBI}/betoffer/event/{ev['id']}.json?{KAMBI_Q}")
+            except Exception as ex:  # noqa: BLE001
+                log.warning("Unibet maçı alınamadı %s: %s", ev.get("id"), ex)
+                continue
+            ts = datetime.fromisoformat(ev["start"].replace("Z", "+00:00")).timestamp()
+            out.append({"id": ev["id"], "home": ev["homeName"], "away": ev["awayName"], "ts": ts,
+                        "mk": _kambi_markets(raw, ev["homeName"], ev["awayName"])})
+    if not out and hit:
+        return hit[1]
+    store.cache_put("bk:kambi", out)
     return out
 
 
@@ -148,6 +173,9 @@ def _center(ladder):
     """Çift yönlü çizgilerde iki tarafın oranının eşitlendiği nokta (piyasanın gerçek çizgisi)."""
     if not ladder:
         return None
+    if len(ladder) == 1:  # tek çizgide oranların dengesizliği çizgiye çevrilir (1 sayı ≈ %3 olasılık)
+        line, a, b = ladder[0]
+        return line - (1 / a / (1 / a + 1 / b) - 0.5) / 0.03
     pts = sorted((x[0], 1 / x[1] - 1 / x[2]) for x in ladder if x[1] and x[2])
     for (a, u), (b, v) in zip(pts, pts[1:]):
         if u == v:

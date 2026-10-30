@@ -136,7 +136,7 @@ function bkOdds(b) {
   return groups.map((g) => {
     const rows = b.options.filter((o) => o.group === g);
     return rows.length ? `<div class="card">${head("💰", g)}<div class="bktiles">${rows.map((o) => `<div class="bktile ${o.code === pick.code ? "safe" : ""}"><span>${esc(o.label)}</span><b>${nf(o.odds, 2)}</b><small>model ${pc(o.p)}</small></div>`).join("")}</div></div>` : "";
-  }).join("") + `<p class="muted">Oranlar Nesine bülteninden, maç başlayana kadar güncellenir.</p>`;
+  }).join("") + `<p class="muted">Oranlar Unibet'ten, maç başlayana kadar güncellenir.</p>`;
 }
 function bkTabs(b) {
   const hasBox = b.box.home.length || b.box.away.length;

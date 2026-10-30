@@ -2,7 +2,7 @@
 /* Basketbol bölümü: NBA ve EuroLeague. Veriler bk-*.json dosyalarından gelir (build_static).
    Sayfalar: #/basket (maçlar), #/basket/mac/<id>, #/basket/lig/<lig>, #/basket/takim/<lig>/<id> */
 
-const BK = { day: null, tab: "ozet", lg: "all", cday: null };
+const BK = { day: null, tab: "ozet", lg: "all", cday: null, ktab: "tercih" };
 const BK_LG = { nba: "NBA", el: "EuroLeague" };
 const BK_LOGO = { nba: "🏀", el: "🇪🇺" };
 
@@ -249,6 +249,29 @@ async function renderBasketCoupons() {
 }
 
 /* ---------- karne ---------- */
+const bkCouponPl = (c) => c.won ? COUPON_STAKE * ((c.paid || c.odds) - 1) : -COUPON_STAKE;
+function bkCouponKarne(K) {
+  const all = ((K.store || {}).coupons || []).flatMap((d) => d.coupons.map((c) => ({ ...c, date: d.date })));
+  const done = all.filter((c) => c.state === "done").sort((a, b) => b.date.localeCompare(a.date));
+  const open = all.length - done.length;
+  if (!done.length) return `<div class="card" style="--c:#e3b341">${head("🎟️", "Kupon karnesi")}<p class="muted">Henüz sonuçlanmış kupon yok.${open ? ` ${open} kupon sonuç bekliyor.` : ""}</p></div>`;
+  const sum = (xs) => xs.reduce((a, c) => a + bkCouponPl(c), 0), pl = sum(done), won = done.filter((c) => c.won).length, staked = done.length * COUPON_STAKE;
+  const series = {};
+  done.forEach((c) => { series[c.date] = (series[c.date] || 0) + bkCouponPl(c); });
+  const themes = [["banko", "✅ Banko"], ["fav", "🏆 Favoriler"], ["sayi", "🎯 Sayılar"]].map(([k, l]) => {
+    const d = done.filter((c) => c.theme === k), w = sum(d);
+    return d.length ? `<div class="bkrow"><span>${l}</span><span class="muted">${d.filter((c) => c.won).length}/${d.length}</span><b class="${w >= 0 ? "pos" : "neg"}">${tl(w, true)}</b></div>` : "";
+  }).join("");
+  const days = [...new Set(done.map((c) => c.date))].map((d) => {
+    const g = done.filter((c) => c.date === d), w = sum(g);
+    return `<h3 class="kath">${esc(cap(new Date(d + "T12:00:00").toLocaleDateString("tr-TR", { day: "numeric", month: "long", weekday: "long" })))} <span class="kpl ${w >= 0 ? "pos" : "neg"}">${tl(w, true)}</span></h3>${g.map(bkCoupon).join("")}`;
+  }).join("");
+  return `<div class="card" style="--c:#e3b341">${head("🎟️", "Kupon karnesi")}
+    <div class="bkexp"><div><small>Tutan</small><b>${won}/${done.length}</b></div><div><small>Oran</small><b>${pc(won / done.length)}</b></div><div><small>Yatırılan</small><b>${tl(staked)}</b></div><div><small>Kâr/zarar</small><b class="${pl >= 0 ? "pos" : "neg"}">${tl(pl, true)}</b></div></div>
+    <p class="muted">Kupon başına ${tl(COUPON_STAKE)} oynanmış gibi hesaplanır.${open ? ` ${open} kupon sonuç bekliyor.` : ""} Futbol karnesinden ayrıdır.</p></div>
+    ${Object.keys(series).length > 1 ? `<div class="card">${plChart(series, `Kupon başına ${tl(COUPON_STAKE)}`)}</div>` : ""}
+    ${themes ? `<div class="card">${head("🧩", "Temaya göre")}${themes}</div>` : ""}${days}`;
+}
 async function renderBasketKarne() {
   const v = $("#view");
   v.innerHTML = bkNav("karne") + skel("list");
@@ -256,15 +279,19 @@ async function renderBasketKarne() {
   try { K = await bkGet("bk-karne.json", "Karne bir sonraki güncellemede gelecek."); }
   catch (e) { v.innerHTML = bkNav("karne") + `<div class="card"><p class="muted">${esc(e.message)}</p></div>`; return; }
   if (location.hash !== "#/basket/karne") return;
+  const tabs = `<div class="ptabs">${[["tercih", "✅ Tek tercihler"], ["kupon", "🎟️ Kuponlar"]].map(([k, l]) => `<button class="ptab ${BK.ktab === k ? "on" : ""}" data-bkk="${k}">${l}</button>`).join("")}</div>`;
+  const bind = () => v.querySelectorAll("[data-bkk]").forEach((b) => b.onclick = () => { BK.ktab = b.dataset.bkk; renderBasketKarne(); });
+  if (BK.ktab === "kupon") { v.innerHTML = bkNav("karne") + tabs + bkCouponKarne(K); bind(); return; }
   const T = K.total;
   const line = (l, x) => x.n ? `<div class="bkrow"><span>${esc(l)}</span><span class="muted">${x.hit}/${x.n} · beklenen ${pc(x.exp)}</span><b class="${x.pl >= 0 ? "pos" : "neg"}">${pc(x.pct)} · ${tl(x.pl, true)}</b></div>` : "";
   const lg = Object.entries(K.by_lg).map(([k, x]) => line(BK_LG[k], x)).join("");
   const ty = Object.entries(K.by_type).map(([k, x]) => line(k, x)).join("");
   const rows = K.recent.filter((r) => r.state === "done").slice(0, 30).map((r) => `<div class="bkrow"><span class="muted">${dateOf(r.utc)}</span><span><a href="#/basket/mac/${esc(r.id)}">${esc(r.home)} ${r.result[0]}-${r.result[1]} ${esc(r.away)}</a> <small class="muted">${esc(r.pick.label)} · ${nf(r.pick.odds, 2)}</small></span><b class="${r.hit ? "pos" : r.hit === false ? "neg" : ""}">${r.hit ? "✓" : r.hit === false ? "✗" : "↩"}</b></div>`).join("");
-  v.innerHTML = bkNav("karne") + `<div class="card" style="--c:#2ea043">${head("📒", "Basketbol karnesi")}
+  v.innerHTML = bkNav("karne") + tabs + `<div class="card" style="--c:#2ea043">${head("📒", "Basketbol karnesi")}
     ${T.n ? `<div class="bkexp"><div><small>Tutan</small><b>${T.hit}/${T.n}</b></div><div><small>Oran</small><b>${pc(T.pct)}</b></div><div><small>Beklenen</small><b>${pc(T.exp)}</b></div><div><small>Kâr/zarar</small><b class="${T.pl >= 0 ? "pos" : "neg"}">${tl(T.pl, true)}</b></div></div>
-    <p class="muted">Tercih başına ${tl(K.stake)} oynanmış gibi hesaplanır. Kuponlar: ${K.coupons.won}/${K.coupons.n} tuttu. Futbol karnesinden ayrıdır.</p>` : `<p class="muted">Henüz sonuçlanmış tercih yok. En garanti tercihler maçlar bittikçe burada toplanacak.</p>`}</div>
+    <p class="muted">Tercih başına ${tl(K.stake)} oynanmış gibi hesaplanır. Futbol karnesinden ayrıdır.</p>` : `<p class="muted">Henüz sonuçlanmış tercih yok. En garanti tercihler maçlar bittikçe burada toplanacak.</p>`}</div>
     ${lg ? `<div class="card">${head("🏆", "Lige göre")}${lg}</div>` : ""}${ty ? `<div class="card">${head("🧩", "Tercih türüne göre")}${ty}</div>` : ""}${rows ? `<div class="card">${head("📅", "Son tercihler")}${rows}</div>` : ""}`;
+  bind();
 }
 
 /* ---------- yönlendirme (app.js route çağırır) ---------- */

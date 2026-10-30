@@ -2663,6 +2663,12 @@ function startPolling() {
    kayıtları bir kez görür; "Tamam" ile en son id kaydedilir ve pencere tekrar çıkmaz. */
 const RELEASES = [
   {
+    id: 27, date: "30 Ekim 2026", title: "Basketbol kupon karnesi", sub: "Bu güncellemede gelenler",
+    items: [
+      ["🎟️", "Kupon karnesi", "Basketbol karnesinde yeni Kuponlar sekmesi: isabet, kâr/zarar, temalar ve sonuçlanan bütün kuponlar."],
+    ],
+  },
+  {
     id: 26, date: "30 Ekim 2026", title: "Yeni tutarlar", sub: "Bu güncellemede gelenler",
     items: [
       ["💰", "1.000 ₺ ve 5.000 ₺", "Futbol ve basketbolda her tek tercihe 1.000 ₺, her kupona 5.000 ₺ oynanmış gibi hesaplanır; geçmiş sonuçlar da bu tutarlarla güncellendi."],

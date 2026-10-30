@@ -463,7 +463,7 @@ function bindMatch() {
         // çevrimiçi sürümde analiz GitHub'da 6 dk'da bir üretilir; burada sadece yenisi yayınlanmış mı bakılır
         const m = await getData("meta.json");
         const fresh = !meta || m.updated !== meta.updated;
-        meta = m; showUpdated();
+        meta = m;
         if (fresh) {
           await renderMatch(state.current, true);
           toast({ text: "Yeni veriler yüklendi", match_id: state.current });
@@ -2588,7 +2588,6 @@ function route() {
   document.body.classList.toggle("in-match", !!(mm || pm || km || cm || lm || om || shm || tm || xm || hm || (bk && /^#\/basket\/(mac|lig|takim)/.test(location.hash))));
   document.body.classList.toggle("sport-bk", bk);
   document.querySelectorAll("#sportTabs [data-sport]").forEach((a) => a.classList.toggle("on", (a.dataset.sport === "bk") === bk));
-  document.body.classList.toggle("on-moves", !!om);  // sayfa altı yazıları sadece oranlar sayfasında
   state.player = pm ? +pm[1] : null;
   state.karne = km;
   state.kombine = cm;
@@ -2599,6 +2598,7 @@ function route() {
   state.hakem = hm ? +hm[1] : null;
   const navKey = om ? "oranlar" : km ? "karne" : cm ? "kombine" : (mm || pm || lm || tm || xm || hm) ? "" : "home";
   document.querySelectorAll("#bottomNav [data-nav]").forEach((a) => a.classList.toggle("on", a.dataset.nav === navKey));
+  document.body.classList.toggle("on-home", navKey === "home" && !bk);  // sayfa altı yazısı sadece futbol ana sayfasında
   if (bk) { state.current = null; renderBasket(); }
   else if (shm) { state.current = null; window.scrollTo(0, 0); renderShare(); }
   else if (tm) { state.current = null; window.scrollTo(0, 0); renderTeam(state.takim); }
@@ -2677,16 +2677,13 @@ async function unlockWith(raw) {
   try { meta = await getData("meta.json"); return true; }
   catch (e) { KEY = null; if (e.message === "NOTFOUND") throw new Error("Site verisi henüz yayınlanmadı"); return false; }
 }
-function showUpdated() {
-  if (meta) $("#updatedAt").textContent = "Son güncelleme: " + ago(new Date(meta.updated * 1000).toISOString()) + " ·";
-}
 function startPolling() {
   let lastEv = +(safeGet("lastEventId") || 0);
   const tick = async () => {
     try {
       const m = await getData("meta.json");
-      if (meta && m.updated === meta.updated) { showUpdated(); return; }
-      meta = m; showUpdated();
+      if (meta && m.updated === meta.updated) return;
+      meta = m;
       const evs = await getData("events.json");
       evs.filter((e) => e.id > lastEv).reverse().forEach((ev) => addFeed(ev, true));
       if (evs.length) { lastEv = Math.max(lastEv, evs[0].id); safeSet("lastEventId", String(lastEv)); }
@@ -2960,7 +2957,6 @@ async function boot() {
       // ilk girişte eski olayları "yeni" saymamak için
       try { const evs = await getData("events.json"); safeSet("lastEventId", String(evs.length ? evs[0].id : 0)); } catch { }
     }
-    showUpdated();
   }
   ready = true;
   $("#toolbar").classList.remove("hidden");

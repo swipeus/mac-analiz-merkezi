@@ -899,9 +899,9 @@ a#movesBtn { display: inline-flex; align-items: center; justify-content: center;
 /* telefonda alt menüde olan simgeler üst barda tekrar etmesin (başlık tek satırda kalsın) */
 @media (max-width: 700px) { #karneBtn, #botBtn, #movesBtn { display: none !important; } }
 
-/* sayfa altı yazıları sadece oran hareketleri sayfasında */
+/* sayfa altı yazısı sadece futbol ana sayfasında */
 footer.foot { display: none; }
-body.on-moves footer.foot { display: block; }
+body.on-home footer.foot { display: block; }
 /* telefonda açılan küçük pencereler (tarih, sıralama, arama) ekranın içinde ortalı dursun */
 @media (max-width: 700px) {
   .calpop { position: fixed !important; left: 12px !important; right: 12px !important; top: 118px !important; width: auto !important; max-width: none !important; }

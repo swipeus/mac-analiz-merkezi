@@ -92,7 +92,7 @@ async def main(out):
         # günün kombineleri: bugün ve yarın için (dünün kuponları kilitli, sadece gösterilir)
         doc = kupon.update_day(store, day_key(d), bodies) if d >= now - timedelta(hours=1) else store.coupon_get(day_key(d))
         if d >= now - timedelta(hours=1):  # katlama serisi: günde tek kupon
-            katlama.update_day(store, day_key(d), bodies)
+            katlama.update_day(store, day_key(d), bodies, (doc or {}).get("coupons") or [])
         write(f"day-{day_key(d)}.json", {"date": day_key(d), "matches": matches,
                                          "coupons": (doc or {}).get("coupons") or [], "coupons_locked": bool((doc or {}).get("locked"))})
         days.append(day_key(d))

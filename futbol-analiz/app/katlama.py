@@ -6,6 +6,7 @@ Kurallar: toplam oran 1.90-3.00, her tercihin model olasılığı en az %65, her
 bağımsızdır (aynı tercih başka kuponlarda da olabilir) ve karnenin kâr/zarar hesabına girmez. Kupon, maçlarından
 birinin resmi ilk 11'i açıklanınca (en geç ilk maç başlayınca) kilitlenir.
 """
+from collections import Counter
 from datetime import datetime, timezone
 
 from . import kupon
@@ -19,13 +20,15 @@ MIN_LEG_ODDS = 1.15
 MIN_COUPON_P = 0.35
 
 
-def build(bundles, date):
-    """O günün başlamamış maçlarından tek katlama kuponu (kurulamazsa None)."""
+def build(bundles, date, coupons=()):
+    """O günün başlamamış maçlarından tek katlama kuponu (kurulamazsa None).
+    coupons: günün kuponları; iki kupona girmiş tercih katlamaya alınmaz."""
+    use = Counter((l["mid"], l["code"]) for c in coupons for l in c["legs"]) if date >= kupon.USE_ALL_FROM else Counter()
     best = []
     for b in bundles:
         fav = fav_side(((b.get("analysis") or {}).get("prediction") or {}).get("probs") or {})
         ok = [x for x in kupon._cands(b) if x[1] >= MIN_P and x[2] >= MIN_LEG_ODDS and not kupon._weak(x[0])
-              and not fav_under(x[0], fav)]
+              and not fav_under(x[0], fav) and use[(b["id"], x[0])] < kupon.MAX_USE]
         if ok:
             ok.sort(key=lambda x: (round(x[1], 2), x[2]), reverse=True)
             best.append((ok, b))
@@ -48,7 +51,7 @@ def build(bundles, date):
             "legs": lg, "odds": round(odds, 2), "p": round(prob, 3), "state": "pending"}
 
 
-def update_day(store, date, bundles):
+def update_day(store, date, bundles, coupons=()):
     """Günün katlama kuponunu kurar ya da (kilitliyse) olduğu gibi bırakır."""
     if date < START_DATE:
         return store.kat_get(date)
@@ -61,7 +64,7 @@ def update_day(store, date, bundles):
         return doc
     fresh = [b for b in bundles if not (b.get("status") or {}).get("started") and b.get("odds")
              and not kupon._started({"utc": b.get("utc")}, now)]
-    c = build(fresh, date)
+    c = build(fresh, date, coupons)
     if not c:
         return doc
     by_id = {b["id"]: b for b in fresh}

@@ -27,6 +27,8 @@ SIGMA_ALONE = {"nba": (10.0, 21.5), "el": (10.0, 18.0)}
 TEAM_SIGMA = 11.5        # takım toplamı sapması
 
 MIN_ODDS, MAX_ODDS = 1.15, 2.30   # en garanti tercihin oran aralığı
+MAX_USE = 2              # aynı tercih günün en fazla kaç kuponunda yer alır
+MAX_USE_FROM = "2026-10-31"
 STAKE = 1000             # karnede tek tercih başına yatırılan tutar
 
 # temalar: anahtar, ad, simge, tercih türü süzgeci, en düşük olasılık, ayak oranı, toplam oran, kupon adedi
@@ -318,18 +320,21 @@ def record(store, g, pr, pick, opts=None):
     return old
 
 
-def build_coupons(date, cands):
-    """cands: [(oyun, seçenekler)]; aynı temada bir maç tek kuponda kullanılır, aynı kupon iki temada çıkmaz."""
+def build_coupons(date, cands, kept=()):
+    """cands: [(oyun, seçenekler)]; aynı temada bir maç tek kuponda kullanılır, aynı kupon iki temada çıkmaz.
+    Aynı tercih en fazla MAX_USE kupona girer; kept: kilitlenmiş kuponlar, bu sayıma dahildir."""
+    limit = MAX_USE if date >= MAX_USE_FROM else 99
     out, seen = [], set()
+    use = collections.Counter((l["mid"], l["code"]) for c in kept for l in c["legs"])
     for key, name, icon, ok, pmin, (lo, hi), (tot_lo, tot_hi), quota in THEMES:
-        pool = []
-        for g, opts in cands:
-            good = [x for x in opts if ok(x["code"]) and x["p"] >= pmin and lo <= x["odds"] <= hi]
-            if good:
-                pool.append((max(good, key=lambda x: (round(x["p"], 2), x["odds"])), g))
-        pool.sort(key=lambda t: t[0]["p"], reverse=True)
         used, n = set(), 0
         while n < quota:
+            pool = []  # kullanım sayısı her kuponda değişir
+            for g, opts in cands:
+                good = [x for x in opts if ok(x["code"]) and x["p"] >= pmin and lo <= x["odds"] <= hi and use[(g["id"], x["code"])] < limit]
+                if good:
+                    pool.append((max(good, key=lambda x: (round(x["p"], 2), x["odds"])), g))
+            pool.sort(key=lambda t: t[0]["p"], reverse=True)
             legs, odds = [], 1.0
             for x, g in pool:
                 if g["id"] in used or odds * x["odds"] > tot_hi:
@@ -345,6 +350,7 @@ def build_coupons(date, cands):
             if sig in seen:
                 continue
             seen.add(sig)
+            use.update((g["id"], x["code"]) for x, g in legs)
             n += 1
             prob = 1.0
             for x, _ in legs:
@@ -363,7 +369,7 @@ def update_coupons(store, date, cands):
     kept = [c for c in doc["coupons"] if c.get("state") == "done" or started(c)]
     if cands:
         taken = {c["id"] for c in kept}
-        kept += [c for c in build_coupons(date, cands) if c["id"] not in taken]
+        kept += [c for c in build_coupons(date, cands, kept) if c["id"] not in taken]
     doc["coupons"] = kept
     store.bk_put("coupons", date, doc)
     return doc

@@ -18,6 +18,7 @@ STAKE = 5000           # kupon başına
 PER_THEME = 3          # her temada günlük kupon sayısı
 MAX_LEGS = 5
 MAX_USE = 2            # aynı tercih günün en fazla kaç kuponunda yer alır
+USE_ALL_FROM = "2026-10-31"  # bu günden itibaren katlama kuponu da bu sayıma girer
 
 GOALISH = re.compile(r"^(o1\.5|o2\.5|o3\.5|btts_yes|[ha]o[01]\.5)$")
 CORNER_TOTAL = re.compile(r"^c[ou]\d+(\.\d+)?$")
@@ -173,12 +174,13 @@ def _fill(best, tmin, tmax, min_p):
     return legs if prob >= min_p else None
 
 
-def build(bundles, date):
-    """bundles: o günün başlamamış, oranı olan maç paketleri. Banko 5, diğer temalar en fazla 3 kupon (veri yetmezse daha az)."""
+def build(bundles, date, reserved=()):
+    """bundles: o günün başlamamış, oranı olan maç paketleri. Banko 5, diğer temalar en fazla 3 kupon (veri yetmezse daha az).
+    reserved: kilitli katlama kuponundaki (maç, tercih) çiftleri; bu kuponlarda da sayılır."""
     pool = [(b, _cands(b)) for b in bundles]
     pool = [(b, [x for x in cs if x[2] >= MIN_LEG_ODDS]) for b, cs in pool]
     pool = [(b, cs) for b, cs in pool if cs]
-    coupons, seen, use = [], set(), Counter()
+    coupons, seen, use = [], set(), Counter(reserved)
     theme_use = {t[0]: Counter() for t in THEMES}
     count = Counter()
     # temalar sırayla birer kupon alır (önce herkesin 1. kuponu): güçlü tercihler tek temada tükenmesin
@@ -238,7 +240,9 @@ def update_day(store, date, bundles):
         return doc
     fresh = [b for b in bundles if not (b.get("status") or {}).get("started") and b.get("odds")
              and not _started({"utc": b.get("utc")}, now)]
-    coupons = build(fresh, date)
+    kat = store.kat_get(date) if date >= USE_ALL_FROM else None
+    reserved = [(l["mid"], l["code"]) for l in kat["coupon"]["legs"]] if kat and kat.get("locked") else ()
+    coupons = build(fresh, date, reserved)
     if not coupons:
         return doc
     by_id = {b["id"]: b for b in fresh}

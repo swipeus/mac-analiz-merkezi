@@ -345,7 +345,8 @@ function cardHtml(m, sorted) {
     <div class="probs"><span class="ph">${pc(p.p_home)}</span>
       <div class="probbar"><span style="width:${p.p_home * 100}%"></span><span style="width:${p.p_draw * 100}%"></span><span style="width:${p.p_away * 100}%"></span></div>
       <span class="pa">${pc(p.p_away)}</span></div>
-    ${safe}` : `<div class="pending">Analiz hazırlanıyor…</div>`;
+    ${safe}
+    ${probBoxes(boxItems(p.over25, p.btts, p.cpick, p.kpick, p.bodds), m.id)}` : `<div class="pending">Analiz hazırlanıyor…</div>`;
   const stc = matchState(m);
   return `<div class="mcard ${live ? "is-live" : ""} st-${stc}" data-id="${m.id}" title="${STATE_LABEL[stc]}">
     <div class="mtop">${top}<div class="mtags">${sorted ? `<span class="tag lgt"><img src="${leagueLogo(m.league_id)}" alt="" onerror="this.remove()">${esc(m.league)}</span>${sortBadge(m)}` : tags}</div></div>

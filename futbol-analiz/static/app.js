@@ -2580,23 +2580,27 @@ function route() {
   const tm = location.hash.match(/^#\/takim\/(\d+)/);
   const xm = location.hash.match(/^#\/karsilastir\/(\d+)\/(\d+)/);
   const hm = location.hash.match(/^#\/hakem\/(\d+)/);
+  const bk = location.hash.startsWith("#/basket");
   const h = location.hash || "#/";
   if (navStack.length > 1 && navStack[navStack.length - 2] === h) navStack.pop();
   else if (navStack[navStack.length - 1] !== h) navStack.push(h);
   // maç, oyuncu ve karne sayfalarında üst barda yalnızca Geri butonu görünür
-  document.body.classList.toggle("in-match", !!(mm || pm || km || cm || lm || om || shm || tm || xm || hm));
+  document.body.classList.toggle("in-match", !!(mm || pm || km || cm || lm || om || shm || tm || xm || hm || (bk && location.hash.length > 9)));
+  document.body.classList.toggle("sport-bk", bk);
+  document.querySelectorAll("#sportTabs [data-sport]").forEach((a) => a.classList.toggle("on", (a.dataset.sport === "bk") === bk));
   document.body.classList.toggle("on-moves", !!om);  // sayfa altı yazıları sadece oranlar sayfasında
   state.player = pm ? +pm[1] : null;
   state.karne = km;
   state.kombine = cm;
   state.lig = lm ? +lm[1] : null;
-  state.oranlar = om || shm || !!tm || !!xm || !!hm;  // paylaşım, takım ve karşılaştırma sayfalarında da gün listesi arka planda çizilmesin
+  state.oranlar = om || shm || !!tm || !!xm || !!hm || bk;  // paylaşım, takım ve karşılaştırma sayfalarında da gün listesi arka planda çizilmesin
   state.takim = tm ? +tm[1] : null;
   state.cmp = xm ? [+xm[1], +xm[2]] : null;
   state.hakem = hm ? +hm[1] : null;
   const navKey = om ? "oranlar" : km ? "karne" : cm ? "kombine" : (mm || pm || lm || tm || xm || hm) ? "" : "home";
   document.querySelectorAll("#bottomNav [data-nav]").forEach((a) => a.classList.toggle("on", a.dataset.nav === navKey));
-  if (shm) { state.current = null; window.scrollTo(0, 0); renderShare(); }
+  if (bk) { state.current = null; renderBasket(); }
+  else if (shm) { state.current = null; window.scrollTo(0, 0); renderShare(); }
   else if (tm) { state.current = null; window.scrollTo(0, 0); renderTeam(state.takim); }
   else if (xm) { state.current = null; window.scrollTo(0, 0); renderCompare(...state.cmp); }
   else if (hm) { state.current = null; window.scrollTo(0, 0); renderReferee(state.hakem); }
@@ -2610,7 +2614,7 @@ function route() {
 }
 $("#backBtn").onclick = () => {
   if (navStack.length > 1) history.back();
-  else { navStack.length = 0; location.hash = "#/"; }
+  else { const b = location.hash.startsWith("#/basket"); navStack.length = 0; location.hash = b ? "#/basket" : "#/"; }
 };
 // kadrodaki oyunculara tıklayınca oyuncu sayfası
 $("#view").addEventListener("click", (e) => {
@@ -2783,6 +2787,14 @@ const RELEASES = [
       ["📊", "Daha fazla pazar", "Yarılar, handikaplar, korner/kart/şut/ofsayt/faul toplamları, takım bazlı alt/üst ve dakika aralıkları."],
       ["🔍", "Oranlarda arama", "Oranlar sekmesinde oyuncu veya pazar adı yaz, sadece o seçenekler kalsın; gruplar açılıp kapanır."],
       ["🔕", "Sessiz bildirimler", "Bildirimler artık ekranı kaplamaz; yalnızca sarı çana dokununca görünür."],
+    ],
+  },
+  {
+    id: 22, date: "30 Ekim 2026", title: "Yeni: Basketbol", sub: "Bu güncellemede gelenler",
+    items: [
+      ["🏀", "Futbol ve Basketbol", "En üstteki kutucuklardan iki bölüm arasında geçebilirsin. Basketbolda NBA, EuroLeague ve Türkiye Süper Ligi var."],
+      ["📊", "Maç sayfası", "Sezon karşılaştırması, son maçlar, oyuncu ortalamaları, sakatlıklar, eksikler ve maç istatistiği."],
+      ["🏆", "Lig ve takım sayfaları", "Puan durumu, sayı, ribaund ve asist liderleri, takım kadrosu ve fikstür."],
     ],
   },
   {

@@ -14,7 +14,7 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from app import analysis, karne, katlama, kupon, leagues, players, teams
+from app import analysis, basket, karne, katlama, kupon, leagues, players, teams
 from app.config import DB_PATH, LEAGUES, STATIC_DIR, TR_TZ
 from app.crypto_box import derive_key, seal, unseal
 from app.sources import Sources
@@ -132,6 +132,11 @@ async def main(out):
     write("karne.json", karne.export(store))
     katlama.settle(store)
     write("katlama.json", katlama.export(store))
+    # basketbol ayrı işlenir: bir hata ya da takılma futbol yayınını durdurmaz
+    try:
+        await asyncio.wait_for(basket.build(src, store, write, now), 240)
+    except Exception as e:  # noqa: BLE001
+        log.exception("basketbol verisi üretilemedi: %s", e)
     write("meta.json", {
         "updated": time.time(),
         "days": days,
@@ -145,7 +150,7 @@ async def main(out):
     # arayüz: göreli yollar + statik mod işareti. Dosyalara içerik özetiyle sürüm eklenir ki
     # tarayıcı önbelleği eski sayfayla yeni kodu (ya da tersini) karıştırmasın.
     html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
-    for f in ("app.js", "canli.js", "style.css"):
+    for f in ("app.js", "canli.js", "basket.js", "style.css"):
         shutil.copy(STATIC_DIR / f, out / f)
         ver = hashlib.sha1((STATIC_DIR / f).read_bytes()).hexdigest()[:10]
         html = html.replace(f'"/static/{f}"', f'"{f}?v={ver}"')

@@ -34,7 +34,6 @@ button:hover { border-color: var(--accent2); }
 .filter-btn b { background: var(--accent); color: #fff; border-radius: 999px; padding: 0 7px; font-size: 12px; }
 .filter-btn b:empty { display: none; }
 .filter-btn.active { border-color: var(--accent); color: var(--accent); }
-.filter-summary { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .backdrop { position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.5); backdrop-filter: blur(2px); }
 .sheet { position: fixed; z-index: 41; left: 50%; top: 80px; transform: translateX(-50%); width: min(440px, calc(100vw - 32px));
   max-height: calc(100vh - 120px); display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line);
@@ -674,7 +673,6 @@ body.chat-open { overflow: hidden; }
 .krow .sub.live { color: #ff7b72; font-weight: 700; }
 
 /* küçük düzeltmeler: dar ekranda filtre özeti gizlenir (sayı rozeti zaten görünür), kombine kutusu tek satır */
-@media (max-width: 520px) { .filter-summary { display: none; } }
 .hl.kombi .s { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hl.kombi .hlb { min-width: 0; }
 
@@ -788,21 +786,6 @@ a#movesBtn { display: inline-flex; align-items: center; justify-content: center;
 .hotnote b { color: var(--text); }
 
 /* ===== görsel iyileştirmeler ===== */
-/* 1) mobil alt menü */
-.bnav { display: none; }
-@media (max-width: 700px) {
-  .bnav { position: fixed; z-index: 40; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(4, 1fr);
-    background: color-mix(in srgb, var(--panel) 92%, transparent); backdrop-filter: blur(10px); border-top: 1px solid var(--line);
-    padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); }
-  .bnav a, .bnav button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0; color: var(--muted);
-    text-decoration: none; background: none; border: 0; font-size: 11px; font-weight: 600; cursor: pointer; }
-  .bnav svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
-  .bnav .on { color: var(--accent); }
-  .bnav .on svg { filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 60%, transparent)); }
-  body { padding-bottom: calc(70px + env(safe-area-inset-bottom)); }
-  body.locked .bnav { display: none; }
-  .chat { bottom: calc(76px + env(safe-area-inset-bottom)) !important; }
-}
 /* 3) öne çıkanlar: yatay kaydırılan şerit, büyük logolar, tek satır adlar */
 .highlights { display: flex !important; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; gap: 12px; padding-bottom: 4px; }
 .highlights::-webkit-scrollbar { display: none; }
@@ -904,7 +887,7 @@ footer.foot { display: none; }
 body.on-home footer.foot { display: block; }
 /* telefonda açılan küçük pencereler (tarih, sıralama, arama) ekranın içinde ortalı dursun */
 @media (max-width: 700px) {
-  .calpop { position: fixed !important; left: 12px !important; right: 12px !important; top: 118px !important; width: auto !important; max-width: none !important; }
+  .calpop { position: fixed !important; left: 12px !important; right: 12px !important; top: 186px !important; width: auto !important; max-width: none !important; }
   .calrow button { font-size: 13px; padding: 9px 4px; white-space: nowrap; }
 }
 
@@ -1193,8 +1176,7 @@ body.on-home footer.foot { display: block; }
 .sports a.on { color: var(--text); background: var(--panel2); border-color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
 .sports a[data-sport="bk"].on { border-color: #f0883e; box-shadow: inset 0 -2px 0 #f0883e; }
 body.in-match .sports, body.locked .sports { display: none; }
-body.sport-bk #toolbar, body.sport-bk .top .right { display: none; }
-@media (max-width: 700px) { .bknav { display: none !important; } }
+body.sport-bk #toolbar, body.sport-bk .top .right, body.sport-bk #fbNav, body.in-match #fbNav, body.locked #fbNav, body:not(.on-home) #toolbar { display: none; }
 .bkq { display: flex; justify-content: center; gap: 6px; flex-wrap: wrap; }
 .bkq span { font-size: 11px; color: var(--muted); background: var(--panel2); border-radius: 6px; padding: 1px 6px; font-variant-numeric: tabular-nums; }
 .bkq.big { margin-bottom: 10px; }
@@ -1226,6 +1208,18 @@ body.sport-bk #toolbar, body.sport-bk .top .right { display: none; }
 .bknav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding-top: 12px; }
 .bknav a { text-align: center; padding: 8px 6px; border-radius: 10px; font-weight: 600; color: var(--muted); background: var(--panel); border: 1px solid var(--line); text-decoration: none; }
 .bknav a.on { color: var(--text); border-color: #f0883e; }
+.fbnav { max-width: 1280px; margin: 0 auto; padding: 12px 16px 0; grid-template-columns: repeat(4, 1fr); }
+.fbnav a { white-space: nowrap; }
+.fbnav a.on { border-color: var(--accent); }
+#fbDays { padding: 0; flex: 0 1 auto; }
+#toolbar .filter-btn { margin-left: auto; padding: 8px 12px; }
+#toolbar .cal-btn { padding: 8px 10px; }
+#toolbar .calpop { left: auto; right: 0; }
+.fbchips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-top: 2px; }
+.fbchips::-webkit-scrollbar { display: none; }
+.fbchips .chipbtn { flex: 0 0 auto; white-space: nowrap; }
+.chipbtn img { width: 16px; height: 16px; object-fit: contain; vertical-align: -3px; margin-right: 5px; }
+@media (max-width: 600px) { .fbnav { padding: 10px 12px 0; gap: 6px; } .fbnav a { padding: 8px 2px; font-size: 12.5px; } #toolbar { gap: 6px; } }
 .bksafe { display: flex; justify-content: space-between; gap: 8px; align-items: center; padding: 7px 10px; border-radius: 8px; background: rgba(46,160,67,.12); border: 1px solid rgba(46,160,67,.35); font-size: 13px; font-weight: 600; }
 .bksafe b { flex: 0 0 auto; }
 .bksafe.won { background: rgba(46,160,67,.25); }

@@ -55,7 +55,7 @@ def enrich_day(store, matches):
             m["pred"]["kpick"] = pr.get("card_pick")    # kutudaki sabit kart çizgisi (3.5 Üst)
             m["pred"]["bodds"] = pr.get("box_odds")       # 2.5 Üst ve KG Var oranları
             bp = pr.get("best_pick")
-            m["pred"]["safe"] = {"label": bp["label"], "odds": bp.get("odds"),
+            m["pred"]["safe"] = {"label": bp["label"], "odds": bp.get("odds"), "p": bp.get("p"),
                                  "final": bool(pr.get("best_final")) or bool((b["body"].get("status") or {}).get("started"))} if bp else None
             rec = store.pred_get(m["id"]) or {}
             if m["pred"]["safe"] and rec.get("state") == "done":  # maç listesinde ✓/✗

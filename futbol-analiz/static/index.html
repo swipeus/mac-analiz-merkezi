@@ -19,30 +19,24 @@
       <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M21 3L3 10.5l7 2.5 2.5 7z" fill="#39c5cf"/><path d="M21 3L10 13" stroke="#0d1117" stroke-width="1.6"/></svg>
       <b id="shareCount"></b>
     </a>
-    <a id="karneBtn" class="karne-btn" href="#/karne" aria-label="Model karnesi" title="Model karnesi">
-      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-        <rect x="5" y="2.5" width="14.5" height="19" rx="2" fill="#58a6ff"/>
-        <rect x="5" y="2.5" width="3.2" height="19" rx="1.2" fill="#1f6feb"/>
-        <rect x="10.3" y="6.5" width="7" height="1.6" rx=".8" fill="#e6f0ff"/>
-        <rect x="10.3" y="10" width="7" height="1.6" rx=".8" fill="#e6f0ff"/>
-        <rect x="10.3" y="13.5" width="4.6" height="1.6" rx=".8" fill="#e6f0ff"/>
-        <circle cx="3.9" cy="7" r="1" fill="#8b98a8"/><circle cx="3.9" cy="12" r="1" fill="#8b98a8"/><circle cx="3.9" cy="17" r="1" fill="#8b98a8"/>
-      </svg>
-    </a>
-    <a id="movesBtn" class="bot-btn" href="#/oranlar" aria-label="Oran hareketleri" title="Oran hareketleri">
-      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M3 17l5-5 4 3 7-8" fill="none" stroke="#39c5cf" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 7h4v4" fill="none" stroke="#39c5cf" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 21h18" stroke="#8b98a8" stroke-width="1.6" stroke-linecap="round"/></svg>
-    </a>
   </div>
 </header>
 <nav id="sportTabs" class="sports" aria-label="Spor dalı">
   <a href="#/" data-sport="fb" class="on"><span>⚽</span>Futbol</a>
   <a href="#/basket" data-sport="bk"><span>🏀</span>Basketbol</a>
 </nav>
+<nav id="fbNav" class="bknav fbnav" aria-label="Ana menü">
+  <a href="#/" data-nav="home">⚽ Maçlar</a>
+  <a href="#/kombine" data-nav="kombine">🎟️ Kuponlar</a>
+  <a href="#/karne" data-nav="karne">📒 Karne</a>
+  <a href="#/oranlar" data-nav="oranlar">📈 Oranlar</a>
+</nav>
 <div id="feed" class="feed hidden"><div class="feed-head">Son gelişmeler</div><ul id="feedList"></ul></div>
 <div id="toolbar" class="toolbar">
+  <div id="fbDays" class="ptabs"></div>
   <button id="filterBtn" class="filter-btn" aria-haspopup="dialog" aria-controls="filterSheet">
     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4-2v-4z"/></svg>
-    Filtre <b id="filterCount"></b>
+    <b id="filterCount"></b>
   </button>
   <div class="calwrap searchwrap">
     <button id="searchBtn" class="cal-btn" aria-haspopup="dialog" aria-controls="searchPop" title="Takım ara" aria-label="Takım ara">
@@ -56,26 +50,9 @@
   <div class="calwrap sortwrap">
     <button id="sortBtn" class="cal-btn sort-btn" aria-haspopup="menu" aria-controls="sortPop" title="Sırala">
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4v16M3 16l4 4 4-4M17 20V4M13 8l4-4 4 4"/></svg>
-      <span id="sortLabel">Sırala</span>
     </button>
     <div id="sortPop" class="calpop sortpop hidden" role="menu" aria-label="Sıralama"></div>
   </div>
-  <div class="calwrap">
-    <button id="calBtn" class="cal-btn" aria-haspopup="dialog" aria-label="Tarih seç" title="Tarih seç">
-      <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
-        <rect x="3" y="4.5" width="18" height="16.5" rx="3" fill="#2a323d" stroke="#58a6ff" stroke-width="1.6"/>
-        <rect x="3" y="4.5" width="18" height="5" rx="2.5" fill="#58a6ff"/>
-        <line x1="8" y1="2.5" x2="8" y2="6.5" stroke="#e6edf3" stroke-width="1.8" stroke-linecap="round"/><line x1="16" y1="2.5" x2="16" y2="6.5" stroke="#e6edf3" stroke-width="1.8" stroke-linecap="round"/>
-        <circle cx="8" cy="13.5" r="1.1" fill="#e6edf3"/><circle cx="12" cy="13.5" r="1.1" fill="#e6edf3"/><circle cx="16" cy="13.5" r="1.1" fill="#e6edf3"/><circle cx="8" cy="17.3" r="1.1" fill="#e6edf3"/><circle cx="12" cy="17.3" r="1.1" fill="#e6edf3"/>
-      </svg>
-      <span id="calLabel">Bugün</span>
-    </button>
-    <div id="calPop" class="calpop hidden" role="dialog" aria-label="Tarih seç">
-      <div class="calrow"><button id="prevDay" aria-label="Önceki gün">‹ Önceki</button><button id="today">Bugün</button><button id="nextDay" aria-label="Sonraki gün">Sonraki ›</button></div>
-      <input type="date" id="date" aria-label="Tarih">
-    </div>
-  </div>
-  <span id="filterSummary" class="filter-summary"></span>
 </div>
 <div id="filterBackdrop" class="backdrop hidden"></div>
 <div id="filterSheet" class="sheet hidden" role="dialog" aria-modal="true" aria-label="Lig filtresi">
@@ -86,12 +63,6 @@
 </div>
 <main id="view"></main>
 <div id="toasts" class="toasts"></div>
-<nav id="bottomNav" class="bnav" aria-label="Ana menü">
-  <a href="#/" data-nav="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span>Maçlar</span></a>
-  <a href="#/kombine" data-nav="kombine"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l9 5-9 5-9-5z M3 12l9 5 9-5 M3 17l9 5 9-5"/></svg><span>Kombineler</span></a>
-  <a href="#/karne" data-nav="karne"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5z M9 3v18 M12 8h4 M12 12h4"/></svg><span>Karne</span></a>
-  <a href="#/oranlar" data-nav="oranlar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8 M15 7h6v6"/></svg><span>Oranlar</span></a>
-</nav>
 <div id="newsModal" class="wn-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="wnTitle">
   <div class="wn">
     <div class="wn-head"><span class="wn-ic">✨</span><div><h2 id="wnTitle"></h2><small id="wnSub"></small></div></div>

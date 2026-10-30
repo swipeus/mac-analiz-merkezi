@@ -34,6 +34,7 @@ LEAGUES = {
 LIVE_TTL = 120
 SOON_TTL = 600
 BOX_BUDGET = {"el": 12}  # bir turda çekilecek en fazla geçmiş maç kutusu (varsayılan 40); live.euroleague.net sık isteği keser
+NIGHT_HOURS = 8  # Türkiye saatiyle 08.00 öncesi başlayan maçlar önceki günün listesinde
 ABSENT_MIN = 15          # son maçta yoksa "oynamadı" sayılacak oyuncunun dakika ortalaması
 ROSTER_SHOWN = 9         # maç sayfasında takım başına oyuncu
 
@@ -68,7 +69,9 @@ def last_first(s):
 
 
 def tr_day(utc):
-    return datetime.fromisoformat(utc.replace("Z", "+00:00")).astimezone(TR_TZ).strftime("%Y-%m-%d")
+    """Maçın gösterileceği gün: Türkiye saatiyle sabaha karşı başlayan maçlar önceki akşamın listesindedir."""
+    t = datetime.fromisoformat(utc.replace("Z", "+00:00")).astimezone(TR_TZ)
+    return (t - timedelta(hours=NIGHT_HOURS)).strftime("%Y-%m-%d")
 
 
 def to_min(v):
@@ -449,8 +452,9 @@ async def team_news(src, name):
 
 async def build(src, store, write, now):
     """Bütün basketbol dosyalarını yazar; dönüş: ligler (meta için)."""
-    today = now.strftime("%Y-%m-%d")
-    shown = [(now + timedelta(days=i)).strftime("%Y-%m-%d") for i in (-1, 0, 1)]
+    base = now - timedelta(hours=NIGHT_HOURS)  # gece maçları sürerken "bugün" hâlâ önceki akşamdır
+    today = base.strftime("%Y-%m-%d")
+    shown = [(base + timedelta(days=i)).strftime("%Y-%m-%d") for i in (-1, 0, 1)]
     all_cards, out_lg = {d: [] for d in shown}, []
     events = await bm.odds_events(src, store)
     day_cands = {d: [] for d in shown}
@@ -465,6 +469,9 @@ async def build(src, store, write, now):
                 log.warning("geçen sezon alınamadı %s: %s", lg, e)
                 prior = []
             rating = bm.fit(prior + bm.compact(games), now.timestamp() / 86400)
+            # başlamış ama kaydı olmayan maçlar için: gösterilen günlerin sonuçlarını bilmeyen güç tablosu
+            past = [g for g in games if tr_day(g["utc"]) < shown[0]]
+            rating_before = bm.fit(prior + bm.compact(past), now.timestamp() / 86400)
             # maç kutuları: yeniler önce; geçmiş sezon maçları tur başına sınırlı
             need = [g for g in sorted(games, key=lambda x: x["utc"], reverse=True) if g["state"] in ("post", "live")]
             if lg == "nba":  # NBA'de oyuncu ortalaması hazır; yalnızca gösterilecek günlerin kutuları gerekir
@@ -493,7 +500,7 @@ async def build(src, store, write, now):
                 dk = tr_day(g["utc"])
                 if dk in shown:
                     ev = bm.find_event(g, events) if g["state"] == "pre" else None
-                    pr = bm.predict(lg, g, rating, ev)
+                    pr = bm.predict(lg, g, rating if g["state"] == "pre" else rating_before, ev)
                     opts = bm.options(pr, ev, g["home"]["short"], g["away"]["short"])
                     pick = bm.best_pick(opts)
                     rec = bm.record(store, g, pr, pick, opts)
@@ -533,13 +540,11 @@ async def build(src, store, write, now):
 
 def short_pred(g, pr, rec):
     """Maç listesi için özet: başlamış maçta maç öncesi kayıttaki tercih gösterilir."""
-    if g["state"] == "pre":
+    if g["state"] == "pre" or not rec:
         if not pr:
             return None
         return {"p_home": pr["p_home"], "p_away": pr["p_away"], "total": pr["total"], "margin": pr["margin"], "safe": (rec or {}).get("pick"),
                 "boxes": (rec or {}).get("boxes") or []}
-    if not rec:
-        return None
     return {"p_home": rec.get("p_home"), "p_away": round(1 - rec["p_home"], 3) if rec.get("p_home") is not None else None,
             "total": (rec.get("pred") or {}).get("total"), "margin": (rec.get("pred") or {}).get("margin"),
             "safe": rec.get("pick"), "hit": rec.get("hit"), "done": rec.get("state") == "done", "boxes": rec.get("boxes") or []}

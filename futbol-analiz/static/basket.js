@@ -11,6 +11,8 @@ async function bkGet(name, missing) {
   try { return await getData(name); }
   catch (e) { if (e.message === "NOTFOUND") throw new Error(missing); throw e; }
 }
+// sabaha karşı oynanan NBA maçları önceki akşamın listesinde: gün sabah 08.00'de değişir
+const bkToday = () => new Date(Date.now() - 8 * 3600e3).toLocaleDateString("sv-SE", { timeZone: TZ });
 const bkNum = (x, d = 1) => x == null ? "—" : nf(x, d);
 // favori takımın logosunun üstünde yıldız
 const bkCrest = (t, size = 56, isFav, pct) => {
@@ -50,8 +52,8 @@ function bkCard(m) {
 }
 async function renderBasketHome() {
   const v = $("#view");
-  if (!BK.day) BK.day = todayStr();
-  const base = todayStr(), shift = (n) => { const d = new Date(base + "T12:00:00"); d.setDate(d.getDate() + n); return d.toLocaleDateString("sv-SE"); };
+  if (!BK.day) BK.day = bkToday();
+  const base = bkToday(), shift = (n) => { const d = new Date(base + "T12:00:00"); d.setDate(d.getDate() + n); return d.toLocaleDateString("sv-SE"); };
   const days = [[shift(-1), "Dün"], [base, "Bugün"], [shift(1), "Yarın"]];
   if (!days.some(([d]) => d === BK.day)) BK.day = base;
   const bar = bkNav("mac") + `<div class="ptabs">${days.map(([d, l]) => `<button class="ptab ${d === BK.day ? "on" : ""}" data-bkd="${d}">${l}</button>`).join("")}</div>`;
@@ -224,8 +226,8 @@ function bkCoupon(c) {
 }
 async function renderBasketCoupons() {
   const v = $("#view");
-  if (!BK.cday) BK.cday = todayStr();
-  const base = todayStr(), shift = (n) => { const d = new Date(base + "T12:00:00"); d.setDate(d.getDate() + n); return d.toLocaleDateString("sv-SE"); };
+  if (!BK.cday) BK.cday = bkToday();
+  const base = bkToday(), shift = (n) => { const d = new Date(base + "T12:00:00"); d.setDate(d.getDate() + n); return d.toLocaleDateString("sv-SE"); };
   const days = [[shift(-1), "Dün"], [base, "Bugün"], [shift(1), "Yarın"]];
   if (!days.some(([d]) => d === BK.cday)) BK.cday = base;
   const bar = bkNav("kupon") + `<div class="ptabs">${days.map(([d, l]) => `<button class="ptab ${d === BK.cday ? "on" : ""}" data-bkc="${d}">${l}</button>`).join("")}</div>`;

@@ -2663,6 +2663,13 @@ function startPolling() {
    kayıtları bir kez görür; "Tamam" ile en son id kaydedilir ve pencere tekrar çıkmaz. */
 const RELEASES = [
   {
+    id: 24, date: "30 Ekim 2026", title: "NBA gece maçları", sub: "Bu güncellemede gelenler",
+    items: [
+      ["🌙", "Gece maçları aynı günde", "Sabaha karşı oynanan NBA maçları artık bir önceki akşamın listesinde, saatleri kartta yazıyor."],
+      ["★", "NBA'de favori yıldızı", "Oranı çıkmamış ya da başlamış NBA maçlarında da favori ve yüzdeler görünür."],
+    ],
+  },
+  {
     id: 23, date: "30 Ekim 2026", title: "Yenilenen maç ekranı", sub: "Bu güncellemede gelenler",
     items: [
       ["⚽", "Futbol ve basketbol aynı düzende", "Üstte Maçlar, Kuponlar, Karne ve Oranlar; altında Dün, Bugün, Yarın ve lig seçimi."],

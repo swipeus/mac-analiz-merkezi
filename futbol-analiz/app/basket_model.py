@@ -302,9 +302,10 @@ def record(store, g, pr, pick, opts=None):
     """Maç başlayana kadar tahmin güncellenir, başlayınca donar; bitince sonuçlanır."""
     old = store.bk_get("pred", g["id"])
     if g["state"] == "pre":
-        if pick:
+        # oran henüz yoksa yalnızca tahmin saklanır (karneye girmez); maç başlayınca da favori belli kalır
+        if pick or (pr and (not old or old["state"] == "nopick")):
             store.bk_put("pred", g["id"], {"id": g["id"], "lg": g["lg"], "utc": g["utc"], "home": g["home"]["short"], "away": g["away"]["short"],
-                                           "pick": pick, "p_home": pr["p_home"], "state": "pending", "pred": pr, "options": opts,
+                                           "pick": pick, "p_home": pr["p_home"], "state": "pending" if pick else "nopick", "pred": pr, "options": opts,
                                            "boxes": boxes(opts, pr)})
         return store.bk_get("pred", g["id"])
     if g["state"] == "off" and old and old["state"] == "pending":
@@ -409,7 +410,7 @@ def karne(store):
     return {"stake": STAKE, "total": tally(done), "by_lg": {k: tally([r for r in done if r["lg"] == k]) for k in ("nba", "el")},
             "by_type": {k: tally([r for r in done if pick_type(r["pick"]["code"]) == k]) for k in ("Maç sonucu", "Handikap", "Toplam sayı", "Takım toplamı")},
             "coupons": {"n": len(cd), "won": sum(1 for c in cd if c.get("won"))},
-            "recent": slim[:60], "store": {"pred": slim, "coupons": store.bk_all("coupons")}}
+            "recent": [r for r in slim if r.get("pick")][:60], "store": {"pred": slim, "coupons": store.bk_all("coupons")}}
 
 
 def seed(store, doc):

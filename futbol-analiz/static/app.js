@@ -2585,7 +2585,7 @@ function route() {
   if (navStack.length > 1 && navStack[navStack.length - 2] === h) navStack.pop();
   else if (navStack[navStack.length - 1] !== h) navStack.push(h);
   // maç, oyuncu ve karne sayfalarında üst barda yalnızca Geri butonu görünür
-  document.body.classList.toggle("in-match", !!(mm || pm || km || cm || lm || om || shm || tm || xm || hm || (bk && location.hash.length > 9)));
+  document.body.classList.toggle("in-match", !!(mm || pm || km || cm || lm || om || shm || tm || xm || hm || (bk && /^#\/basket\/(mac|lig|takim)/.test(location.hash))));
   document.body.classList.toggle("sport-bk", bk);
   document.querySelectorAll("#sportTabs [data-sport]").forEach((a) => a.classList.toggle("on", (a.dataset.sport === "bk") === bk));
   document.body.classList.toggle("on-moves", !!om);  // sayfa altı yazıları sadece oranlar sayfasında
@@ -2795,6 +2795,7 @@ const RELEASES = [
       ["🏀", "Futbol ve Basketbol", "En üstteki kutucuklardan iki bölüm arasında geçebilirsin. Basketbolda NBA, EuroLeague ve Türkiye Süper Ligi var."],
       ["📊", "Maç sayfası", "Sezon karşılaştırması, son maçlar, oyuncu ortalamaları, sakatlıklar, eksikler ve maç istatistiği."],
       ["🏆", "Lig ve takım sayfaları", "Puan durumu, sayı, ribaund ve asist liderleri, takım kadrosu ve fikstür."],
+      ["🎯", "En garanti tercih ve kupon", "Takım gücü ve piyasa çizgisiyle tahmin, her maça en garanti tercih, günlük kuponlar ve ayrı basketbol karnesi."],
     ],
   },
   {

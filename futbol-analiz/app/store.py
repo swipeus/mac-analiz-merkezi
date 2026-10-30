@@ -24,6 +24,7 @@ class Store:
                 CREATE TABLE IF NOT EXISTS predictions (match_id INTEGER PRIMARY KEY, ts REAL, body TEXT);
                 CREATE TABLE IF NOT EXISTS coupons (day TEXT PRIMARY KEY, ts REAL, body TEXT);
                 CREATE TABLE IF NOT EXISTS katlama (day TEXT PRIMARY KEY, ts REAL, body TEXT);
+                CREATE TABLE IF NOT EXISTS basket (kind TEXT, key TEXT, ts REAL, body TEXT, PRIMARY KEY (kind, key));
                 """
             )
 
@@ -114,6 +115,23 @@ class Store:
     def coupon_all(self):
         with self.lock:
             rows = self.conn.execute("SELECT body FROM coupons ORDER BY day").fetchall()
+        return [json.loads(r[0]) for r in rows]
+
+    # --- basketbol tercih ve kupon kayıtları (temizlikte silinmez)
+    def bk_get(self, kind, key):
+        with self.lock:
+            row = self.conn.execute("SELECT body FROM basket WHERE kind=? AND key=?", (kind, key)).fetchone()
+        return json.loads(row[0]) if row else None
+
+    def bk_put(self, kind, key, obj):
+        with self.lock:
+            self.conn.execute("INSERT OR REPLACE INTO basket(kind, key, ts, body) VALUES (?,?,?,?)",
+                              (kind, key, time.time(), json.dumps(obj, ensure_ascii=False)))
+            self.conn.commit()
+
+    def bk_all(self, kind):
+        with self.lock:
+            rows = self.conn.execute("SELECT body FROM basket WHERE kind=?", (kind,)).fetchall()
         return [json.loads(r[0]) for r in rows]
 
     # --- katlama serisi: günde tek kupon (karneden ve diğer kuponlardan bağımsız, temizlikte silinmez) ---

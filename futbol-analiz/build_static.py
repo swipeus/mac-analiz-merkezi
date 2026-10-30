@@ -14,7 +14,7 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from app import analysis, basket, karne, katlama, kupon, leagues, players, teams
+from app import analysis, basket, basket_model, karne, katlama, kupon, leagues, players, teams
 from app.config import DB_PATH, LEAGUES, STATIC_DIR, TR_TZ
 from app.crypto_box import derive_key, seal, unseal
 from app.sources import Sources
@@ -50,6 +50,9 @@ async def main(out):
             r = await src.client.get(pages.rstrip("/") + f"/data/katlama.json?t={int(time.time())}")
             if r.status_code == 200:
                 log.info("katlama yayındakiyle birleştirildi: %s gün", katlama.seed(store, unseal(key, r.json())))
+            r = await src.client.get(pages.rstrip("/") + f"/data/bk-karne.json?t={int(time.time())}")
+            if r.status_code == 200:
+                log.info("basketbol karnesi birleştirildi: %s kayıt", basket_model.seed(store, unseal(key, r.json())))
         except Exception as e:  # noqa: BLE001
             log.warning("karne geri yüklenemedi: %s", e)
     # karneden tür bazında kalibrasyon (yeterli veri ve belirgin sapma varsa olasılıklar düzeltilir)

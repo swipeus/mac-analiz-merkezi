@@ -140,6 +140,12 @@ function bkPredict(b) {
     <div><small>Beklenen toplam</small><b>${nf(P.total, 1)}</b></div>${P.mkt_margin != null ? `<div><small>Piyasa farkı</small><b>${P.mkt_margin > 0 ? "+" : ""}${nf(P.mkt_margin, 1)}</b></div>` : ""}${P.model_margin != null ? `<div><small>Model farkı</small><b>${P.model_margin > 0 ? "+" : ""}${nf(P.model_margin, 1)}</b></div>` : ""}</div>` : "";
   return `<div class="card" style="--c:#2ea043">${head("🎯", "Tahmin")}${bars}${safe}${score}</div>`;
 }
+function bkComment(b) {
+  const c = b.comment;
+  if (!c) return "";
+  return `<div class="card comm" style="--c:#39c5cf">${head("🗣️", `Maç yorumu <span class="muted">· ${b.state === "pre" ? "form, sakatlıklar ve oranlara göre" : "maç öncesi yazıldı"}</span>`)}
+    ${c.paras.map((p) => `<p>${esc(p)}</p>`).join("")}<p class="cconcl">${esc(c.concl)}</p></div>`;
+}
 function bkOdds(b) {
   const pick = (b.rec && b.rec.pick) || {};
   const groups = ["Maç sonucu", "Handikap", "Toplam sayı", "Takım toplamı"];
@@ -160,7 +166,7 @@ function bkBody(b) {
   if (BK.tab === "kutu") return `<div class="grid2">${bkBox(b.box.home, H.short)}${bkBox(b.box.away, A.short)}</div>`;
   if (BK.tab === "oran") return bkOdds(b);
   const h2h = b.h2h.length ? `<div class="card">${head("🤝", "Aralarındaki maçlar (bu sezon)")}${b.h2h.map((x) => `<div class="bkrow"><span class="muted">${dateOf(x.utc)}</span><span>${esc(x.home)} <b>${x.hs}-${x.as}</b> ${esc(x.away)}</span></div>`).join("")}</div>` : "";
-  return `${bkPredict(b)}${bkCompare(b)}<div class="grid2">${bkInjury(b, "home")}${bkInjury(b, "away")}</div>${h2h}<div class="grid2">${bkLog(H, b.lg)}${bkLog(A, b.lg)}</div>`;
+  return `${bkPredict(b)}${bkComment(b)}${bkCompare(b)}<div class="grid2">${bkInjury(b, "home")}${bkInjury(b, "away")}</div>${h2h}<div class="grid2">${bkLog(H, b.lg)}${bkLog(A, b.lg)}</div>`;
 }
 async function renderBasketMatch(id) {
   const v = $("#view");

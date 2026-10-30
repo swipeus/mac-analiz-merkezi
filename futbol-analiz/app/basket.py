@@ -510,7 +510,14 @@ async def build(src, store, write, now):
                         pr, opts = rec["pred"], rec.get("options") or []
                     model = {"pred": pr, "options": opts, "rec": rec}
                     all_cards[dk].append({**card(g, table), "pred": short_pred(g, pr, rec)})
-                    write(f"bk-match-{g['id']}.json", {**await bundle(src, g, lg, d, table, games, roster, boxes.get(g["id"]), last_box), **model})
+                    bd = await bundle(src, g, lg, d, table, games, roster, boxes.get(g["id"]), last_box)
+                    comment = (rec or {}).get("comment")  # maç başlayınca yorum da donar
+                    if g["state"] == "pre":
+                        comment = commentary(bd, pr, pick)
+                        if rec:
+                            rec["comment"] = comment
+                            store.bk_put("pred", g["id"], rec)
+                    write(f"bk-match-{g['id']}.json", {**bd, **model, "comment": comment})
             for tid, r in table.items():
                 write(f"bk-team-{lg}-{tid}.json", {
                     "lg": lg, "lg_name": info["name"], **{k: r[k] for k in ("id", "name", "short", "logo")}, "stats": team_summary(r),
@@ -548,6 +555,88 @@ def short_pred(g, pr, rec):
     return {"p_home": rec.get("p_home"), "p_away": round(1 - rec["p_home"], 3) if rec.get("p_home") is not None else None,
             "total": (rec.get("pred") or {}).get("total"), "margin": (rec.get("pred") or {}).get("margin"),
             "safe": rec.get("pick"), "hit": rec.get("hit"), "done": rec.get("state") == "done", "boxes": rec.get("boxes") or []}
+
+
+def _n1(x):
+    return f"{x:.1f}".replace(".", ",")
+
+
+def _form_text(name, r):
+    if not r:
+        return f"{name} bu sezon henüz maça çıkmadı."
+    txt = f"{name} {r['w']} galibiyet, {r['l']} mağlubiyetle oynuyor, iç sahada {r['hw']}-{r['hl']}, deplasmanda {r['aw']}-{r['al']}."
+    n, won = int(r["streak"][:-1] or 0), r["streak"][-1] == "G"
+    if n >= 3:
+        txt += f" Son {n} maçını {'kazandı' if won else 'kaybetti'}."
+    return txt
+
+
+def _score_text(name, r):
+    txt = f"{name} maç başına {_n1(r['ppg'])} sayı atıp {_n1(r['opp'])} sayı yiyor (fark {_n1(r['diff']) if r['diff'] < 0 else '+' + _n1(r['diff'])})."
+    if r["gp"] >= 6 and abs(r["l5ppg"] - r["ppg"]) >= 5:
+        txt += f" Son 5 maçta hücumu {'yükseldi' if r['l5ppg'] > r['ppg'] else 'düştü'} ({_n1(r['l5ppg'])} sayı)."
+    return txt
+
+
+def _missing_text(name, b, sd):
+    pts = {p["name"]: p.get("pts") for p in b["players"][sd]}
+    rows = [i for i in b["injuries"][sd] if i.get("name")]
+    rows.sort(key=lambda i: -(pts.get(i["name"]) or 0))
+    tag = lambda i: f"{i['name']} ({_n1(pts[i['name']])} sayı)" if pts.get(i["name"]) else i["name"]  # noqa: E731
+    out = [tag(i) for i in rows if i.get("out")][:3]
+    doubt = [tag(i) for i in rows if not i.get("out")][:2]
+    last = [f"{p['name']} ({_n1(p['pts'])} sayı)" for p in b["absent"][sd]][:3]
+    parts = []
+    if out:
+        parts.append(f"{', '.join(out)} yok")
+    if doubt:
+        parts.append(f"{', '.join(doubt)} için durum belirsiz")
+    if last:
+        parts.append(f"{', '.join(last)} son maçta oynamadı")
+    return f"{name} tarafında {'; '.join(parts)}." if parts else ""
+
+
+def commentary(b, pr, pick):
+    """Maç öncesi yorum: elimizdeki verilerden kısa paragraflar ve bir sonuç cümlesi."""
+    if not pr:
+        return None
+    H, A = b["home"], b["away"]
+    hn, an = H["short"], A["short"]
+    x, y = H.get("rec"), A.get("rec")
+    paras = [f"{_form_text(hn, x)} {_form_text(an, y)}"]
+    if x and y:
+        paras.append(f"{_score_text(hn, x)} {_score_text(an, y)}")
+    rest = []
+    for name, t in ((hn, H), (an, A)):
+        if t.get("rest") == 0:
+            rest.append(f"{name} üst üste ikinci gün sahaya çıkıyor.")
+    if H.get("rest") is not None and A.get("rest") is not None and abs(H["rest"] - A["rest"]) >= 2:
+        more = (hn, H) if H["rest"] > A["rest"] else (an, A)
+        rest.append(f"{more[0]} {more[1]['rest']} gün dinlenerek geliyor.")
+    if rest:
+        paras.append(" ".join(rest))
+    missing = " ".join(t for t in (_missing_text(hn, b, "home"), _missing_text(an, b, "away")) if t)
+    if missing:
+        paras.append(missing)
+    if b["h2h"]:
+        m = b["h2h"][0]
+        paras.append(f"Bu sezonki son karşılaşmada skor {m['home']} {m['hs']}-{m['as']} {m['away']} olmuştu.")
+    mm, mt = pr.get("mkt_margin"), pr.get("model_margin")
+    if mm is not None and mt is not None and abs(mm - mt) >= 4:
+        who = lambda z: f"{hn if z > 0 else an} {_n1(abs(z))} sayı önde"  # noqa: E731
+        paras.append(f"Piyasa {who(mm)} görüyor, takım gücü hesabı ise {who(mt)} diyor.")
+    tm, tt = pr.get("mkt_total"), pr.get("model_total")
+    if tm is not None and tt is not None and abs(tm - tt) >= 6:
+        paras.append(f"Takım gücüne göre maç piyasanın beklediğinden daha {'yüksek' if tt > tm else 'düşük'} skorlu geçebilir ({_n1(tt)} - {_n1(tm)}).")
+    fp = max(pr["p_home"], pr["p_away"])
+    fav = hn if pr["p_home"] >= pr["p_away"] else an
+    level = "net favori" if fp >= .75 else "favori" if fp >= .6 else "hafif favori"
+    concl = f"Maç başa baş görünüyor (%{round(fp * 100)})." if fp < .53 else f"{fav} {level} (%{round(fp * 100)})."
+    if pr.get("total"):
+        concl += f" Beklenen skor {round((pr['total'] + pr['margin']) / 2)}-{round((pr['total'] - pr['margin']) / 2)}."
+    if pick:
+        concl += f" En garanti tercih: {pick['label']}."
+    return {"paras": paras, "concl": concl}
 
 
 async def bundle(src, g, lg, d, table, games, roster, box, last_box):

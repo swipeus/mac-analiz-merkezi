@@ -406,7 +406,7 @@ def karne(store):
         return {"n": n, "hit": h, "pct": round(h / n, 3) if n else None, "exp": round(sum(r["pick"]["p"] for r in xs) / n, 3) if n else None, "pl": round(pl)}
     coupons = [c for d in sorted(store.bk_all("coupons"), key=lambda d: d["date"], reverse=True) for c in d["coupons"]]
     cd = [c for c in coupons if c.get("state") == "done"]
-    slim = [{k: v for k, v in r.items() if k != "options"} for r in rows]  # karne dosyası küçük kalsın
+    slim = [{k: v for k, v in r.items() if k not in ("options", "comment")} for r in rows]  # karne dosyası küçük kalsın
     return {"stake": STAKE, "total": tally(done), "by_lg": {k: tally([r for r in done if r["lg"] == k]) for k in ("nba", "el")},
             "by_type": {k: tally([r for r in done if pick_type(r["pick"]["code"]) == k]) for k in ("Maç sonucu", "Handikap", "Toplam sayı", "Takım toplamı")},
             "coupons": {"n": len(cd), "won": sum(1 for c in cd if c.get("won"))},

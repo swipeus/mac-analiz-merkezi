@@ -1241,12 +1241,3 @@ body.sport-bk #toolbar, body.sport-bk .top .right, body.sport-bk #fbNav, body.in
 .bktile b { font-size: 16px; }
 .bktile small { color: var(--muted); font-size: 11px; }
 .bktile.safe { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
-.bkcoupon h3 { margin: 0 0 8px; font-size: 15px; }
-.bkleg { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); }
-.bkleg > div { flex: 1; min-width: 0; }
-.bkleg small { display: block; color: var(--muted); }
-.bkleg a { color: var(--text); }
-.bkleg .kst { flex: 0 0 auto; min-width: 42px; font-size: 12px; color: var(--muted); }
-.bkleg .kst.ok { color: #56d364; } .bkleg .kst.no { color: #f85149; }
-.bkstake { margin: 8px 0 0; font-weight: 700; }
-.bkstake.pos { color: #56d364; } .bkstake.neg { color: #f85149; }

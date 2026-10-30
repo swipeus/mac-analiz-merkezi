@@ -2663,6 +2663,12 @@ function startPolling() {
    kayıtları bir kez görür; "Tamam" ile en son id kaydedilir ve pencere tekrar çıkmaz. */
 const RELEASES = [
   {
+    id: 28, date: "30 Ekim 2026", title: "Yeni basketbol kuponları", sub: "Bu güncellemede gelenler",
+    items: [
+      ["🎟️", "Futbolla aynı görünüm", "Basketbol kuponları tema sekmeleri, zaman çizelgesi, canlı skor ve paylaşım düğmeleriyle yenilendi."],
+    ],
+  },
+  {
     id: 27, date: "30 Ekim 2026", title: "Basketbol kupon karnesi", sub: "Bu güncellemede gelenler",
     items: [
       ["🎟️", "Kupon karnesi", "Basketbol karnesinde yeni Kuponlar sekmesi: isabet, kâr/zarar, temalar ve sonuçlanan bütün kuponlar."],

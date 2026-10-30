@@ -2,7 +2,7 @@
 /* Basketbol bölümü: NBA ve EuroLeague. Veriler bk-*.json dosyalarından gelir (build_static).
    Sayfalar: #/basket (maçlar), #/basket/mac/<id>, #/basket/lig/<lig>, #/basket/takim/<lig>/<id> */
 
-const BK = { day: null, tab: "ozet", lg: "all", cday: null, ktab: "tercih" };
+const BK = { day: null, tab: "ozet", lg: "all", cday: null, ktab: "tercih", ctheme: "banko" };
 const BK_LG = { nba: "NBA", el: "EuroLeague" };
 const BK_LOGO = { nba: "🏀", el: "🇪🇺" };
 
@@ -222,13 +222,52 @@ async function renderBasketTeam(lg, id) {
 }
 
 /* ---------- kuponlar ---------- */
-function bkCoupon(c) {
-  const done = c.state === "done", paid = c.paid || c.odds;
-  const legs = c.legs.map((l) => `<div class="bkleg"><span class="kst ${l.hit === true ? "ok" : l.hit === false ? "no" : ""}">${l.hit === true ? "✓" : l.hit === false ? "✗" : l.done ? "↩" : timeOf(l.utc)}</span>
-    <div><a href="#/basket/mac/${esc(l.mid)}">${esc(l.home)} - ${esc(l.away)}</a>${l.result ? ` <b>${l.result[0]}-${l.result[1]}</b>` : ""}<small>${esc(l.label)}</small></div><b>${nf(l.odds, 2)}</b></div>`).join("");
-  const stake = COUPON_STAKE, ret = stake * paid;
-  return `<div class="card bkcoupon"><h3>${esc(c.icon)} ${esc(c.name)} <span class="muted">· oran ${nf(c.odds, 2)} · tutma ${pc(c.p)}</span></h3>${legs}
-    <p class="bkstake ${done ? (c.won ? "pos" : "neg") : ""}">${tl(stake)} → ${done ? (c.won ? `${tl(ret)} (${tl(ret - stake, true)})` : `0 ₺ (${tl(-stake, true)})`) : tl(ret)}</p></div>`;
+const BK_THEMES = [["banko", "✅", "Banko", "#2ea043", "Modelin en emin olduğu tercihler; düşük oran, yüksek isabet."],
+  ["fav", "🏆", "Favoriler", "#e3b341", "Favori takımların maç sonucu ve handikap tercihleri."],
+  ["sayi", "🎯", "Sayılar", "#f85149", "Toplam sayı ve takım sayısı tercihleri."]];
+const bkCouponPl = (c) => c.won ? COUPON_STAKE * ((c.paid || c.odds) - 1) : -COUPON_STAKE;
+// futbol kupon kartının aynısı; byId varsa ayaklara logo ve canlı skor eklenir
+function bkCoupon(c, date, byId = {}, open = true) {
+  const done = c.state === "done", th = BK_THEMES.find((x) => x[0] === c.theme) || [];
+  const legs = [...c.legs].sort((a, b) => a.utc.localeCompare(b.utc)).map((l) => {
+    const m = byId[l.mid];
+    return { ...l, logo: l.hlogo || (m && m.home.logo), live: l.hit == null && m && m.state === "live" ? { min: m.clock, score: [m.home.score ?? 0, m.away.score ?? 0] } : null };
+  });
+  const started = c.legs.some((l) => new Date(l.utc) <= new Date());
+  const stake = COUPON_STAKE, ret = stake * (done && c.won ? c.paid || c.odds : c.odds);
+  const status = done ? (c.won ? `<span class="kst ok">✓ Kazandı</span>` : `<span class="kst no">✗ Kaybetti</span>`)
+    : started ? `<span class="kst wait fin" title="Maçlarından biri başladı; kupon artık değişmez.">✓ Son hali · ⏳ Bekliyor</span>`
+    : `<span class="kst wait tbd" title="Kupondaki maçlardan biri başlayınca kupon kesinleşir.">! Değişebilir</span>`;
+  const mini = done ? `<span class="kpl ${c.won ? "pos" : "neg"}">${c.won ? "✓" : "✗"} ${tl(bkCouponPl(c), true)}</span>`
+    : `<span class="kmini kp" title="Tutma ihtimali">%${Math.round(c.p * 100)}</span><span class="kmini ks ${started ? "fin" : "tbd"}" title="${started ? "Son hali" : "Değişebilir"}">${started ? "✓" : "!"}</span>`;
+  const cid = "bk-" + c.id, shared = { ...c, date, legs: c.legs.map((l) => ({ ...l, home: { name: l.home }, away: { name: l.away } })) };
+  COUPON_BY_ID.set(cid, shared);
+  return `<details class="card kupon ogrp ${done ? (c.won ? "won" : "lost") : ""}" style="--c:${th[3] || "#e3b341"}" ${open ? "open" : ""}>
+    <summary>${head(c.icon, `${esc(c.name)} <span class="muted">· ${c.legs.length} maç</span><span class="kodds">${nf(c.odds, 2)}</span>${mini}`)}</summary>
+    <p class="muted kdesc">${esc(th[4] || "")}</p>
+    <div class="klegs ktl">${legs.map((l) => `<div class="ktr ${legState(l)}"><div class="ktime">${esc(timeOf(l.utc))}</div><span class="kdot"></span><div class="kleg ${l.hit === true ? "hit" : l.hit === false ? "miss" : ""}" data-bkm="${esc(l.mid)}">
+      <div class="klt">${l.logo ? `<img src="${esc(l.logo)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}<span>${esc(l.home)} – ${esc(l.away)}</span>
+        ${l.result ? `<b class="kres">${l.result[0]}-${l.result[1]}</b>` : l.live ? `<b class="kres live">● ${esc(l.live.min || "")} ${l.live.score[0]}-${l.live.score[1]}</b>` : ""}</div>
+      <div class="klp"><span class="kpick">${esc(l.label)}</span><small>${pc(l.p)}</small><b>${nf(l.odds, 2)}</b>${legStatus(l)}</div>
+      <div class="kpbar"><span style="width:${Math.round(l.p * 100)}%"></span></div>
+    </div></div>`).join("")}</div>
+    ${couponBar({ ...c, legs })}
+    <div class="kfoot ksum"><span>Tutma ihtimali <b>${pc(c.p)}</b></span>
+      <span class="kstake ${done ? (c.won ? "pos" : "neg") : ""}">${tl(stake)} → ${done ? (c.won ? tl(ret) + ` (${tl(ret - stake, true)})` : `0 ₺ (${tl(-stake, true)})`) : tl(ret)}</span>${status}</div>
+    <div class="kshare"><button class="kbtn" data-share="copy" data-cid="${esc(cid)}">📋 Kopyala</button>${shareBtn("k:" + cid, `${c.icon} ${c.name} · ${nf(c.odds, 2)}`, couponText(shared))}</div>
+  </details>`;
+}
+// kuponun ayağına dokununca basketbol maç sayfası
+$("#view").addEventListener("click", (e) => { const k = e.target.closest("[data-bkm]"); if (k) location.hash = "#/basket/mac/" + k.dataset.bkm; });
+// son 14 günde en çok kazandıran tema
+function bkHotTheme(K) {
+  const since = new Date(Date.now() - 14 * 86400e3).toLocaleDateString("sv-SE");
+  const all = ((K && K.store && K.store.coupons) || []).filter((d) => d.date >= since).flatMap((d) => d.coupons).filter((c) => c.state === "done");
+  const best = BK_THEMES.map(([k, ic, name]) => {
+    const d = all.filter((c) => c.theme === k);
+    return { k, ic, name, n: d.length, h: d.filter((c) => c.won).length, pl: d.reduce((a, c) => a + bkCouponPl(c), 0) };
+  }).filter((t) => t.n >= 3).sort((a, b) => b.pl - a.pl)[0];
+  return best && best.pl > 0 ? best : null;
 }
 async function renderBasketCoupons() {
   const v = $("#view");
@@ -238,18 +277,30 @@ async function renderBasketCoupons() {
   if (!days.some(([d]) => d === BK.cday)) BK.cday = base;
   const bar = bkNav("kupon") + `<div class="ptabs">${days.map(([d, l]) => `<button class="ptab ${d === BK.cday ? "on" : ""}" data-bkc="${d}">${l}</button>`).join("")}</div>`;
   v.innerHTML = bar + skel("list");
-  let D;
-  try { D = await bkGet(`bk-day-${BK.cday}.json`, "Kuponlar bir sonraki güncellemede gelecek."); }
-  catch (e) { v.innerHTML = bar + `<div class="card"><p class="muted">${esc(e.message)}</p></div>`; return; }
+  let D, K;
+  try { [D, K] = await Promise.all([bkGet(`bk-day-${BK.cday}.json`, "Kuponlar bir sonraki güncellemede gelecek."), bkGet("bk-karne.json", "").catch(() => null)]); }
+  catch (e) { v.innerHTML = bar + `<div class="card"><p class="muted">${esc(e.message)}</p></div>`; bkBindCouponDays(); return; }
   if (location.hash !== "#/basket/kupon") return;
-  const cs = D.coupons || [];
-  v.innerHTML = bar + (cs.length ? cs.map(bkCoupon).join("") : `<div class="card"><p class="muted">Bu gün için kupon yok. Kuponlar oranı açıklanmış maçlardan kurulur.</p></div>`)
-    + `<p class="muted">Kuponlar maçlarından biri başlayana kadar değişebilir, başlayınca kilitlenir.</p>`;
-  v.querySelectorAll("[data-bkc]").forEach((b) => b.onclick = () => { BK.cday = b.dataset.bkc; renderBasketCoupons(); });
+  const cs = D.coupons || [], byId = Object.fromEntries(D.matches.map((m) => [m.id, m])), hot = bkHotTheme(K);
+  const title = new Date(BK.cday + "T12:00:00").toLocaleDateString("tr-TR", { weekday: "long", day: "numeric", month: "long" });
+  const intro = `<div class="card" style="--c:#a371f7">${head("🧩", `Günün kuponları <span class="muted">· ${cap(title)}</span>`)}
+    <details class="kinfo"><summary>Kuponlar nasıl hazırlanıyor? ›</summary><p class="muted">Model her gün üç temada kupon hazırlar: Banko üç, Favoriler ve Sayılar ikişer kupon. Her maçtan tek tercih alınır ve bir maç aynı temada tek kupona girer. Tercih başına en az olasılık Banko'da %66, Favoriler'de %60, Sayılar'da %55. Toplam oranlar: Banko 2-3.6, Favoriler 2-4.5, Sayılar 2-5. Kuponda <b>! Değişebilir</b> yazıyorsa oranlar güncellendikçe yenilenebilir; maçlarından biri başlayınca kupon kilitlenir ve <b>✓ Son hali</b> olur.</p></details></div>`;
+  const tabs = `<div class="ptabs ctabs">${BK_THEMES.map(([k, ic, name, color]) => {
+    const n = cs.filter((c) => c.theme === k).length;
+    return `<button class="ptab ${BK.ctheme === k ? "on" : ""}" style="--tc:${color}" data-bkth="${k}">${ic} ${name}${hot && hot.k === k ? " 🔥" : ""}${n ? ` <small>${n}</small>` : ""}</button>`; }).join("")}</div>
+    ${hot ? `<div class="hotnote">🔥 Son 14 günde en çok kazandıran tema: <b>${hot.ic} ${esc(hot.name)}</b> · ${hot.h}/${hot.n} kupon tuttu, <span class="kpl ${hot.pl >= 0 ? "pos" : "neg"}">${tl(hot.pl, true)}</span></div>` : ""}`;
+  const list = cs.filter((c) => c.theme === BK.ctheme);
+  const empty = cs.length ? `<div class="card"><p class="muted">Bu temada bu gün kupon çıkmadı: kurallara uyan yeterli maç yok.</p></div>`
+    : `<div class="card"><p class="muted">Bu gün için kupon yok. Kuponlar oranı açıklanmış maçlardan kurulur.</p></div>`;
+  v.innerHTML = bar + intro + tabs + (list.length ? list.map((c) => bkCoupon(c, BK.cday, byId)).join("") : empty);
+  bkBindCouponDays();
+  v.querySelectorAll("[data-bkth]").forEach((b) => b.onclick = () => { BK.ctheme = b.dataset.bkth; renderBasketCoupons(); });
+}
+function bkBindCouponDays() {
+  $("#view").querySelectorAll("[data-bkc]").forEach((b) => b.onclick = () => { BK.cday = b.dataset.bkc; renderBasketCoupons(); });
 }
 
 /* ---------- karne ---------- */
-const bkCouponPl = (c) => c.won ? COUPON_STAKE * ((c.paid || c.odds) - 1) : -COUPON_STAKE;
 function bkCouponKarne(K) {
   const all = ((K.store || {}).coupons || []).flatMap((d) => d.coupons.map((c) => ({ ...c, date: d.date })));
   const done = all.filter((c) => c.state === "done").sort((a, b) => b.date.localeCompare(a.date));
@@ -264,7 +315,7 @@ function bkCouponKarne(K) {
   }).join("");
   const days = [...new Set(done.map((c) => c.date))].map((d) => {
     const g = done.filter((c) => c.date === d), w = sum(g);
-    return `<h3 class="kath">${esc(cap(new Date(d + "T12:00:00").toLocaleDateString("tr-TR", { day: "numeric", month: "long", weekday: "long" })))} <span class="kpl ${w >= 0 ? "pos" : "neg"}">${tl(w, true)}</span></h3>${g.map(bkCoupon).join("")}`;
+    return `<h3 class="kath">${esc(cap(new Date(d + "T12:00:00").toLocaleDateString("tr-TR", { day: "numeric", month: "long", weekday: "long" })))} <span class="kpl ${w >= 0 ? "pos" : "neg"}">${tl(w, true)}</span></h3>${g.map((c) => bkCoupon(c, d, {}, false)).join("")}`;
   }).join("");
   return `<div class="card" style="--c:#e3b341">${head("🎟️", "Kupon karnesi")}
     <div class="bkexp"><div><small>Tutan</small><b>${won}/${done.length}</b></div><div><small>Oran</small><b>${pc(won / done.length)}</b></div><div><small>Yatırılan</small><b>${tl(staked)}</b></div><div><small>Kâr/zarar</small><b class="${pl >= 0 ? "pos" : "neg"}">${tl(pl, true)}</b></div></div>

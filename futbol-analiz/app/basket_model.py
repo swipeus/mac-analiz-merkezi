@@ -350,7 +350,7 @@ def build_coupons(date, cands):
             for x, _ in legs:
                 prob *= x["p"]
             out.append({"id": f"{key}-{date}-{n}", "theme": key, "name": f"{name} {n}", "icon": icon, "odds": round(odds, 2), "p": round(prob, 3), "state": "pending",
-                        "legs": [{"mid": g["id"], "lg": g["lg"], "utc": g["utc"], "home": g["home"]["short"], "away": g["away"]["short"],
+                        "legs": [{"mid": g["id"], "lg": g["lg"], "utc": g["utc"], "home": g["home"]["short"], "away": g["away"]["short"], "hlogo": g["home"]["logo"],
                                   "code": x["code"], "label": x["label"], "odds": x["odds"], "p": x["p"]} for x, g in legs]})
     return out
 

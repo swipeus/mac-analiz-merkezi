@@ -1109,7 +1109,7 @@ function extrasHtml(b) {
 }
 
 /* ---------- günün kombineleri ---------- */
-const COUPON_STAKE = 1000;
+const COUPON_STAKE = 5000;
 const MOVES_ICON = `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M3 17l5-5 4 3 7-8" fill="none" stroke="#39c5cf" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 7h4v4" fill="none" stroke="#39c5cf" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 21h18" stroke="#8b98a8" stroke-width="1.6" stroke-linecap="round"/></svg>`;
 // kâr/zarar her zaman güncel tutarla hesaplanır (eski kayıtlarda saklanan tutar farklı olabilir)
 const couponProfit = (c) => c.won ? COUPON_STAKE * ((c.paid_odds || c.odds) - 1) : -COUPON_STAKE;
@@ -1210,7 +1210,7 @@ function drawCoupons() {
   const cs = (dayCache.coupons || []).map(normCoupon).filter((c) => themeOf(c) !== "diger");
   const title = new Date(state.date + "T12:00:00").toLocaleDateString("tr-TR", { weekday: "long", day: "numeric", month: "long" });
   const intro = `<div class="card" style="--c:#a371f7">${head("🧩", `Günün kombineleri <span class="muted">· ${cap(title)}</span>`)}
-    <details class="kinfo"><summary>Kuponlar nasıl hazırlanıyor? ›</summary><p class="muted">Model her gün beş temada kupon hazırlar: Banko 5, Gol şöleni, Kornerler, Kartlar ve Değerli oranlar üçer kupon. Her kupon 2-5 maçtan oluşur ve her maçtan tek tercih içerir. Banko'daki bir tercih başka hiçbir kupona girmez; diğer temalarda aynı tercih en fazla iki kuponda olur. Çifte şans 12 ve en çok korner güvenli kuponlara alınmaz. Az maçlı günlerde tema başına daha az kupon çıkar; tutma ihtimali %20'nin altındaki kupon kurulmaz (Banko'da %35). Toplam oranlar: Banko 2-3.5, Kartlar 2-6 (yalnızca kart tercihleri), Gol şöleni ve Kornerler 2.5-6, Değerli oranlar 3-6 (tercih başına en az %58, kupon en az %25). Kuponlar en güncel verilerle yenilenir; bu sürede kuponda <b>! Değişebilir</b> yazar. Kuponlardaki maçlardan ilkinin resmi ilk 11'i açıklanınca model son kontrolü yapar ve kuponları kilitler (<b>✓ Son hali</b>); karneye bu hâliyle kupon başına 1.000 ₺ ile yazılır.</p></details></div>`;
+    <details class="kinfo"><summary>Kuponlar nasıl hazırlanıyor? ›</summary><p class="muted">Model her gün beş temada kupon hazırlar: Banko 5, Gol şöleni, Kornerler, Kartlar ve Değerli oranlar üçer kupon. Her kupon 2-5 maçtan oluşur ve her maçtan tek tercih içerir. Banko'daki bir tercih başka hiçbir kupona girmez; diğer temalarda aynı tercih en fazla iki kuponda olur. Çifte şans 12 ve en çok korner güvenli kuponlara alınmaz. Az maçlı günlerde tema başına daha az kupon çıkar; tutma ihtimali %20'nin altındaki kupon kurulmaz (Banko'da %35). Toplam oranlar: Banko 2-3.5, Kartlar 2-6 (yalnızca kart tercihleri), Gol şöleni ve Kornerler 2.5-6, Değerli oranlar 3-6 (tercih başına en az %58, kupon en az %25). Kuponlar en güncel verilerle yenilenir; bu sürede kuponda <b>! Değişebilir</b> yazar. Kuponlardaki maçlardan ilkinin resmi ilk 11'i açıklanınca model son kontrolü yapar ve kuponları kilitler (<b>✓ Son hali</b>); karneye bu hâliyle kupon başına 5.000 ₺ ile yazılır.</p></details></div>`;
   const tabs = COUPON_THEMES.concat([["katlama", "🔁", "Katlama"]]);
   const hot = hotTheme();
   if (!tabs.some(([k]) => k === couponTab)) couponTab = "banko";
@@ -1317,7 +1317,7 @@ const pickType = (p) => {
   if (st) return `${st[2] ? "Takım" : "Toplam"} ${{ k: "kart", s: "şut", t: "isabetli şut" }[st[1]]} alt/üst`;
   return (p.label || "").replace(/ \(.*\)$/, "");
 };
-const STAKE = 250;
+const STAKE = 1000;
 const rowProfit = (r) => r.pick_hit ? STAKE * (r.pick.odds - 1) : -STAKE;
 const tl = (x, sign) => (sign && x > 0 ? "+" : x < 0 ? "−" : "") + Math.abs(Math.round(x)).toLocaleString("tr-TR") + " ₺";
 const trDay = (utc) => new Date(utc).toLocaleDateString("sv-SE", { timeZone: TZ });
@@ -1332,7 +1332,7 @@ const rate = (h, n) => n ? `%${Math.round(h / n * 100)}` : "—";
 // tek tercih sonuçlandı mı: maç bitti ya da maç sürerken kesinleşti (KG Var, üstler...)
 const pickDecided = (r) => (r.state === "done" || r.pick_early) && (r.pick_hit === true || r.pick_hit === false);
 const liveMid = (lv) => `<div class="sc live">${lv.score[0]} - ${lv.score[1]}</div><div class="sub live">● ${esc(lv.min || "canlı")}</div>`;
-// karne özetleri: tek tercihler (250 ₺), kombineler (1000 ₺), skorlar (yalnızca isabet, bahis yok)
+// karne özetleri: tek tercihler (1000 ₺), kombineler (5000 ₺), skorlar (yalnızca isabet, bahis yok)
 function karneStats() {
   const rows = karneRows || [];
   const done = rows.filter((r) => r.state === "done");
@@ -1455,13 +1455,13 @@ function singlesKarneHtml(s) {
     const types = Object.entries(byType).sort((a, b) => b[1].n - a[1].n);
     const series = {};
     rows.filter((r) => pickDecided(r) && r.pick.odds).forEach((r) => { const k = trDay(r.utc); series[k] = (series[k] || 0) + rowProfit(r); });
-    extra = plChart(series, "Tercih başına 250 ₺") + (types.length ? `<h3>Tercih türüne göre</h3>${ringsHtml(types.map(([lab, t]) => [lab, t.h, t.n]))}` : "");
+    extra = plChart(series, "Tercih başına 1.000 ₺") + (types.length ? `<h3>Tercih türüne göre</h3>${ringsHtml(types.map(([lab, t]) => [lab, t.h, t.n]))}` : "");
     const decided = rows.filter(pickDecided);
     extra += valueKarneHtml(rows) + lessonsHtml() + byLeagueHtml(decided) + calibrationHtml(decided)
       + clvHtml(rows.filter((r) => r.state === "done" || r.live).map((r) => [r.pick.o0, r.pick.odds]), "tercih");
   }
   const note = pick
-    ? `Model her maç için başlama düdüğünden önceki son "en garanti tercihini" kaydeder. Tercihler maç sonucu, çifte şans, karşılıklı gol, gol alt/üst, takım golleri, toplam korner, en çok korner, kırmızı kart ve kombine pazarlardan; oranı 1.30 ve üstü olanlar arasından seçilir. Her tercihe 250 ₺: tutarsa 250 × (oran − 1) kazanç, tutmazsa 250 ₺ kayıp; iade olanlar sayılmaz.`
+    ? `Model her maç için başlama düdüğünden önceki son "en garanti tercihini" kaydeder. Tercihler maç sonucu, çifte şans, karşılıklı gol, gol alt/üst, takım golleri, toplam korner, en çok korner, kırmızı kart ve kombine pazarlardan; oranı 1.30 ve üstü olanlar arasından seçilir. Her tercihe 1.000 ₺: tutarsa 1.000 × (oran − 1) kazanç, tutmazsa 1.000 ₺ kayıp; iade olanlar sayılmaz.`
     : `Skor tahmini, modelin skor dağılımı ile piyasanın skor oranları harmanlanarak beklenen sonuç ve gol sayısıyla tutarlı skorlar arasından seçilir. Skor tahminlerine bahis yapılmaz; yalnızca isabet takip edilir.`;
   const top = `<div class="card" style="--c:${pick ? "#2ea043" : "#a371f7"}">${statKpis(s, pick ? STAKE : 0, pick ? "tercih" : "skor tahmini")}${extra}<p class="muted">${note}</p></div>`;
   const groups = new Map();
@@ -1500,7 +1500,7 @@ function ringsHtml(items) {
       <div class="rl">${esc(lab)}</div><div class="rn muted">${h}/${n}${pl != null ? ` · <span class="${pl >= 0 ? "pos" : "neg"}">${tl(pl, true)}</span>` : ""}</div></div>`;
   }).join("")}</div>`;
 }
-// değerli oran tercihleri: garanti tercihten ayrı izlenir (250 ₺ sabit)
+// değerli oran tercihleri: garanti tercihten ayrı izlenir (1000 ₺ sabit)
 function valueKarneHtml(rows) {
   const v = rows.filter((r) => r.value && r.state === "done" && (r.value_hit === true || r.value_hit === false));
   const pend = rows.filter((r) => r.value && r.state !== "done" && r.state !== "void").length;
@@ -1510,7 +1510,7 @@ function valueKarneHtml(rows) {
   const avg = v.length ? v.reduce((a, r) => a + r.value.odds, 0) / v.length : 0;
   return `<h3>💎 Değerli oran tercihleri</h3><div class="vkarne">
     <div><b>${v.length ? `${h}/${v.length}` : "—"}</b><small>tuttu${v.length ? ` · %${Math.round(h / v.length * 100)}` : ""}</small></div>
-    <div><b class="${pl >= 0 ? "pos" : "neg"}">${v.length ? tl(pl, true) : "—"}</b><small>kâr / zarar (250 ₺)</small></div>
+    <div><b class="${pl >= 0 ? "pos" : "neg"}">${v.length ? tl(pl, true) : "—"}</b><small>kâr / zarar (1.000 ₺)</small></div>
     <div><b>${v.length ? nf(avg, 2) : "—"}</b><small>ortalama oran</small></div>
     <div><b>${pend}</b><small>bekleyen</small></div></div>
     <p class="muted">Garanti tercihten ayrı izlenir. Oranlar daha yüksek olduğu için isabet daha düşük beklenir; ölçü kâr/zarardır.</p>`;
@@ -1591,10 +1591,10 @@ function couponKarneHtml(s) {
   const series = {};
   karneCoupons.filter((c) => c.state === "done").forEach((c) => { series[c.date] = (series[c.date] || 0) + couponProfit(c); });
   const top = `<div class="card" style="--c:#e3b341">${statKpis(s, COUPON_STAKE, "kupon")}
-    ${plChart(series, "Kupon başına 1.000 ₺")}
+    ${plChart(series, "Kupon başına 5.000 ₺")}
     ${themeStats()}
     ${clvHtml(karneCoupons.flatMap((c) => c.legs.filter((l) => !l.void).map((l) => [l.odds, l.close])), "kupon ayağı")}
-    <p class="muted">Günün kombineleri: model her gün beş temada kupon hazırlar (Banko 5, diğerleri üçer; 2-5 maç). Kuponlardaki maçlardan ilkinin resmi ilk 11'i açıklanınca o günün kuponları kilitlenir. Her kupona 1.000 ₺: bütün tercihler tutarsa 1.000 × toplam oran döner, biri bile tutmazsa 1.000 ₺ kayıp. İade olan ya da ertelenen maç kupondan düşer (oranı 1 sayılır). Tutarlar geçmiş kuponlar için de bu tutarla hesaplanır.</p></div>`;
+    <p class="muted">Günün kombineleri: model her gün beş temada kupon hazırlar (Banko 5, diğerleri üçer; 2-5 maç). Kuponlardaki maçlardan ilkinin resmi ilk 11'i açıklanınca o günün kuponları kilitlenir. Her kupona 5.000 ₺: bütün tercihler tutarsa 5.000 × toplam oran döner, biri bile tutmazsa 5.000 ₺ kayıp. İade olan ya da ertelenen maç kupondan düşer (oranı 1 sayılır). Tutarlar geçmiş kuponlar için de bu tutarla hesaplanır.</p></div>`;
   const byDay = new Map();
   karneCoupons.forEach((c) => { if (!byDay.has(c.date)) byDay.set(c.date, []); byDay.get(c.date).push(c); });
   const days = [...byDay.keys()].filter(inWeek).sort().reverse();
@@ -2662,6 +2662,12 @@ function startPolling() {
    Her güncellemede RELEASES'e yeni bir kayıt eklenir (id bir artar). Kişi o cihazda daha önce görmediği
    kayıtları bir kez görür; "Tamam" ile en son id kaydedilir ve pencere tekrar çıkmaz. */
 const RELEASES = [
+  {
+    id: 26, date: "30 Ekim 2026", title: "Yeni tutarlar", sub: "Bu güncellemede gelenler",
+    items: [
+      ["💰", "1.000 ₺ ve 5.000 ₺", "Futbol ve basketbolda her tek tercihe 1.000 ₺, her kupona 5.000 ₺ oynanmış gibi hesaplanır; geçmiş sonuçlar da bu tutarlarla güncellendi."],
+    ],
+  },
   {
     id: 25, date: "30 Ekim 2026", title: "Basketbola maç yorumu", sub: "Bu güncellemede gelenler",
     items: [

@@ -27,7 +27,7 @@ SIGMA_ALONE = {"nba": (10.0, 21.5), "el": (10.0, 18.0)}
 TEAM_SIGMA = 11.5        # takım toplamı sapması
 
 MIN_ODDS, MAX_ODDS = 1.15, 2.30   # en garanti tercihin oran aralığı
-STAKE = 100              # karnede tek tercih başına yatırılan tutar
+STAKE = 1000             # karnede tek tercih başına yatırılan tutar
 
 # temalar: anahtar, ad, simge, tercih türü süzgeci, en düşük olasılık, ayak oranı, toplam oran, kupon adedi
 THEMES = [

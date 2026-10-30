@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 
 from .analysis import SAFE_CODES, STAT_CODE, TOTAL_CODE, code_label, code_odds, early_hit, fav_side, fav_under, pick_hit, stat_ok
 
-STAKE = 1000           # kupon başına
+STAKE = 5000           # kupon başına
 PER_THEME = 3          # her temada günlük kupon sayısı
 MAX_LEGS = 5
 MAX_USE = 2            # aynı tercih günün en fazla kaç kuponunda yer alır

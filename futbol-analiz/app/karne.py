@@ -1,6 +1,6 @@
 """Model karnesi: her maç için başlamadan önceki son tahmin saklanır, maç bitince sonuçla karşılaştırılır.
 
-Karne üç başlıkta tutulur: tek tercihler (her birine 100 ₺), günün kombineleri (kupon başına 250 ₺) ve
+Karne üç başlıkta tutulur: tek tercihler (her birine 1000 ₺), günün kombineleri (kupon başına 5000 ₺) ve
 skor tahminleri (her birine 10 ₺, skorun oranıyla). KARNE_START öncesindeki kayıtlar yayınlanmaz (sıfırlama).
 """
 from datetime import datetime

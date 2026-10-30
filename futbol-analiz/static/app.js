@@ -2052,7 +2052,7 @@ async function renderMoves() {
   let D;
   try { D = await api("/api/oddsmoves"); }
   catch (e) { v.innerHTML = `<div class="card"><p>${esc(e.message)}</p></div>`; return; }
-  if (!state.oranlar) return;
+  if (!location.hash.startsWith("#/oranlar")) return;
   drawMoves(D);
 }
 function drawMoves(D) {
@@ -2651,7 +2651,7 @@ function startPolling() {
       const evs = await getData("events.json");
       evs.filter((e) => e.id > lastEv).reverse().forEach((ev) => addFeed(ev, true));
       if (evs.length) { lastEv = Math.max(lastEv, evs[0].id); safeSet("lastEventId", String(lastEv)); }
-      /^#\/(paylas|takim|karsilastir|hakem)/.test(location.hash) ? null : state.lig ? renderLeague(state.lig) : state.oranlar ? renderMoves() : state.kombine ? (dayCache = null, renderCoupons()) : state.karne ? renderKarne(true) : state.player ? renderPlayer(state.player, true) : state.current ? renderMatch(state.current, true) : renderDay(true);
+      /^#\/(paylas|takim|karsilastir|hakem|basket)/.test(location.hash) ? null : state.lig ? renderLeague(state.lig) : state.oranlar ? renderMoves() : state.kombine ? (dayCache = null, renderCoupons()) : state.karne ? renderKarne(true) : state.player ? renderPlayer(state.player, true) : state.current ? renderMatch(state.current, true) : renderDay(true);
     } catch { /* bir sonraki turda tekrar dener */ }
   };
 

@@ -609,7 +609,6 @@ body.chat-open { overflow: hidden; }
 .hl.kombi .ic { background: rgba(163,113,247,.16); }
 .hl.kombi { border-color: rgba(163,113,247,.45); }
 .kodds { margin-left: 8px; font-weight: 800; font-size: 16px; color: #e3b341; background: rgba(227,179,65,.14); padding: 1px 10px; border-radius: 999px; font-variant-numeric: tabular-nums; }
-.kdesc { margin: -4px 0 8px; font-size: 13px; }
 .klegs { display: flex; flex-direction: column; gap: 6px; }
 .kleg { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: var(--panel2); cursor: pointer; }
 .kleg.hit { border-color: rgba(46,160,67,.6); background: rgba(46,160,67,.08); }
@@ -782,8 +781,6 @@ a#movesBtn { display: inline-flex; align-items: center; justify-content: center;
 .cv small { font-size: 11px; }
 .cv .pos { color: #3fb950; } .cv .neg { color: #f85149; }
 @media (max-width: 520px) { .calrow { grid-template-columns: 105px minmax(0, 1fr) 62px; font-size: 12px; } }
-.hotnote { margin: 8px 2px 4px; font-size: 13px; color: var(--muted); }
-.hotnote b { color: var(--text); }
 
 /* ===== görsel iyileştirmeler ===== */
 /* 3) öne çıkanlar: yatay kaydırılan şerit, büyük logolar, tek satır adlar */
@@ -834,9 +831,6 @@ a#movesBtn { display: inline-flex; align-items: center; justify-content: center;
   .kpi .s { font-size: 11px; line-height: 1.35; }
 }
 
-.kinfo > summary { cursor: pointer; color: var(--accent); font-size: 13px; font-weight: 700; list-style: none; }
-.kinfo > summary::-webkit-details-marker { display: none; }
-.kinfo[open] > summary { margin-bottom: 6px; }
 .mvmore { display: block; padding: 4px 0 0 26px; font-size: 12px; }
 /* öne çıkanlarda iki takım alt alta (tek satıra sığmayınca kesiliyordu) */
 .hl .t { flex-direction: column; align-items: flex-start !important; gap: 2px !important; }
@@ -1159,6 +1153,7 @@ body.on-home footer.foot { display: block; }
 .katpath span { padding: 2px 8px; border-radius: 999px; background: rgba(46,160,67,.14); color: #7ee2a8; }
 .katpath span.now { background: #2ea043; color: #fff; } .katpath i { font-style: normal; color: var(--muted); }
 .kath { margin: 14px 4px 6px; }
+.kdate { margin: 12px 4px 0; font-weight: 700; color: var(--muted); }
 .kathist { border-top: 1px solid var(--line); }
 .kathist summary { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; padding: 8px 0; cursor: pointer; list-style: none; font-size: 13px; }
 .kathist summary::-webkit-details-marker { display: none; }

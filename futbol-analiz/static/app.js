@@ -1180,7 +1180,6 @@ function couponCard(c, draft, open = true, kd = "") {
     : `<span class="kmini kp" title="Tutma ihtimali">%${Math.round(c.p * 100)}</span><span class="kmini ks ${draft ? "tbd" : "fin"}" title="${draft ? "Değişebilir" : "Son hali"}">${draft ? "!" : "✓"}</span>`;
   return `<details class="card kupon ogrp ${done ? (c.won ? "won" : "lost") : ""}" style="--c:${color}" ${kd ? `data-kd="${esc(kd)}"` : ""} ${open ? "open" : ""}>
     <summary>${head(c.icon || "🧩", `${esc(c.name)} <span class="muted">· ${c.legs.length} maç</span><span class="kodds">${nf(c.odds, 2)}</span>${mini}`)}</summary>
-    <p class="muted kdesc">${esc(c.desc || "")}</p>
     <div class="klegs ktl">${c.legs.map((l) => `<div class="ktr ${legState(l)}"><div class="ktime">${esc(timeOf(l.utc))}</div><span class="kdot"></span><div class="kleg ${l.hit === true ? "hit" : l.hit === false ? "miss" : ""}" data-mid="${l.mid}">
       <div class="klt"><img src="${teamLogo(l.home.id)}" alt="" onerror="this.remove()"><span>${esc(l.home.name)} – ${esc(l.away.name)}</span>
         ${l.result ? `<b class="kres">${l.result[0]}-${l.result[1]}</b>` : l.live ? `<b class="kres live">● ${esc(l.live.min || "")} ${l.live.score[0]}-${l.live.score[1]}</b>` : ""}</div>
@@ -1189,7 +1188,7 @@ function couponCard(c, draft, open = true, kd = "") {
       <div class="kpbar"><span style="width:${Math.round(l.p * 100)}%"></span></div>
     </div></div>`).join("")}</div>
     ${couponBar(c)}
-    <div class="kfoot ksum"><span>Tutma ihtimali <b>${pc(c.p)}</b></span>
+    <div class="kfoot ksum">
       ${stake == null ? `<span class="kstake">Tutar önceki kupon sonuçlanınca belli olur</span>` : `<span class="kstake ${done ? (c.won ? "pos" : "neg") : ""}">${tl(stake)} → ${done ? (c.won ? tl(ret) + ` (${tl(ret - stake, true)})` : `0 ₺ (${tl(-stake, true)})`) : tl(ret)}</span>`}${status}</div>
     <div class="kshare"><button class="kbtn" data-share="copy" data-cid="${esc(c.id)}">📋 Kopyala</button>${shareBtn("k:" + c.id, `${c.icon || "🧩"} ${c.name} · ${nf(c.odds, 2)}`, couponText(c))}</div>
   </details>`;
@@ -1209,18 +1208,16 @@ function drawCoupons() {
   const v = $("#view");
   const cs = (dayCache.coupons || []).map(normCoupon).filter((c) => themeOf(c) !== "diger");
   const title = new Date(state.date + "T12:00:00").toLocaleDateString("tr-TR", { weekday: "long", day: "numeric", month: "long" });
-  const intro = `<div class="card" style="--c:#a371f7">${head("🧩", `Günün kombineleri <span class="muted">· ${cap(title)}</span>`)}
-    <details class="kinfo"><summary>Kuponlar nasıl hazırlanıyor? ›</summary><p class="muted">Model her gün beş temada kupon hazırlar: Banko 5, Gol şöleni, Kornerler, Kartlar ve Değerli oranlar üçer kupon. Her kupon 2-5 maçtan oluşur ve her maçtan tek tercih içerir. Banko'daki bir tercih başka hiçbir kupona girmez; aynı tercih Katlama dahil en fazla iki kuponda olur. Çifte şans 12 ve en çok korner güvenli kuponlara alınmaz. Az maçlı günlerde tema başına daha az kupon çıkar; tutma ihtimali %20'nin altındaki kupon kurulmaz (Banko'da %35). Toplam oranlar: Banko 2-3.5, Kartlar 2-6 (yalnızca kart tercihleri), Gol şöleni ve Kornerler 2.5-6, Değerli oranlar 3-6 (tercih başına en az %58, kupon en az %25). Kuponlar en güncel verilerle yenilenir; bu sürede kuponda <b>! Değişebilir</b> yazar. Kuponlardaki maçlardan ilkinin resmi ilk 11'i açıklanınca model son kontrolü yapar ve kuponları kilitler (<b>✓ Son hali</b>); karneye bu hâliyle kupon başına 5.000 ₺ ile yazılır.</p></details></div>`;
+  const intro = `<p class="kdate">${esc(cap(title))}</p>`;
   const tabs = COUPON_THEMES.concat([["katlama", "🔁", "Katlama"]]);
   const hot = hotTheme();
   if (!tabs.some(([k]) => k === couponTab)) couponTab = "banko";
   const list = cs.filter((c) => themeOf(c) === couponTab);
   const bar = `<div class="ptabs ctabs">${tabs.map(([k, ic, name]) => {
     const n = cs.filter((c) => themeOf(c) === k).length;
-    return `<button class="ptab ${couponTab === k ? "on" : ""}" style="--tc:${THEME_COLOR[k] || "var(--accent)"}" data-ct="${k}">${ic} ${name}${hot && hot.k === k ? " 🔥" : ""}${n ? ` <small>${n}</small>` : ""}</button>`; }).join("")}</div>
-  ${hot ? `<div class="hotnote">🔥 Son 14 günde en çok kazandıran tema: <b>${hot.ic} ${esc(hot.name)}</b> · ${hot.h}/${hot.n} kupon tuttu, <span class="kpl ${hot.pl >= 0 ? "pos" : "neg"}">${tl(hot.pl, true)}</span></div>` : ""}`;
-  const empty = cs.length ? `<div class="card"><p class="muted">Bu temada bugün kupon çıkmadı: kurallara (oran aralığı, tercih başına yüksek olasılık, aynı tercihin en fazla iki kuponda olması) uyan yeterli maç yok.</p></div>`
-    : `<div class="card"><p class="muted">Bu gün için henüz kombine yok. Kombineler, oranları açıklanmış ve başlamamış en az 2 maç olduğunda hazırlanır.</p></div>`;
+    return `<button class="ptab ${couponTab === k ? "on" : ""}" style="--tc:${THEME_COLOR[k] || "var(--accent)"}" data-ct="${k}">${ic} ${name}${hot && hot.k === k ? " 🔥" : ""}${n ? ` <small>${n}</small>` : ""}</button>`; }).join("")}</div>`;
+  const empty = cs.length ? `<div class="card"><p class="muted">Bu temada kupon yok.</p></div>`
+    : `<div class="card"><p class="muted">Bu gün için henüz kupon yok.</p></div>`;
   v.innerHTML = intro + bar + (couponTab === "katlama" ? `<div id="katBox">${skel("list")}</div>` : list.length ? list.map((c) => couponCard(c, !dayCache.coupons_locked)).join("") : empty);
   v.querySelectorAll("[data-ct]").forEach((b) => b.onclick = () => { couponTab = b.dataset.ct; drawCoupons(); });
   if (couponTab === "katlama") drawKatlama();
@@ -1246,8 +1243,7 @@ async function drawKatlama() {
       <div><span>Kupon</span><b>${won}/${done.length}</b><small>tuttu</small></div>
       <div><span>Seriler</span><b>${(K.closed || []).filter((x) => x.result === "hedef").length} hedef · ${(K.closed || []).filter((x) => x.result === "kayıp").length} kayıp</b><small>en uzun ${K.best} gün</small></div>
     </div>
-    ${path.length > 1 ? `<div class="katpath">${path.map((x, i) => `<span class="${i === path.length - 1 ? "now" : ""}">${shortTl(x).replace(/^\+/, "")} ₺</span>`).join("<i>→</i>")}</div>` : ""}
-    <p class="muted">Her gün tek kupon: toplam oran 1.90-3.00, her tercihin model olasılığı en az %65. ${tl(K.start_stake)} ile başlar; kazanınca dönen paranın tamamı ertesi günün kuponuna yatırılır (1.000 → 2.000 → 4.000 gibi). <b>${goal} gün üst üste kazanınca seri kapanır:</b> kârın %${Math.round((R.reinvest || 0.5) * 100)}'si ile yeni seri başlar, ana para ve kârın kalanı kenara alınır (örnek: 1.000 → 8.000 olunca 4.500 kenara, yeni seri 3.500 ile). Kaybedince seri biter, ertesi gün cepten ${tl(K.start_stake)} ile yeni seri başlar. Diğer kuponlardan bağımsızdır (aynı tercih başka kuponlarda da olabilir) ve karnenin kâr/zararına eklenmez. Kupon, maçlarından birinin resmi 11'i açıklanınca kilitlenir.</p></div>`;
+    ${path.length > 1 ? `<div class="katpath">${path.map((x, i) => `<span class="${i === path.length - 1 ? "now" : ""}">${shortTl(x).replace(/^\+/, "")} ₺</span>`).join("<i>→</i>")}</div>` : ""}</div>`;
   const cards = open.map((d) => `<h3 class="kath">${esc(cap(fmt(d.date)))}</h3>` + couponCard({ ...d.coupon, kstake: d.stake, name: `Katlama · ${d.series}. seri` }, !d.locked)).join("");
   const hist = done.length ? `<div class="card" style="--c:#58a6ff">${head("📜", "Geçmiş")}${done.map((d) => {
     const c = d.coupon;
@@ -2662,6 +2658,12 @@ function startPolling() {
    Her güncellemede RELEASES'e yeni bir kayıt eklenir (id bir artar). Kişi o cihazda daha önce görmediği
    kayıtları bir kez görür; "Tamam" ile en son id kaydedilir ve pencere tekrar çıkmaz. */
 const RELEASES = [
+  {
+    id: 30, date: "31 Ekim 2026", title: "Sade kupon sayfası", sub: "Bu güncellemede gelenler",
+    items: [
+      ["🧹", "Daha az yazı", "Futbol ve basketbol kupon sayfalarından açıklama yazıları kaldırıldı."],
+    ],
+  },
   {
     id: 29, date: "31 Ekim 2026", title: "Basketbol kupon kilidi", sub: "Bu güncellemede gelenler",
     items: [

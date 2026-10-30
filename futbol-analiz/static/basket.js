@@ -222,9 +222,7 @@ async function renderBasketTeam(lg, id) {
 }
 
 /* ---------- kuponlar ---------- */
-const BK_THEMES = [["banko", "✅", "Banko", "#2ea043", "Modelin en emin olduğu tercihler; düşük oran, yüksek isabet."],
-  ["fav", "🏆", "Favoriler", "#e3b341", "Favori takımların maç sonucu ve handikap tercihleri."],
-  ["sayi", "🎯", "Sayılar", "#f85149", "Toplam sayı ve takım sayısı tercihleri."]];
+const BK_THEMES = [["banko", "✅", "Banko", "#2ea043"], ["fav", "🏆", "Favoriler", "#e3b341"], ["sayi", "🎯", "Sayılar", "#f85149"]];
 const bkCouponPl = (c) => c.won ? COUPON_STAKE * ((c.paid || c.odds) - 1) : -COUPON_STAKE;
 // futbol kupon kartının aynısı; byId varsa ayaklara logo ve canlı skor eklenir
 function bkCoupon(c, date, byId = {}, open = true) {
@@ -244,7 +242,6 @@ function bkCoupon(c, date, byId = {}, open = true) {
   COUPON_BY_ID.set(cid, shared);
   return `<details class="card kupon ogrp ${done ? (c.won ? "won" : "lost") : ""}" style="--c:${th[3] || "#e3b341"}" ${open ? "open" : ""}>
     <summary>${head(c.icon, `${esc(c.name)} <span class="muted">· ${c.legs.length} maç</span><span class="kodds">${nf(c.odds, 2)}</span>${mini}`)}</summary>
-    <p class="muted kdesc">${esc(th[4] || "")}</p>
     <div class="klegs ktl">${legs.map((l) => `<div class="ktr ${legState(l)}"><div class="ktime">${esc(timeOf(l.utc))}</div><span class="kdot"></span><div class="kleg ${l.hit === true ? "hit" : l.hit === false ? "miss" : ""}" data-bkm="${esc(l.mid)}">
       <div class="klt">${l.logo ? `<img src="${esc(l.logo)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}<span>${esc(l.home)} – ${esc(l.away)}</span>
         ${l.result ? `<b class="kres">${l.result[0]}-${l.result[1]}</b>` : l.live ? `<b class="kres live">● ${esc(l.live.min || "")} ${l.live.score[0]}-${l.live.score[1]}</b>` : ""}</div>
@@ -252,7 +249,7 @@ function bkCoupon(c, date, byId = {}, open = true) {
       <div class="kpbar"><span style="width:${Math.round(l.p * 100)}%"></span></div>
     </div></div>`).join("")}</div>
     ${couponBar({ ...c, legs })}
-    <div class="kfoot ksum"><span>Tutma ihtimali <b>${pc(c.p)}</b></span>
+    <div class="kfoot ksum">
       <span class="kstake ${done ? (c.won ? "pos" : "neg") : ""}">${tl(stake)} → ${done ? (c.won ? tl(ret) + ` (${tl(ret - stake, true)})` : `0 ₺ (${tl(-stake, true)})`) : tl(ret)}</span>${status}</div>
     <div class="kshare"><button class="kbtn" data-share="copy" data-cid="${esc(cid)}">📋 Kopyala</button>${shareBtn("k:" + cid, `${c.icon} ${c.name} · ${nf(c.odds, 2)}`, couponText(shared))}</div>
   </details>`;
@@ -282,17 +279,13 @@ async function renderBasketCoupons() {
   catch (e) { v.innerHTML = bar + `<div class="card"><p class="muted">${esc(e.message)}</p></div>`; bkBindCouponDays(); return; }
   if (location.hash !== "#/basket/kupon") return;
   const cs = D.coupons || [], byId = Object.fromEntries(D.matches.map((m) => [m.id, m])), hot = bkHotTheme(K);
-  const title = new Date(BK.cday + "T12:00:00").toLocaleDateString("tr-TR", { weekday: "long", day: "numeric", month: "long" });
-  const intro = `<div class="card" style="--c:#a371f7">${head("🧩", `Günün kuponları <span class="muted">· ${cap(title)}</span>`)}
-    <details class="kinfo"><summary>Kuponlar nasıl hazırlanıyor? ›</summary><p class="muted">Model her gün üç temada kupon hazırlar: Banko üç, Favoriler ve Sayılar ikişer kupon. Her maçtan tek tercih alınır, bir maç aynı temada tek kupona girer ve aynı tercih en fazla iki kupona girer. Tercih başına en az olasılık Banko'da %66, Favoriler'de %60, Sayılar'da %55. Toplam oranlar: Banko 2-3.6, Favoriler 2-4.5, Sayılar 2-5. Kuponda <b>! Değişebilir</b> yazıyorsa oranlar güncellendikçe yenilenebilir; kupondaki ilk maça 1 saat kala kupon kilitlenir ve <b>✓ Son hali</b> olur.</p></details></div>`;
   const tabs = `<div class="ptabs ctabs">${BK_THEMES.map(([k, ic, name, color]) => {
     const n = cs.filter((c) => c.theme === k).length;
-    return `<button class="ptab ${BK.ctheme === k ? "on" : ""}" style="--tc:${color}" data-bkth="${k}">${ic} ${name}${hot && hot.k === k ? " 🔥" : ""}${n ? ` <small>${n}</small>` : ""}</button>`; }).join("")}</div>
-    ${hot ? `<div class="hotnote">🔥 Son 14 günde en çok kazandıran tema: <b>${hot.ic} ${esc(hot.name)}</b> · ${hot.h}/${hot.n} kupon tuttu, <span class="kpl ${hot.pl >= 0 ? "pos" : "neg"}">${tl(hot.pl, true)}</span></div>` : ""}`;
+    return `<button class="ptab ${BK.ctheme === k ? "on" : ""}" style="--tc:${color}" data-bkth="${k}">${ic} ${name}${hot && hot.k === k ? " 🔥" : ""}${n ? ` <small>${n}</small>` : ""}</button>`; }).join("")}</div>`;
   const list = cs.filter((c) => c.theme === BK.ctheme);
-  const empty = cs.length ? `<div class="card"><p class="muted">Bu temada bu gün kupon çıkmadı: kurallara uyan yeterli maç yok.</p></div>`
-    : `<div class="card"><p class="muted">Bu gün için kupon yok. Kuponlar oranı açıklanmış maçlardan kurulur.</p></div>`;
-  v.innerHTML = bar + intro + tabs + (list.length ? list.map((c) => bkCoupon(c, BK.cday, byId)).join("") : empty);
+  const empty = cs.length ? `<div class="card"><p class="muted">Bu temada kupon yok.</p></div>`
+    : `<div class="card"><p class="muted">Bu gün için henüz kupon yok.</p></div>`;
+  v.innerHTML = bar + tabs + (list.length ? list.map((c) => bkCoupon(c, BK.cday, byId)).join("") : empty);
   bkBindCouponDays();
   v.querySelectorAll("[data-bkth]").forEach((b) => b.onclick = () => { BK.ctheme = b.dataset.bkth; renderBasketCoupons(); });
 }

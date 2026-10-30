@@ -233,13 +233,13 @@ function bkCoupon(c, date, byId = {}, open = true) {
     const m = byId[l.mid];
     return { ...l, logo: l.hlogo || (m && m.home.logo), live: l.hit == null && m && m.state === "live" ? { min: m.clock, score: [m.home.score ?? 0, m.away.score ?? 0] } : null };
   });
-  const started = c.legs.some((l) => new Date(l.utc) <= new Date());
+  const locked = c.legs.some((l) => new Date(l.utc) - 3600e3 <= Date.now());  // ilk maça 1 saat kala kesinleşir
   const stake = COUPON_STAKE, ret = stake * (done && c.won ? c.paid || c.odds : c.odds);
   const status = done ? (c.won ? `<span class="kst ok">✓ Kazandı</span>` : `<span class="kst no">✗ Kaybetti</span>`)
-    : started ? `<span class="kst wait fin" title="Maçlarından biri başladı; kupon artık değişmez.">✓ Son hali · ⏳ Bekliyor</span>`
-    : `<span class="kst wait tbd" title="Kupondaki maçlardan biri başlayınca kupon kesinleşir.">! Değişebilir</span>`;
+    : locked ? `<span class="kst wait fin" title="İlk maçına 1 saat kaldı; kupon artık değişmez.">✓ Son hali · ⏳ Bekliyor</span>`
+    : `<span class="kst wait tbd" title="Kupondaki ilk maça 1 saat kala kupon kesinleşir.">! Değişebilir</span>`;
   const mini = done ? `<span class="kpl ${c.won ? "pos" : "neg"}">${c.won ? "✓" : "✗"} ${tl(bkCouponPl(c), true)}</span>`
-    : `<span class="kmini kp" title="Tutma ihtimali">%${Math.round(c.p * 100)}</span><span class="kmini ks ${started ? "fin" : "tbd"}" title="${started ? "Son hali" : "Değişebilir"}">${started ? "✓" : "!"}</span>`;
+    : `<span class="kmini kp" title="Tutma ihtimali">%${Math.round(c.p * 100)}</span><span class="kmini ks ${locked ? "fin" : "tbd"}" title="${locked ? "Son hali" : "Değişebilir"}">${locked ? "✓" : "!"}</span>`;
   const cid = "bk-" + c.id, shared = { ...c, date, legs: c.legs.map((l) => ({ ...l, home: { name: l.home }, away: { name: l.away } })) };
   COUPON_BY_ID.set(cid, shared);
   return `<details class="card kupon ogrp ${done ? (c.won ? "won" : "lost") : ""}" style="--c:${th[3] || "#e3b341"}" ${open ? "open" : ""}>
@@ -284,7 +284,7 @@ async function renderBasketCoupons() {
   const cs = D.coupons || [], byId = Object.fromEntries(D.matches.map((m) => [m.id, m])), hot = bkHotTheme(K);
   const title = new Date(BK.cday + "T12:00:00").toLocaleDateString("tr-TR", { weekday: "long", day: "numeric", month: "long" });
   const intro = `<div class="card" style="--c:#a371f7">${head("🧩", `Günün kuponları <span class="muted">· ${cap(title)}</span>`)}
-    <details class="kinfo"><summary>Kuponlar nasıl hazırlanıyor? ›</summary><p class="muted">Model her gün üç temada kupon hazırlar: Banko üç, Favoriler ve Sayılar ikişer kupon. Her maçtan tek tercih alınır, bir maç aynı temada tek kupona girer ve aynı tercih en fazla iki kupona girer. Tercih başına en az olasılık Banko'da %66, Favoriler'de %60, Sayılar'da %55. Toplam oranlar: Banko 2-3.6, Favoriler 2-4.5, Sayılar 2-5. Kuponda <b>! Değişebilir</b> yazıyorsa oranlar güncellendikçe yenilenebilir; maçlarından biri başlayınca kupon kilitlenir ve <b>✓ Son hali</b> olur.</p></details></div>`;
+    <details class="kinfo"><summary>Kuponlar nasıl hazırlanıyor? ›</summary><p class="muted">Model her gün üç temada kupon hazırlar: Banko üç, Favoriler ve Sayılar ikişer kupon. Her maçtan tek tercih alınır, bir maç aynı temada tek kupona girer ve aynı tercih en fazla iki kupona girer. Tercih başına en az olasılık Banko'da %66, Favoriler'de %60, Sayılar'da %55. Toplam oranlar: Banko 2-3.6, Favoriler 2-4.5, Sayılar 2-5. Kuponda <b>! Değişebilir</b> yazıyorsa oranlar güncellendikçe yenilenebilir; kupondaki ilk maça 1 saat kala kupon kilitlenir ve <b>✓ Son hali</b> olur.</p></details></div>`;
   const tabs = `<div class="ptabs ctabs">${BK_THEMES.map(([k, ic, name, color]) => {
     const n = cs.filter((c) => c.theme === k).length;
     return `<button class="ptab ${BK.ctheme === k ? "on" : ""}" style="--tc:${color}" data-bkth="${k}">${ic} ${name}${hot && hot.k === k ? " 🔥" : ""}${n ? ` <small>${n}</small>` : ""}</button>`; }).join("")}</div>

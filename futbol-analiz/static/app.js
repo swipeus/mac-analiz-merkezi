@@ -2663,6 +2663,12 @@ function startPolling() {
    kayıtları bir kez görür; "Tamam" ile en son id kaydedilir ve pencere tekrar çıkmaz. */
 const RELEASES = [
   {
+    id: 29, date: "31 Ekim 2026", title: "Basketbol kupon kilidi", sub: "Bu güncellemede gelenler",
+    items: [
+      ["🔒", "1 saat kala kesinleşir", "Basketbol kuponları, içindeki ilk maçın başlamasına 1 saat kala kilitlenir ve artık değişmez."],
+    ],
+  },
+  {
     id: 28, date: "30 Ekim 2026", title: "Yeni basketbol kuponları", sub: "Bu güncellemede gelenler",
     items: [
       ["🎟️", "Futbolla aynı görünüm", "Basketbol kuponları tema sekmeleri, zaman çizelgesi, canlı skor ve paylaşım düğmeleriyle yenilendi."],

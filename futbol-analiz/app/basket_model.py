@@ -10,7 +10,7 @@ import math
 import re
 import time
 import unicodedata
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 log = logging.getLogger("basket")
 
@@ -27,6 +27,7 @@ SIGMA_ALONE = {"nba": (10.0, 21.5), "el": (10.0, 18.0)}
 TEAM_SIGMA = 11.5        # takım toplamı sapması
 
 MIN_ODDS, MAX_ODDS = 1.15, 2.30   # en garanti tercihin oran aralığı
+LOCK_BEFORE = timedelta(hours=1)  # kupon, ilk maçına bu kadar kala kesinleşir
 MAX_USE = 2              # aynı tercih günün en fazla kaç kuponunda yer alır
 MAX_USE_FROM = "2026-10-31"
 STAKE = 1000             # karnede tek tercih başına yatırılan tutar
@@ -362,11 +363,12 @@ def build_coupons(date, cands, kept=()):
 
 
 def update_coupons(store, date, cands):
-    """Günün ilk maçı başlayana kadar kuponlar yenilenir; bir kuponun maçı başlayınca o kupon donar."""
+    """Kuponlar yenilenir; bir kuponun ilk maçına LOCK_BEFORE kala o kupon kesinleşir ve donar."""
     doc = store.bk_get("coupons", date) or {"date": date, "coupons": []}
     now = datetime.now(timezone.utc)
-    started = lambda c: any(datetime.fromisoformat(l["utc"].replace("Z", "+00:00")) <= now for l in c["legs"])  # noqa: E731
-    kept = [c for c in doc["coupons"] if c.get("state") == "done" or started(c)]
+    soon = lambda g: datetime.fromisoformat(g["utc"].replace("Z", "+00:00")) <= now + LOCK_BEFORE  # noqa: E731
+    kept = [c for c in doc["coupons"] if c.get("state") == "done" or any(soon(l) for l in c["legs"])]
+    cands = [(g, o) for g, o in cands if not soon(g)]  # kilit süresine girmiş maç yeni kupona alınmaz
     if cands:
         taken = {c["id"] for c in kept}
         kept += [c for c in build_coupons(date, cands, kept) if c["id"] not in taken]

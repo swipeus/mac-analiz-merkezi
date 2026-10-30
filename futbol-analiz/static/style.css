@@ -1154,6 +1154,8 @@ body.on-home footer.foot { display: block; }
 .katpath span.now { background: #2ea043; color: #fff; } .katpath i { font-style: normal; color: var(--muted); }
 .kath { margin: 14px 4px 6px; }
 .kdate { margin: 12px 4px 0; font-weight: 700; color: var(--muted); }
+.hotnote { margin: 8px 2px 4px; font-size: 13px; color: var(--muted); }
+.hotnote b { color: var(--text); }
 .kathist { border-top: 1px solid var(--line); }
 .kathist summary { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; padding: 8px 0; cursor: pointer; list-style: none; font-size: 13px; }
 .kathist summary::-webkit-details-marker { display: none; }

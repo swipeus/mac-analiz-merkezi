@@ -281,7 +281,8 @@ async function renderBasketCoupons() {
   const cs = D.coupons || [], byId = Object.fromEntries(D.matches.map((m) => [m.id, m])), hot = bkHotTheme(K);
   const tabs = `<div class="ptabs ctabs">${BK_THEMES.map(([k, ic, name, color]) => {
     const n = cs.filter((c) => c.theme === k).length;
-    return `<button class="ptab ${BK.ctheme === k ? "on" : ""}" style="--tc:${color}" data-bkth="${k}">${ic} ${name}${hot && hot.k === k ? " 🔥" : ""}${n ? ` <small>${n}</small>` : ""}</button>`; }).join("")}</div>`;
+    return `<button class="ptab ${BK.ctheme === k ? "on" : ""}" style="--tc:${color}" data-bkth="${k}">${ic} ${name}${hot && hot.k === k ? " 🔥" : ""}${n ? ` <small>${n}</small>` : ""}</button>`; }).join("")}</div>
+    ${hot ? `<div class="hotnote">🔥 Son 14 günde en çok kazandıran tema: <b>${hot.ic} ${esc(hot.name)}</b> · ${hot.h}/${hot.n} kupon tuttu, <span class="kpl ${hot.pl >= 0 ? "pos" : "neg"}">${tl(hot.pl, true)}</span></div>` : ""}`;
   const list = cs.filter((c) => c.theme === BK.ctheme);
   const empty = cs.length ? `<div class="card"><p class="muted">Bu temada kupon yok.</p></div>`
     : `<div class="card"><p class="muted">Bu gün için henüz kupon yok.</p></div>`;

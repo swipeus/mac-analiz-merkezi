@@ -1215,7 +1215,8 @@ function drawCoupons() {
   const list = cs.filter((c) => themeOf(c) === couponTab);
   const bar = `<div class="ptabs ctabs">${tabs.map(([k, ic, name]) => {
     const n = cs.filter((c) => themeOf(c) === k).length;
-    return `<button class="ptab ${couponTab === k ? "on" : ""}" style="--tc:${THEME_COLOR[k] || "var(--accent)"}" data-ct="${k}">${ic} ${name}${hot && hot.k === k ? " 🔥" : ""}${n ? ` <small>${n}</small>` : ""}</button>`; }).join("")}</div>`;
+    return `<button class="ptab ${couponTab === k ? "on" : ""}" style="--tc:${THEME_COLOR[k] || "var(--accent)"}" data-ct="${k}">${ic} ${name}${hot && hot.k === k ? " 🔥" : ""}${n ? ` <small>${n}</small>` : ""}</button>`; }).join("")}</div>
+  ${hot ? `<div class="hotnote">🔥 Son 14 günde en çok kazandıran tema: <b>${hot.ic} ${esc(hot.name)}</b> · ${hot.h}/${hot.n} kupon tuttu, <span class="kpl ${hot.pl >= 0 ? "pos" : "neg"}">${tl(hot.pl, true)}</span></div>` : ""}`;
   const empty = cs.length ? `<div class="card"><p class="muted">Bu temada kupon yok.</p></div>`
     : `<div class="card"><p class="muted">Bu gün için henüz kupon yok.</p></div>`;
   v.innerHTML = intro + bar + (couponTab === "katlama" ? `<div id="katBox">${skel("list")}</div>` : list.length ? list.map((c) => couponCard(c, !dayCache.coupons_locked)).join("") : empty);

@@ -144,7 +144,10 @@ async def main(out):
         await asyncio.wait_for(basket.build(src, store, write, now), 240)
     except Exception as e:  # noqa: BLE001
         log.exception("basketbol verisi üretilemedi: %s", e)
+    # site sürümü: arayüz dosyalarının içerik özeti; telefon yeni sürümü bununla anlar
+    site_ver = hashlib.sha1(b"".join((STATIC_DIR / f).read_bytes() for f in ("index.html", "app.js", "canli.js", "basket.js", "style.css"))).hexdigest()[:10]
     write("meta.json", {
+        "site_ver": site_ver,
         "updated": time.time(),
         "days": days,
         "leagues": [{"id": k, "name": v} for k, v in LEAGUES.items()],
@@ -161,7 +164,7 @@ async def main(out):
         shutil.copy(STATIC_DIR / f, out / f)
         ver = hashlib.sha1((STATIC_DIR / f).read_bytes()).hexdigest()[:10]
         html = html.replace(f'"/static/{f}"', f'"{f}?v={ver}"')
-    html = html.replace("<script src=", "<script>window.STATIC_SITE = true;</script>\n<script src=", 1)
+    html = html.replace("<script src=", f'<script>window.STATIC_SITE = true; window.SITE_VER = "{site_ver}";</script>\n<script src=', 1)
     (out / "index.html").write_text(html, encoding="utf-8")
     (out / ".nojekyll").write_text("", encoding="utf-8")
     await src.close()

@@ -2638,11 +2638,23 @@ async function unlockWith(raw) {
   try { meta = await getData("meta.json"); return true; }
   catch (e) { KEY = null; if (e.message === "NOTFOUND") throw new Error("Site verisi henüz yayınlanmadı"); return false; }
 }
+// yeni sürüm yayınlandıysa sayfa önbelleği aşılarak yenilenir (GitHub sayfayı 10 dakika önbellekte tutar); her sürüm için bir kez denenir
+function checkVersion(m) {
+  const v = m && m.site_ver;
+  if (!v || !window.SITE_VER || v === window.SITE_VER) return;
+  try {
+    if (sessionStorage.getItem("verTried") === v) return;
+    sessionStorage.setItem("verTried", v);
+  } catch { return; }
+  location.replace(location.pathname + "?v=" + v + location.hash);
+}
 function startPolling() {
   let lastEv = +(safeGet("lastEventId") || 0);
+  checkVersion(meta);
   const tick = async () => {
     try {
       const m = await getData("meta.json");
+      checkVersion(m);
       if (meta && m.updated === meta.updated) return;
       meta = m;
       const evs = await getData("events.json");
@@ -2653,6 +2665,7 @@ function startPolling() {
   };
 
   setInterval(tick, 60000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) tick(); });
 }
 
 /* ---------- yenilikler penceresi ----------

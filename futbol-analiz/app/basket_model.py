@@ -310,9 +310,12 @@ def record(store, g, pr, pick, opts=None):
         # oran henüz yoksa yalnızca tahmin saklanır (karneye girmez); maç başlayınca da favori belli kalır
         if pick or (pr and (not old or old["state"] == "nopick")):
             store.bk_put("pred", g["id"], {"id": g["id"], "lg": g["lg"], "utc": g["utc"], "home": g["home"]["short"], "away": g["away"]["short"],
-                                           "pick": pick, "p_home": pr["p_home"], "state": "pending" if pick else "nopick", "pred": pr, "options": opts,
+                                           "hlogo": g["home"]["logo"], "alogo": g["away"]["logo"], "pick": pick, "p_home": pr["p_home"], "state": "pending" if pick else "nopick", "pred": pr, "options": opts,
                                            "boxes": boxes(opts, pr)})
         return store.bk_get("pred", g["id"])
+    if old and "hlogo" not in old:  # eski kayıtlara karne için logolar
+        old.update({"hlogo": g["home"]["logo"], "alogo": g["away"]["logo"]})
+        store.bk_put("pred", g["id"], old)
     if g["state"] == "off" and old and old["state"] == "pending":
         old["state"] = "void"
         store.bk_put("pred", g["id"], old)

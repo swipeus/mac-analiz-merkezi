@@ -2,7 +2,7 @@
 /* Basketbol bölümü: NBA ve EuroLeague. Veriler bk-*.json dosyalarından gelir (build_static).
    Sayfalar: #/basket (maçlar), #/basket/mac/<id>, #/basket/lig/<lig>, #/basket/takim/<lig>/<id> */
 
-const BK = { day: null, tab: "ozet", lg: "all", cday: null, ktab: "tercih", ctheme: "banko" };
+const BK = { day: null, tab: "ozet", lg: "all", cday: null, ktab: "tercih", ctheme: "banko", kweek: 0, kmonth: null, kopen: new Set() };
 const BK_LG = { nba: "NBA", el: "EuroLeague" };
 const BK_LOGO = { nba: "🏀", el: "🇪🇺" };
 
@@ -295,27 +295,95 @@ function bkBindCouponDays() {
 }
 
 /* ---------- karne ---------- */
+const bkDayOf = (utc) => new Date(new Date(utc).getTime() - 8 * 3600e3).toLocaleDateString("sv-SE", { timeZone: TZ });
+const bkDayTitle = (k) => cap(new Date(k + "T12:00:00").toLocaleDateString("tr-TR", { weekday: "long", day: "numeric", month: "long" }));
+function bkWeek(off) {
+  const t = new Date(bkToday() + "T12:00:00");
+  const mon = new Date(t); mon.setDate(t.getDate() - ((t.getDay() + 6) % 7) + off * 7);
+  const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+  return [mon.toLocaleDateString("sv-SE"), sun.toLocaleDateString("sv-SE"), mon, sun];
+}
+// hafta çubuğu: futbol karnesiyle aynı; first: kaydın başladığı gün
+function bkWeekBar(first, hits, n, pl) {
+  const [mon, , m, su] = bkWeek(BK.kweek);
+  const fmt = (d, y) => d.toLocaleDateString("tr-TR", { day: "numeric", month: "long", ...(y ? { year: "numeric" } : {}) });
+  const title = BK.kweek === 0 ? "Bu hafta" : BK.kweek === -1 ? "Geçen hafta" : BK.kweek === 1 ? "Gelecek hafta" : `${fmt(m)} haftası`;
+  return `<div class="card wkbar" style="--c:#58a6ff">
+    <button class="calbtn" data-bkw="-1" ${first && mon > first ? "" : "disabled"} aria-label="Önceki hafta">‹</button>
+    <div class="wkt"><b>${title}</b><small class="muted">${fmt(m)} – ${fmt(su, true)}</small></div>
+    <button class="calbtn" data-bkw="1" ${BK.kweek >= 1 ? "disabled" : ""} aria-label="Sonraki hafta">›</button>
+    <span class="wks">${n ? `${hits}/${n} tuttu` : "sonuç yok"}${n ? ` <span class="kpl ${pl >= 0 ? "pos" : "neg"}">${tl(pl, true)}</span>` : ""}</span></div>`;
+}
+// açılır kapanır gün sekmesi
+function bkDayGroup(key, day, unit, n, hits, decided, pl, body) {
+  const k = `${key}:${day}`;
+  return `<details class="kdgrp" data-bko="${k}" ${BK.kopen.has(k) ? "open" : ""}><summary class="kdayh">🗓️ ${esc(bkDayTitle(day))} <span class="muted">· ${n} ${unit} · ${decided ? `${hits}/${decided} tuttu` : "sonuç bekleniyor"}</span>${decided ? `<span class="kpl ${pl >= 0 ? "pos" : "neg"}">${tl(pl, true)}</span>` : ""}</summary>${body}</details>`;
+}
+// ay takvimi: futbol karnesindeki takvimin aynısı
+function bkCalendar(pl, note) {
+  const today = bkToday(), ym = BK.kmonth || today.slice(0, 7), [y, mo] = ym.split("-").map(Number);
+  const first = new Date(y, mo - 1, 1), nDays = new Date(y, mo, 0).getDate(), lead = (first.getDay() + 6) % 7;
+  const best = Math.max(...Object.entries(pl).filter(([k]) => k.startsWith(ym)).map(([, v]) => v), -Infinity);
+  let tot = 0, cells = `<div class="cd empty"></div>`.repeat(lead);
+  for (let d = 1; d <= nDays; d++) {
+    const k = `${ym}-${String(d).padStart(2, "0")}`, v = pl[k];
+    if (v != null) tot += v;
+    const cls = v == null ? (k > today ? "future" : "none") : v > 0 ? "pos" : v < 0 ? "neg" : "zero";
+    cells += `<div class="cd ${cls} ${k === today ? "today" : ""} ${v != null && v > 0 && v === best ? "gold" : ""}" ${v != null ? `title="${tl(v, true)}"` : ""}><span class="dn">${d}</span>${v != null ? `<b>${shortTl(v)}</b>` : ""}</div>`;
+  }
+  return `<div class="card" style="--c:#39c5cf">${head("📅", `Günlük kâr / zarar <span class="muted">· ${note}</span>`)}
+    <div class="calnav"><button class="calbtn" data-bkcm="-1" aria-label="Önceki ay">‹</button><b>${esc(cap(first.toLocaleDateString("tr-TR", { month: "long", year: "numeric" })))}</b><button class="calbtn" data-bkcm="1" aria-label="Sonraki ay">›</button>
+      <span class="kpl ${tot >= 0 ? "pos" : "neg"}">Ay toplamı ${tl(tot, true)}</span></div>
+    <div class="calgrid">${["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"].map((w) => `<div class="cw">${w}</div>`).join("")}${cells}</div></div>`;
+}
+const bkPickPl = (r, stake) => r.hit ? (r.pick.odds - 1) * stake : -stake;
+function bkPickRow(r, stake) {
+  const logo = (u) => u ? `<img src="${esc(u)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : "";
+  const done = r.state === "done", decided = done && r.hit != null;
+  const mark = decided ? `<span class="bkmk ${r.hit ? "ok" : "no"}">${r.hit ? "✔" : "✖"}</span>` : "";
+  return `<div class="bkpk" data-bkm="${esc(r.id)}">${mark}
+    <div class="bkpt"><span class="h">${esc(r.home)}${logo(r.hlogo)}</span><b>${done ? `${r.result[0]}-${r.result[1]}` : esc(timeOf(r.utc))}</b><span class="a">${logo(r.alogo)}${esc(r.away)}</span></div>
+    <div class="bkpp">${esc(r.pick.label)} · <b>${nf(r.pick.odds, 2)}</b>${decided ? ` · <span class="${r.hit ? "pos" : "neg"}">${tl(bkPickPl(r, stake), true)}</span>` : ""}</div></div>`;
+}
+function bkPickKarne(K) {
+  const rows = ((K.store || {}).pred || []).filter((r) => r.pick && (r.state === "done" || r.state === "pending"));
+  const paid = rows.filter((r) => r.state === "done" && r.hit != null), [a, z] = bkWeek(BK.kweek);
+  const sum = (xs) => xs.reduce((x, r) => x + bkPickPl(r, K.stake), 0);
+  const series = {};
+  paid.forEach((r) => { const k = bkDayOf(r.utc); series[k] = (series[k] || 0) + bkPickPl(r, K.stake); });
+  const byDay = new Map();
+  rows.forEach((r) => { const k = bkDayOf(r.utc); if (!byDay.has(k)) byDay.set(k, []); byDay.get(k).push(r); });
+  const days = [...byDay.keys()].filter((k) => k >= a && k <= z).sort().reverse();
+  const wk = days.flatMap((k) => byDay.get(k)).filter((r) => r.state === "done" && r.hit != null);
+  const list = days.length ? days.map((k) => {
+    const g = byDay.get(k).sort((x, y) => x.utc.localeCompare(y.utc)), d = g.filter((r) => r.state === "done" && r.hit != null);
+    return bkDayGroup("t", k, "tercih", g.length, d.filter((r) => r.hit).length, d.length, sum(d), `<div class="card bkpks">${g.map((r) => bkPickRow(r, K.stake)).join("")}</div>`);
+  }).join("") : `<div class="card"><p class="muted">Bu hafta için tercih yok.</p></div>`;
+  const first = rows.length ? rows.map((r) => bkDayOf(r.utc)).sort()[0] : null;
+  return bkWeekBar(first, wk.filter((r) => r.hit).length, wk.length, sum(wk)) + list + bkCalendar(series, "tek tercih");
+}
 function bkCouponKarne(K) {
   const all = ((K.store || {}).coupons || []).flatMap((d) => d.coupons.map((c) => ({ ...c, date: d.date })));
-  const done = all.filter((c) => c.state === "done").sort((a, b) => b.date.localeCompare(a.date));
-  const open = all.length - done.length;
-  if (!done.length) return `<div class="card" style="--c:#e3b341">${head("🎟️", "Kupon karnesi")}<p class="muted">Henüz sonuçlanmış kupon yok.${open ? ` ${open} kupon sonuç bekliyor.` : ""}</p></div>`;
-  const sum = (xs) => xs.reduce((a, c) => a + bkCouponPl(c), 0), pl = sum(done), won = done.filter((c) => c.won).length, staked = done.length * COUPON_STAKE;
+  const done = all.filter((c) => c.state === "done");
+  const sum = (xs) => xs.reduce((a, c) => a + bkCouponPl(c), 0), pl = sum(done), won = done.filter((c) => c.won).length;
   const series = {};
   done.forEach((c) => { series[c.date] = (series[c.date] || 0) + bkCouponPl(c); });
-  const themes = [["banko", "✅ Banko"], ["fav", "🏆 Favoriler"], ["sayi", "🎯 Sayılar"]].map(([k, l]) => {
+  const themes = BK_THEMES.map(([k, ic, name]) => {
     const d = done.filter((c) => c.theme === k), w = sum(d);
-    return d.length ? `<div class="bkrow"><span>${l}</span><span class="muted">${d.filter((c) => c.won).length}/${d.length}</span><b class="${w >= 0 ? "pos" : "neg"}">${tl(w, true)}</b></div>` : "";
+    return d.length ? `<div class="bkrow"><span>${ic} ${name}</span><span class="muted">${d.filter((c) => c.won).length}/${d.length}</span><b class="${w >= 0 ? "pos" : "neg"}">${tl(w, true)}</b></div>` : "";
   }).join("");
-  const days = [...new Set(done.map((c) => c.date))].map((d) => {
-    const g = done.filter((c) => c.date === d), w = sum(g);
-    return `<h3 class="kath">${esc(cap(new Date(d + "T12:00:00").toLocaleDateString("tr-TR", { day: "numeric", month: "long", weekday: "long" })))} <span class="kpl ${w >= 0 ? "pos" : "neg"}">${tl(w, true)}</span></h3>${g.map((c) => bkCoupon(c, d, {}, false)).join("")}`;
-  }).join("");
-  return `<div class="card" style="--c:#e3b341">${head("🎟️", "Kupon karnesi")}
-    <div class="bkexp"><div><small>Tutan</small><b>${won}/${done.length}</b></div><div><small>Oran</small><b>${pc(won / done.length)}</b></div><div><small>Yatırılan</small><b>${tl(staked)}</b></div><div><small>Kâr/zarar</small><b class="${pl >= 0 ? "pos" : "neg"}">${tl(pl, true)}</b></div></div>
-    <p class="muted">Kupon başına ${tl(COUPON_STAKE)} oynanmış gibi hesaplanır.${open ? ` ${open} kupon sonuç bekliyor.` : ""} Futbol karnesinden ayrıdır.</p></div>
+  const top = `<div class="card" style="--c:#e3b341">${head("🎟️", "Kupon karnesi")}${done.length ? `
+    <div class="bkexp"><div><small>Tutan</small><b>${won}/${done.length}</b></div><div><small>Oran</small><b>${pc(won / done.length)}</b></div><div><small>Yatırılan</small><b>${tl(done.length * COUPON_STAKE)}</b></div><div><small>Kâr/zarar</small><b class="${pl >= 0 ? "pos" : "neg"}">${tl(pl, true)}</b></div></div>` : `<p class="muted">Henüz sonuçlanmış kupon yok.</p>`}</div>
     ${Object.keys(series).length > 1 ? `<div class="card">${plChart(series, `Kupon başına ${tl(COUPON_STAKE)}`)}</div>` : ""}
-    ${themes ? `<div class="card">${head("🧩", "Temaya göre")}${themes}</div>` : ""}${days}`;
+    ${themes ? `<div class="card">${head("🧩", "Temaya göre")}${themes}</div>` : ""}`;
+  const [a, z] = bkWeek(BK.kweek), dates = [...new Set(all.map((c) => c.date))];
+  const days = dates.filter((k) => k >= a && k <= z).sort().reverse();
+  const wk = done.filter((c) => c.date >= a && c.date <= z);
+  const list = days.length ? days.map((k) => {
+    const g = all.filter((c) => c.date === k), d = g.filter((c) => c.state === "done");
+    return bkDayGroup("k", k, "kupon", g.length, d.filter((c) => c.won).length, d.length, sum(d), g.map((c) => bkCoupon(c, k, {}, false)).join(""));
+  }).join("") : `<div class="card"><p class="muted">Bu hafta için kupon yok.</p></div>`;
+  return top + bkWeekBar(dates.sort()[0] || null, wk.filter((c) => c.won).length, wk.length, sum(wk)) + list + bkCalendar(series, "kupon");
 }
 async function renderBasketKarne() {
   const v = $("#view");
@@ -324,19 +392,27 @@ async function renderBasketKarne() {
   try { K = await bkGet("bk-karne.json", "Karne bir sonraki güncellemede gelecek."); }
   catch (e) { v.innerHTML = bkNav("karne") + `<div class="card"><p class="muted">${esc(e.message)}</p></div>`; return; }
   if (location.hash !== "#/basket/karne") return;
+  bkKarneDraw(K);
+}
+function bkKarneDraw(K) {
+  const v = $("#view");
   const tabs = `<div class="ptabs">${[["tercih", "✅ Tek tercihler"], ["kupon", "🎟️ Kuponlar"]].map(([k, l]) => `<button class="ptab ${BK.ktab === k ? "on" : ""}" data-bkk="${k}">${l}</button>`).join("")}</div>`;
-  const bind = () => v.querySelectorAll("[data-bkk]").forEach((b) => b.onclick = () => { BK.ktab = b.dataset.bkk; renderBasketKarne(); });
-  if (BK.ktab === "kupon") { v.innerHTML = bkNav("karne") + tabs + bkCouponKarne(K); bind(); return; }
   const T = K.total;
   const line = (l, x) => x.n ? `<div class="bkrow"><span>${esc(l)}</span><span class="muted">${x.hit}/${x.n} · beklenen ${pc(x.exp)}</span><b class="${x.pl >= 0 ? "pos" : "neg"}">${pc(x.pct)} · ${tl(x.pl, true)}</b></div>` : "";
   const lg = Object.entries(K.by_lg).map(([k, x]) => line(BK_LG[k], x)).join("");
   const ty = Object.entries(K.by_type).map(([k, x]) => line(k, x)).join("");
-  const rows = K.recent.filter((r) => r.state === "done").slice(0, 30).map((r) => `<div class="bkrow"><span class="muted">${dateOf(r.utc)}</span><span><a href="#/basket/mac/${esc(r.id)}">${esc(r.home)} ${r.result[0]}-${r.result[1]} ${esc(r.away)}</a> <small class="muted">${esc(r.pick.label)} · ${nf(r.pick.odds, 2)}</small></span><b class="${r.hit ? "pos" : r.hit === false ? "neg" : ""}">${r.hit ? "✓" : r.hit === false ? "✗" : "↩"}</b></div>`).join("");
-  v.innerHTML = bkNav("karne") + tabs + `<div class="card" style="--c:#2ea043">${head("📒", "Basketbol karnesi")}
-    ${T.n ? `<div class="bkexp"><div><small>Tutan</small><b>${T.hit}/${T.n}</b></div><div><small>Oran</small><b>${pc(T.pct)}</b></div><div><small>Beklenen</small><b>${pc(T.exp)}</b></div><div><small>Kâr/zarar</small><b class="${T.pl >= 0 ? "pos" : "neg"}">${tl(T.pl, true)}</b></div></div>
-    <p class="muted">Tercih başına ${tl(K.stake)} oynanmış gibi hesaplanır. Futbol karnesinden ayrıdır.</p>` : `<p class="muted">Henüz sonuçlanmış tercih yok. En garanti tercihler maçlar bittikçe burada toplanacak.</p>`}</div>
-    ${lg ? `<div class="card">${head("🏆", "Lige göre")}${lg}</div>` : ""}${ty ? `<div class="card">${head("🧩", "Tercih türüne göre")}${ty}</div>` : ""}${rows ? `<div class="card">${head("📅", "Son tercihler")}${rows}</div>` : ""}`;
-  bind();
+  const pick = `<div class="card" style="--c:#2ea043">${head("📒", "Basketbol karnesi")}
+    ${T.n ? `<div class="bkexp"><div><small>Tutan</small><b>${T.hit}/${T.n}</b></div><div><small>Oran</small><b>${pc(T.pct)}</b></div><div><small>Beklenen</small><b>${pc(T.exp)}</b></div><div><small>Kâr/zarar</small><b class="${T.pl >= 0 ? "pos" : "neg"}">${tl(T.pl, true)}</b></div></div>` : `<p class="muted">Henüz sonuçlanmış tercih yok.</p>`}</div>
+    ${lg ? `<div class="card">${head("🏆", "Lige göre")}${lg}</div>` : ""}${ty ? `<div class="card">${head("🧩", "Tercih türüne göre")}${ty}</div>` : ""}${bkPickKarne(K)}`;
+  v.innerHTML = bkNav("karne") + tabs + (BK.ktab === "kupon" ? bkCouponKarne(K) : pick);
+  v.querySelectorAll("[data-bkk]").forEach((b) => b.onclick = () => { BK.ktab = b.dataset.bkk; bkKarneDraw(K); });
+  v.querySelectorAll("[data-bkw]").forEach((b) => b.onclick = () => { BK.kweek += +b.dataset.bkw; bkKarneDraw(K); });
+  v.querySelectorAll("[data-bko]").forEach((d) => d.ontoggle = () => { d.open ? BK.kopen.add(d.dataset.bko) : BK.kopen.delete(d.dataset.bko); });
+  v.querySelectorAll("[data-bkcm]").forEach((b) => b.onclick = () => {
+    const [y, m] = (BK.kmonth || bkToday().slice(0, 7)).split("-").map(Number), d = new Date(y, m - 1 + +b.dataset.bkcm, 1);
+    BK.kmonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    bkKarneDraw(K);
+  });
 }
 
 /* ---------- yönlendirme (app.js route çağırır) ---------- */

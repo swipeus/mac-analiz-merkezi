@@ -2660,6 +2660,12 @@ function startPolling() {
    kayıtları bir kez görür; "Tamam" ile en son id kaydedilir ve pencere tekrar çıkmaz. */
 const RELEASES = [
   {
+    id: 31, date: "31 Ekim 2026", title: "Basketbol karnesi yenilendi", sub: "Bu güncellemede gelenler",
+    items: [
+      ["📒", "Haftalık görünüm", "Tek tercihler ve kuponlar hafta hafta, günler açılır kapanır; altta ay takvimi var."],
+    ],
+  },
+  {
     id: 30, date: "31 Ekim 2026", title: "Sade kupon sayfası", sub: "Bu güncellemede gelenler",
     items: [
       ["🧹", "Daha az yazı", "Futbol ve basketbol kupon sayfalarından açıklama yazıları kaldırıldı."],

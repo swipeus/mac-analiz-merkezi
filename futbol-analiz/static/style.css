@@ -1153,6 +1153,18 @@ body.on-home footer.foot { display: block; }
 .katpath span { padding: 2px 8px; border-radius: 999px; background: rgba(46,160,67,.14); color: #7ee2a8; }
 .katpath span.now { background: #2ea043; color: #fff; } .katpath i { font-style: normal; color: var(--muted); }
 .kath { margin: 14px 4px 6px; }
+.bkpks { padding: 4px 8px; }
+.bkpk { position: relative; padding: 11px 28px 11px 0; text-align: center; border-top: 1px solid var(--line); cursor: pointer; }
+.bkpk:first-child { border-top: 0; }
+.bkpt { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 6px; font-size: 13px; font-weight: 700; }
+.bkpt span { display: flex; align-items: center; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+.bkpt .h { justify-content: flex-end; }
+.bkpt img { width: 20px; height: 20px; object-fit: contain; flex: 0 0 auto; }
+.bkpp { margin-top: 4px; font-size: 13px; color: var(--muted); }
+.bkpp b { color: var(--text); }
+.bkmk { position: absolute; right: 0; top: 50%; transform: translateY(-50%); width: 24px; height: 24px; border-radius: 7px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 14px; font-weight: 900; line-height: 1; }
+.bkmk.ok { background: #2ea043; }
+.bkmk.no { background: #f85149; }
 .kdate { margin: 12px 4px 0; font-weight: 700; color: var(--muted); }
 .hotnote { margin: 8px 2px 4px; font-size: 13px; color: var(--muted); }
 .hotnote b { color: var(--text); }

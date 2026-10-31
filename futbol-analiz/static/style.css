@@ -1162,6 +1162,8 @@ body.on-home footer.foot { display: block; }
 .bkpt img { width: 20px; height: 20px; object-fit: contain; flex: 0 0 auto; }
 .bkpp { margin-top: 4px; font-size: 13px; color: var(--muted); }
 .bkpp b { color: var(--text); }
+.bkpp .pos { color: #56d364; font-weight: 700; }
+.bkpp .neg { color: #ff7b72; font-weight: 700; }
 .bkmk { position: absolute; right: 0; top: 50%; transform: translateY(-50%); width: 24px; height: 24px; border-radius: 7px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 14px; font-weight: 900; line-height: 1; }
 .bkmk.ok { background: #2ea043; }
 .bkmk.no { background: #f85149; }

@@ -5,6 +5,7 @@ geçen sezon + bu sezon) ile piyasa çizgisinin karışımı. Parametreler geçe
 NBA 995, EuroLeague 302 maç; piyasasız kazananı bilme %68 ve %65.
 """
 import collections
+import hashlib
 import logging
 import math
 import re
@@ -365,18 +366,26 @@ def build_coupons(date, cands, kept=()):
     return out
 
 
+def coupon_sig(c):
+    """Kuponun içeriğinin kısa parmak izi: kayıtlarda değişip değişmediği görülür."""
+    return hashlib.sha1("|".join(sorted(f"{l['mid']}:{l['code']}:{l['odds']}" for l in c["legs"])).encode()).hexdigest()[:6]
+
+
 def update_coupons(store, date, cands):
     """Kuponlar yenilenir; bir kuponun ilk maçına LOCK_BEFORE kala o kupon kesinleşir ve donar."""
     doc = store.bk_get("coupons", date) or {"date": date, "coupons": []}
     now = datetime.now(timezone.utc)
     soon = lambda g: datetime.fromisoformat(g["utc"].replace("Z", "+00:00")) <= now + LOCK_BEFORE  # noqa: E731
-    kept = [c for c in doc["coupons"] if c.get("state") == "done" or any(soon(l) for l in c["legs"])]
+    kept = [c for c in doc["coupons"] if c.get("locked") or c.get("state") == "done" or any(soon(l) for l in c["legs"])]
+    for c in kept:
+        c["locked"] = True  # kilitlenen kupon bir daha yeniden kurulmaz; yalnızca sonuçları işlenir
     cands = [(g, o) for g, o in cands if not soon(g)]  # kilit süresine girmiş maç yeni kupona alınmaz
     if cands:
         kept += build_coupons(date, cands, kept)
         kept.sort(key=lambda c: ([t[0] for t in THEMES].index(c["theme"]), int(c["id"].rsplit("-", 1)[1])))
     doc["coupons"] = kept
     store.bk_put("coupons", date, doc)
+    log.info("basketbol kuponları %s: %s", date, " ".join(f"{c['id'].split('-')[0]}{c['id'].rsplit('-', 1)[1]}{'*' if c.get('locked') else ''}:{coupon_sig(c)}" for c in kept))
     return doc
 
 
@@ -432,8 +441,21 @@ def seed(store, doc):
         if not store.bk_get("pred", r["id"]):
             store.bk_put("pred", r["id"], r)
             n += 1
+    now = datetime.now(timezone.utc)
+    final = lambda c: c.get("locked") or c.get("state") == "done" or any(  # noqa: E731
+        datetime.fromisoformat(l["utc"].replace("Z", "+00:00")) <= now + LOCK_BEFORE for l in c["legs"])
     for d in s.get("coupons", []):
-        if not store.bk_get("coupons", d["date"]):
+        local = store.bk_get("coupons", d["date"])
+        if not local:
             store.bk_put("coupons", d["date"], d)
             n += 1
+            continue
+        # yayındaki kilitli kupon yerelde yoksa (önbellek geri gittiyse) yayındaki geçerlidir
+        mine = {c["id"]: c for c in local["coupons"]}
+        lost = [c for c in d["coupons"] if final(c) and not final(mine.get(c["id"], {"legs": []}))]
+        if lost:
+            mine.update({c["id"]: {**c, "locked": True} for c in lost})
+            local["coupons"] = sorted(mine.values(), key=lambda c: c["id"])
+            store.bk_put("coupons", d["date"], local)
+            n += len(lost)
     return n

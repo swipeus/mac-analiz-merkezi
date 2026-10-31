@@ -50,11 +50,15 @@ async def main(out):
             r = await src.client.get(pages.rstrip("/") + f"/data/katlama.json?t={int(time.time())}")
             if r.status_code == 200:
                 log.info("katlama yayındakiyle birleştirildi: %s gün", katlama.seed(store, unseal(key, r.json())))
+        except Exception as e:  # noqa: BLE001
+            log.warning("karne geri yüklenemedi: %s", e)
+    if pages:  # her tur: yayındaki kilitli basketbol kuponları kaybolmasın
+        try:
             r = await src.client.get(pages.rstrip("/") + f"/data/bk-karne.json?t={int(time.time())}")
             if r.status_code == 200:
                 log.info("basketbol karnesi birleştirildi: %s kayıt", basket_model.seed(store, unseal(key, r.json())))
         except Exception as e:  # noqa: BLE001
-            log.warning("karne geri yüklenemedi: %s", e)
+            log.warning("basketbol karnesi geri yüklenemedi: %s", e)
     # karneden tür bazında kalibrasyon (yeterli veri ve belirgin sapma varsa olasılıklar düzeltilir)
     analysis.CALIB, calib_report = karne.calib_table(store)
     log.info("kalibrasyon: %s", analysis.CALIB or "gerek yok")

@@ -231,7 +231,7 @@ function bkCoupon(c, date, byId = {}, open = true) {
     const m = byId[l.mid];
     return { ...l, logo: l.hlogo || (m && m.home.logo), live: l.hit == null && m && m.state === "live" ? { min: m.clock, score: [m.home.score ?? 0, m.away.score ?? 0] } : null };
   });
-  const locked = c.legs.some((l) => new Date(l.utc) - 3600e3 <= Date.now());  // ilk maça 1 saat kala kesinleşir
+  const locked = c.locked || c.legs.some((l) => new Date(l.utc) - 3600e3 <= Date.now());  // ilk maça 1 saat kala kesinleşir
   const stake = COUPON_STAKE, ret = stake * (done && c.won ? c.paid || c.odds : c.odds);
   const status = done ? (c.won ? `<span class="kst ok">✓ Kazandı</span>` : `<span class="kst no">✗ Kaybetti</span>`)
     : locked ? `<span class="kst wait fin" title="İlk maçına 1 saat kaldı; kupon artık değişmez.">✓ Son hali · ⏳ Bekliyor</span>`

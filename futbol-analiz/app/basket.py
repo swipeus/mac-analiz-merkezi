@@ -456,6 +456,7 @@ async def build(src, store, write, now):
     today = base.strftime("%Y-%m-%d")
     shown = [(base + timedelta(days=i)).strftime("%Y-%m-%d") for i in (-1, 0, 1)]
     all_cards, out_lg = {d: [] for d in shown}, []
+    bm.drop_removed(store)
     events = await bm.odds_events(src, store)
     day_cands = {d: [] for d in shown}
     for lg, info in LEAGUES.items():

@@ -28,6 +28,7 @@ SIGMA_ALONE = {"nba": (10.0, 21.5), "el": (10.0, 18.0)}
 TEAM_SIGMA = 11.5        # takım toplamı sapması
 
 MIN_ODDS, MAX_ODDS = 1.15, 2.30   # en garanti tercihin oran aralığı
+REMOVED_COUPONS = {"sayi-2026-10-30-2"}  # istekle silinen kuponlar
 LOCK_BEFORE = timedelta(hours=1)  # kupon, ilk maçına bu kadar kala kesinleşir
 MAX_USE = 2              # aynı tercih günün en fazla kaç kuponunda yer alır
 MAX_USE_FROM = "2026-10-31"
@@ -364,6 +365,15 @@ def build_coupons(date, cands, kept=()):
                         "legs": [{"mid": g["id"], "lg": g["lg"], "utc": g["utc"], "home": g["home"]["short"], "away": g["away"]["short"], "hlogo": g["home"]["logo"],
                                   "code": x["code"], "label": x["label"], "odds": x["odds"], "p": x["p"]} for x, g in legs]})
     return out
+
+
+def drop_removed(store):
+    """Elle silinen kuponlar kayıtlardan ve karneden çıkarılır; yayından geri gelse de yine silinir."""
+    for doc in store.bk_all("coupons"):
+        left = [c for c in doc["coupons"] if c["id"] not in REMOVED_COUPONS]
+        if len(left) != len(doc["coupons"]):
+            doc["coupons"] = left
+            store.bk_put("coupons", doc["date"], doc)
 
 
 def coupon_sig(c):

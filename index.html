@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maç Analiz Merkezi</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚽</text></svg>">
+<link rel="stylesheet" href="style.css?v=a665d36286">
+</head>
+<body>
+<header class="top">
+  <button id="backBtn" class="back-btn" aria-label="Günün maçlarına dön">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+    Geri
+  </button>
+  <a class="brand" href="#/">Maç Analiz Merkezi</a>
+  <div class="right">
+    <a id="shareBtn" class="karne-btn share-btn" href="#/paylas" aria-label="Paylaşım listesi" title="Paylaşım listesi">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M21 3L3 10.5l7 2.5 2.5 7z" fill="#39c5cf"/><path d="M21 3L10 13" stroke="#0d1117" stroke-width="1.6"/></svg>
+      <b id="shareCount"></b>
+    </a>
+  </div>
+</header>
+<nav id="sportTabs" class="sports" aria-label="Spor dalı">
+  <a href="#/" data-sport="fb" class="on"><span>⚽</span>Futbol</a>
+  <a href="#/basket" data-sport="bk"><span>🏀</span>Basketbol</a>
+</nav>
+<nav id="fbNav" class="bknav fbnav" aria-label="Ana menü">
+  <a href="#/" data-nav="home">⚽ Maçlar</a>
+  <a href="#/kombine" data-nav="kombine">🎟️ Kuponlar</a>
+  <a href="#/karne" data-nav="karne">📒 Karne</a>
+  <a href="#/oranlar" data-nav="oranlar">📈 Oranlar</a>
+</nav>
+<div id="feed" class="feed hidden"><div class="feed-head">Son gelişmeler</div><ul id="feedList"></ul></div>
+<div id="toolbar" class="toolbar">
+  <div id="fbDays" class="ptabs"></div>
+  <button id="filterBtn" class="filter-btn" aria-haspopup="dialog" aria-controls="filterSheet">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4-2v-4z"/></svg>
+    <b id="filterCount"></b>
+  </button>
+  <div class="calwrap searchwrap">
+    <button id="searchBtn" class="cal-btn" aria-haspopup="dialog" aria-controls="searchPop" title="Takım ara" aria-label="Takım ara">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l5 5"/></svg>
+    </button>
+    <div id="searchPop" class="calpop searchpop hidden" role="dialog" aria-label="Takım ara">
+      <input id="searchInput" type="search" placeholder="Takım ara (ör. Galatasaray)" autocomplete="off">
+      <div id="searchRes"></div>
+    </div>
+  </div>
+  <div class="calwrap sortwrap">
+    <button id="sortBtn" class="cal-btn sort-btn" aria-haspopup="menu" aria-controls="sortPop" title="Sırala">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4v16M3 16l4 4 4-4M17 20V4M13 8l4-4 4 4"/></svg>
+    </button>
+    <div id="sortPop" class="calpop sortpop hidden" role="menu" aria-label="Sıralama"></div>
+  </div>
+</div>
+<div id="filterBackdrop" class="backdrop hidden"></div>
+<div id="filterSheet" class="sheet hidden" role="dialog" aria-modal="true" aria-label="Lig filtresi">
+  <div class="sheet-head"><b>Görüntülenecek ligler</b><button id="filterClose" class="x" aria-label="Kapat">✕</button></div>
+  <div class="sheet-actions"><button id="filterAll">Tümünü seç</button><button id="filterNone">Hiçbirini seçme</button></div>
+  <div id="leagues" class="sheet-list"></div>
+  <div class="sheet-foot"><button id="filterDone" class="primary">Tamam</button></div>
+</div>
+<main id="view"></main>
+<div id="toasts" class="toasts"></div>
+<div id="newsModal" class="wn-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="wnTitle">
+  <div class="wn">
+    <div class="wn-head"><span class="wn-ic">✨</span><div><h2 id="wnTitle"></h2><small id="wnSub"></small></div></div>
+    <div id="wnList" class="wn-list"></div>
+    <div class="wn-foot"><button id="wnOk" class="primary">Tamam</button></div>
+  </div>
+</div>
+<footer class="foot"><span class="love">Ece'yi çok seviyorum ❤️</span></footer>
+<script>window.STATIC_SITE = true; window.SITE_VER = "45e50e2346";</script>
+<script src="app.js?v=f815cb035c"></script>
+<script src="canli.js?v=ba893febd2"></script>
+<script src="basket.js?v=9210e82efe"></script>
+</body>
+</html>

@@ -373,7 +373,7 @@ function bkCouponKarne(K) {
     return d.length ? `<div class="bkrow"><span>${ic} ${name}</span><span class="muted">${d.filter((c) => c.won).length}/${d.length}</span><b class="${w >= 0 ? "pos" : "neg"}">${tl(w, true)}</b></div>` : "";
   }).join("");
   const top = `<div class="card" style="--c:#e3b341">${head("🎟️", "Kupon karnesi")}${done.length ? `
-    <div class="bkexp"><div><small>Tutan</small><b>${won}/${done.length}</b></div><div><small>Oran</small><b>${pc(won / done.length)}</b></div><div><small>Yatırılan</small><b>${tl(done.length * COUPON_STAKE)}</b></div><div><small>Kâr/zarar</small><b class="${pl >= 0 ? "pos" : "neg"}">${tl(pl, true)}</b></div></div>` : `<p class="muted">Henüz sonuçlanmış kupon yok.</p>`}</div>
+    <div class="bkexp"><div><small>Tutan</small><b>${won}/${done.length}</b></div><div><small>İsabet</small><b>${pc(won / done.length)}</b></div><div><small>Yatırılan</small><b>${tl(done.length * COUPON_STAKE)}</b></div><div><small>Kâr/zarar</small><b class="${pl >= 0 ? "pos" : "neg"}">${tl(pl, true)}</b></div></div>` : `<p class="muted">Henüz sonuçlanmış kupon yok.</p>`}</div>
     ${Object.keys(series).length > 1 ? `<div class="card">${plChart(series, `Kupon başına ${tl(COUPON_STAKE)}`)}</div>` : ""}
     ${themes ? `<div class="card">${head("🧩", "Temaya göre")}${themes}</div>` : ""}`;
   const [a, z] = bkWeek(BK.kweek), dates = [...new Set(all.map((c) => c.date))];
@@ -397,12 +397,13 @@ async function renderBasketKarne() {
 function bkKarneDraw(K) {
   const v = $("#view");
   const tabs = `<div class="ptabs">${[["tercih", "✅ Tek tercihler"], ["kupon", "🎟️ Kuponlar"]].map(([k, l]) => `<button class="ptab ${BK.ktab === k ? "on" : ""}" data-bkk="${k}">${l}</button>`).join("")}</div>`;
-  const T = K.total;
-  const line = (l, x) => x.n ? `<div class="bkrow"><span>${esc(l)}</span><span class="muted">${x.hit}/${x.n} · beklenen ${pc(x.exp)}</span><b class="${x.pl >= 0 ? "pos" : "neg"}">${pc(x.pct)} · ${tl(x.pl, true)}</b></div>` : "";
+  const T = K.total, paid = ((K.store || {}).pred || []).filter((r) => r.state === "done" && r.hit != null);
+  const avg = paid.length ? paid.reduce((a, r) => a + r.pick.odds, 0) / paid.length : null;
+  const line = (l, x) => x.n ? `<div class="bkrow"><span>${esc(l)}</span><span class="muted">${x.hit}/${x.n}</span><b class="${x.pl >= 0 ? "pos" : "neg"}">${pc(x.pct)} · ${tl(x.pl, true)}</b></div>` : "";
   const lg = Object.entries(K.by_lg).map(([k, x]) => line(BK_LG[k], x)).join("");
   const ty = Object.entries(K.by_type).map(([k, x]) => line(k, x)).join("");
   const pick = `<div class="card" style="--c:#2ea043">${head("📒", "Basketbol karnesi")}
-    ${T.n ? `<div class="bkexp"><div><small>Tutan</small><b>${T.hit}/${T.n}</b></div><div><small>Oran</small><b>${pc(T.pct)}</b></div><div><small>Beklenen</small><b>${pc(T.exp)}</b></div><div><small>Kâr/zarar</small><b class="${T.pl >= 0 ? "pos" : "neg"}">${tl(T.pl, true)}</b></div></div>` : `<p class="muted">Henüz sonuçlanmış tercih yok.</p>`}</div>
+    ${T.n ? `<div class="bkexp"><div><small>Tutan</small><b>${T.hit}/${T.n}</b></div><div><small>İsabet</small><b>${pc(T.pct)}</b></div><div><small>Ortalama oran</small><b>${avg ? nf(avg, 2) : "—"}</b></div><div><small>Kâr/zarar</small><b class="${T.pl >= 0 ? "pos" : "neg"}">${tl(T.pl, true)}</b></div></div>` : `<p class="muted">Henüz sonuçlanmış tercih yok.</p>`}</div>
     ${lg ? `<div class="card">${head("🏆", "Lige göre")}${lg}</div>` : ""}${ty ? `<div class="card">${head("🧩", "Tercih türüne göre")}${ty}</div>` : ""}${bkPickKarne(K)}`;
   v.innerHTML = bkNav("karne") + tabs + (BK.ktab === "kupon" ? bkCouponKarne(K) : pick);
   v.querySelectorAll("[data-bkk]").forEach((b) => b.onclick = () => { BK.ktab = b.dataset.bkk; bkKarneDraw(K); });

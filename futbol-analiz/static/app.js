@@ -1328,7 +1328,6 @@ function cornerNote(r) {
 const rate = (h, n) => n ? `%${Math.round(h / n * 100)}` : "—";
 // tek tercih sonuçlandı mı: maç bitti ya da maç sürerken kesinleşti (KG Var, üstler...)
 const pickDecided = (r) => (r.state === "done" || r.pick_early) && (r.pick_hit === true || r.pick_hit === false);
-const liveMid = (lv) => `<div class="sc live">${lv.score[0]} - ${lv.score[1]}</div><div class="sub live">● ${esc(lv.min || "canlı")}</div>`;
 // karne özetleri: tek tercihler (1000 ₺), kombineler (5000 ₺), skorlar (yalnızca isabet, bahis yok)
 function karneStats() {
   const rows = karneRows || [];
@@ -1480,7 +1479,7 @@ function singlesKarneHtml(s) {
       : null;
     const title = new Date(k + "T12:00:00").toLocaleDateString("tr-TR", { weekday: "long", day: "numeric", month: "long" });
     return `<details class="card kday ogrp" style="--c:#58a6ff" data-kd="${karneTab}:${k}" ${karneOpen.has(karneTab + ":" + k) ? "open" : ""}><summary>${head("🗓️", `${cap(title)} <span class="muted">· ${g.length} maç · ${d.length ? `${hits}/${d.length} tuttu` : "sonuç bekleniyor"}</span>${d.length && dayPl != null ? `<span class="kpl ${dayPl >= 0 ? "pos" : "neg"}">${tl(dayPl, true)}</span>` : ""}`)}</summary>
-      ${g.map(karneRow).join("")}</details>`;
+      <div class="bkpks">${g.map(karneRow).join("")}</div></details>`;
   }).join("") : `<div class="card"><p class="muted">Bu hafta için kayıtlı tahmin yok. Oklarla diğer haftalara bakabilirsin.</p></div>`;
   return top + weekBar(wh, wn, pick ? wpl : null) + weekReport() + list;
 }
@@ -1659,28 +1658,16 @@ function karneRow(r) {
   const pick = karneTab === "pick";
   const done = r.state === "done" || (pick && pickDecided(r));
   const hit = pick ? r.pick_hit : r.score_hit;
-  const rowCls = !done || hit == null ? "" : hit ? "hit" : "miss";
-  const early = r.state !== "done" && done;
-  const status = !done ? `<span class="kst wait">${r.live ? "● Canlı" : "⏳ Bekliyor"}</span>` : hit == null ? `<span class="kst wait">↩ İade</span>`
-    : hit ? `<span class="kst ok">✓ ${early ? "Kazandı" : "Tuttu"}</span>` : `<span class="kst no">✗ ${early ? "Kaybetti" : "Tutmadı"}</span>`;
-  const mid = r.state === "done" ? `<div class="sc">${r.result[0]} - ${r.result[1]}</div><div class="sub">maç sonu</div>`
-    : r.live ? liveMid(r.live) : `<div class="ko">${esc(timeOf(r.utc))}</div><div class="sub">başlama</div>`;
-  const tip = pick
-    ? `<span class="kpick">${esc(r.pick.label)} <small>${r.pick.odds ? "@" + nf(r.pick.odds, 2) + " · " : ""}${pc(r.pick.p)}</small></span>`
-    : `<span class="kpick">Skor ${esc(r.score.score)} <small>${pc(r.score.p)}</small></span>`;
-  const odds = pick ? r.pick.odds : null;
-  const stake = STAKE;
-  const prof = pick && done && hit != null && odds ? rowProfit(r) : null;
+  const mark = !done ? "" : hit == null ? `<span class="bkmk void">↩</span>` : `<span class="bkmk ${hit ? "ok" : "no"}">${hit ? "✔" : "✖"}</span>`;
+  const mid = r.state === "done" ? `${r.result[0]}-${r.result[1]}` : r.live ? `${r.live.score[0]}-${r.live.score[1]}` : esc(timeOf(r.utc));
+  const prof = pick && done && hit != null && r.pick.odds ? rowProfit(r) : null;
+  const line = pick ? `${esc(r.pick.label)}${r.pick.odds ? ` · <b>${nf(r.pick.odds, 2)}</b>` : ""}${prof != null ? ` · <span class="${prof >= 0 ? "pos" : "neg"}">${tl(prof, true)}</span>` : ""}${cornerNote(r)}`
+    : `Skor ${esc(r.score.score)} · <b>${pc(r.score.p)}</b>`;
+  const why = pick && done && hit === false && r.final ? lossReason(r.pick.code, finalCtx({ final: r.final, home: { score: r.result[0] }, away: { score: r.result[1] }, status: { finished: true } }), r.home.name, r.away.name) : null;
   const linkable = !STATIC || (meta && meta.days && meta.days.includes(trDay(r.utc)));
-  return `<div class="krow ${rowCls}" ${linkable ? `data-mid="${r.id}"` : ""}>
-    <div class="kteams">
-      <span class="kt"><img src="${teamLogo(r.home.id)}" alt="" onerror="this.remove()">${esc(r.home.name)}</span>
-      <div class="mid">${mid}</div>
-      <span class="kt r">${esc(r.away.name)}<img src="${teamLogo(r.away.id)}" alt="" onerror="this.remove()"></span>
-    </div>
-    ${pick && done && hit === false && r.final ? (() => { const w = lossReason(r.pick.code, finalCtx({ final: r.final, home: { score: r.result[0] }, away: { score: r.result[1] }, status: { finished: true } }), r.home.name, r.away.name); return w ? `<div class="why ${w.kind}">${REASON_TAG[w.kind]} · ${esc(w.txt.replace(/^[^:]+: /, ""))}</div>` : ""; })() : ""}
-    <div class="kfoot"><span class="muted kl">${esc(lgName(r.league_id, r.league))}${pick ? cornerNote(r) : ""}</span>${tip}${odds ? `<span class="kstake ${prof != null ? (prof >= 0 ? "pos" : "neg") : ""}">${stake} ₺ → ${prof != null ? tl(prof, true) : "@" + nf(odds, 2)}</span>` : ""}${status}</div>
-  </div>`;
+  return `<div class="bkpk" ${linkable ? `data-mid="${r.id}"` : ""}>${mark}
+    <div class="bkpt"><span class="h">${esc(r.home.name)}<img src="${teamLogo(r.home.id)}" alt="" onerror="this.remove()"></span><b>${mid}</b><span class="a"><img src="${teamLogo(r.away.id)}" alt="" onerror="this.remove()">${esc(r.away.name)}</span></div>
+    <div class="bkpp">${line}</div>${why ? `<div class="why ${why.kind}">${REASON_TAG[why.kind]} · ${esc(why.txt.replace(/^[^:]+: /, ""))}</div>` : ""}</div>`;
 }
 
 /* ---------- oyuncu sayfası ---------- */

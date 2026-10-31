@@ -30,7 +30,7 @@ TEAM_SIGMA = 11.5        # takım toplamı sapması
 MIN_ODDS, MAX_ODDS = 1.15, 2.30   # en garanti tercihin oran aralığı
 REMOVED_COUPONS = {"sayi-2026-10-30-2"}  # istekle silinen kuponlar
 LOCK_BEFORE = timedelta(hours=1)  # kupon, ilk maçına bu kadar kala kesinleşir
-MAX_USE = 2              # aynı tercih günün en fazla kaç kuponunda yer alır
+MAX_USE = 1              # aynı tercih günün yalnızca bir kuponunda yer alır
 MAX_USE_FROM = "2026-10-31"
 STAKE = 1000             # karnede tek tercih başına yatırılan tutar
 
@@ -328,7 +328,7 @@ def record(store, g, pr, pick, opts=None):
 
 def build_coupons(date, cands, kept=()):
     """cands: [(oyun, seçenekler)]; aynı temada bir maç tek kuponda kullanılır, aynı kupon iki temada çıkmaz.
-    Aynı tercih en fazla MAX_USE kupona girer; kept: kilitlenmiş kuponlar, bütün sayımlara dahildir ve numaraları korunur."""
+    Aynı tercih başka kupona girmez (MAX_USE); kept: kilitlenmiş kuponlar, bütün sayımlara dahildir ve numaraları korunur."""
     limit = MAX_USE if date >= MAX_USE_FROM else 99
     out, seen = [], {frozenset((l["mid"], l["code"]) for l in c["legs"]) for c in kept}
     use = collections.Counter((l["mid"], l["code"]) for c in kept for l in c["legs"])

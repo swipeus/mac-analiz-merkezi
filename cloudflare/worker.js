@@ -19,6 +19,14 @@ export default {
     };
     if (req.method === "OPTIONS") return new Response(null, { headers: cors });
     if (url.pathname === "/") return json({ ok: true, service: "mac-analiz-canli" }, 200, cors);
+    // logo köprüsü: FotMob görselleri CORS vermediği için paylaşım görseli (canvas) bunlardan geçer
+    if (url.pathname === "/logo") {
+      const id = (url.searchParams.get("id") || "").replace(/\D/g, "");
+      if (!id) return json({ error: "id" }, 400, cors);
+      const dir = url.searchParams.get("t") === "league" ? "leaguelogo/dark" : "teamlogo";
+      const r = await fetch(`https://images.fotmob.com/image_resources/logo/${dir}/${id}.png`, { cf: { cacheTtl: 604800, cacheEverything: true } });
+      return new Response(r.body, { status: r.status, headers: { "Content-Type": "image/png", "Cache-Control": "public, max-age=604800", "Access-Control-Allow-Origin": "*" } });
+    }
     const expected = (env.ACCESS_KEY || "").trim();  // gizli değişkene satır sonu karışabiliyor
     if (!expected || (req.headers.get("X-Key") || "").trim() !== expected) return json({ error: "yetkisiz" }, 401, cors);
     try {

@@ -233,7 +233,11 @@ async function renderDay(silent) {
       <div class="mgrid">${mine.map((m) => cardHtml(m, true)).join("")}</div></section>` : "";
   v.innerHTML = quickBar(all) + (ms.length ? mineHtml + body : `<div class="card"><p class="muted">Bu filtreye uyan maç yok.</p></div>`);
   v.querySelectorAll("[data-quick]").forEach((x) => x.onclick = () => { quick = x.dataset.quick; safeSet("quick", quick); renderDay(true); });
-  v.querySelectorAll("[data-id]").forEach((r) => r.onclick = () => location.hash = "#/mac/" + r.dataset.id);
+  v.querySelectorAll("[data-id]").forEach((r) => r.onclick = (e) => {
+    const im = e.target.closest("[data-cimg]");
+    if (im) { openCardShare(+im.dataset.cimg, im); return; }
+    location.hash = "#/mac/" + r.dataset.id;
+  });
   if (typeof liveTick === "function") setTimeout(liveTick, 50);  // kartlara anlık skorları uygula
 }
 
@@ -349,7 +353,7 @@ function cardHtml(m, sorted) {
     ${probBoxes(boxItems(p.over25, p.btts, p.cpick, p.kpick, p.bodds), m.id)}` : `<div class="pending">Analiz hazırlanıyor…</div>`;
   const stc = matchState(m);
   return `<div class="mcard ${live ? "is-live" : ""} st-${stc}" data-id="${m.id}" title="${STATE_LABEL[stc]}">
-    <div class="mtop">${top}<div class="mtags">${sorted ? `<span class="tag lgt"><img src="${leagueLogo(m.league_id)}" alt="" onerror="this.remove()">${esc(m.league)}</span>${sortBadge(m)}` : tags}</div></div>
+    <div class="mtop"><span class="mtl">${top}${p ? `<button class="cimg" data-cimg="${m.id}" title="Görsel olarak paylaş" aria-label="Görsel olarak paylaş"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4m0 0L8 8m4-4 4 4M5 13v6a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>` : ""}</span><div class="mtags">${sorted ? `<span class="tag lgt"><img src="${leagueLogo(m.league_id)}" alt="" onerror="this.remove()">${esc(m.league)}</span>${sortBadge(m)}` : tags}</div></div>
     <div class="mteams">
       <div class="tm">${crestHtml(m.home, fav === "home", p && p.p_home)}<div class="nm">${esc(m.home.name)}</div></div>
       <div class="mid">${mid}</div>
@@ -2594,6 +2598,134 @@ function renderDays() {
   $("#fbDays").innerHTML = [[shift(-1), "Dün"], [base, "Bugün"], [shift(1), "Yarın"]].map(([d, l]) =>
     `<button class="ptab ${d === state.date ? "on" : ""}" data-fbd="${d}">${l}</button>`).join("");
   $("#fbDays").querySelectorAll("[data-fbd]").forEach((b) => b.onclick = () => setDate(b.dataset.fbd));
+}
+
+/* ---------- maç kartını görsel olarak paylaşma ---------- */
+const rr = (c, x, y, w, h, r) => { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); };
+// logolar köprüden gelir; gelmezse kart logosuz çizilir (görsel yine de çıkar)
+function logoImg(kind, id) {
+  const base = meta && meta.live && meta.live.url;
+  if (!base) return Promise.resolve(null);
+  return new Promise((ok) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    const t = setTimeout(() => ok(null), 5000);
+    img.onload = () => { clearTimeout(t); ok(img); };
+    img.onerror = () => { clearTimeout(t); ok(null); };
+    img.src = `${base}/logo?t=${kind}&id=${id}`;
+  });
+}
+async function cardImage(m) {
+  const W = 590, H = 500, S = 2, p = m.pred, s = p.safe, live = m.started && !m.finished;
+  const cv = document.createElement("canvas");
+  cv.width = W * S; cv.height = H * S;
+  const c = cv.getContext("2d");
+  c.scale(S, S);
+  const FONT = getComputedStyle(document.body).fontFamily;
+  const txt = (t, x, y, size, weight, color, align = "left", maxW = 0) => {
+    let z = size;
+    c.font = `${weight} ${z}px ${FONT}`;
+    while (maxW && z > 10 && c.measureText(t).width > maxW) { z -= 1; c.font = `${weight} ${z}px ${FONT}`; }
+    c.fillStyle = color; c.textAlign = align; c.textBaseline = "middle";
+    c.fillText(t, x, y);
+  };
+  const [hl, al, ll] = await Promise.all([logoImg("team", m.home.id), logoImg("team", m.away.id), logoImg("league", m.league_id)]);
+  c.fillStyle = "#0d1117"; c.fillRect(0, 0, W, H);
+  rr(c, 10, 10, W - 20, H - 20, 24); c.fillStyle = "#161b22"; c.fill();
+  c.save(); c.clip();
+  c.fillStyle = { live: "#f85149", final: "#3fb950", open: "#e3b341", wait: "#6e7681" }[matchState(m)] || "#30363d";
+  c.fillRect(10, 10, 7, H - 20);
+  c.restore();
+  rr(c, 10, 10, W - 20, H - 20, 24); c.strokeStyle = "#2b3440"; c.lineWidth = 1.5; c.stroke();
+  // lig etiketi ve durum
+  c.font = `600 14px ${FONT}`;
+  const lw = Math.min(c.measureText(m.league).width, 240) + (ll ? 28 : 0) + 24;
+  rr(c, W - 30 - lw, 28, lw, 30, 9); c.fillStyle = "#1f2630"; c.fill(); c.strokeStyle = "#2b3440"; c.stroke();
+  if (ll) c.drawImage(ll, W - 30 - lw + 11, 34, 18, 18);
+  txt(m.league, W - 42, 43, 14, 600, "#8b98a8", "right", 240);
+  if (live) txt(`CANLI ${m.live || ""}`.trim(), 40, 43, 15, 800, "#f85149");
+  else if (m.finished) txt("Maç sonu", 40, 43, 15, 600, "#8b98a8");
+  // takımlar
+  const fav = favoriteSide(p);
+  [[m.home, hl, 135, "home"], [m.away, al, 455, "away"]].forEach(([t, img, x, side]) => {
+    c.beginPath(); c.arc(x, 128, 42, 0, Math.PI * 2); c.fillStyle = "#1f2630"; c.fill();
+    if (fav === side) { c.beginPath(); c.arc(x, 128, 45, 0, Math.PI * 2); c.strokeStyle = "rgba(240,180,41,.75)"; c.lineWidth = 3; c.stroke(); }
+    if (img) c.drawImage(img, x - 30, 98, 60, 60);
+    else txt((t.name || "?").split(" ").map((w) => w[0]).join("").slice(0, 3), x, 128, 22, 800, "#8b98a8", "center");
+    if (fav === side) {
+      c.beginPath(); c.arc(x, 84, 15, 0, Math.PI * 2); c.fillStyle = "#f0c14b"; c.fill();
+      txt("★", x, 85, 18, 800, "#0d1117", "center");
+    }
+    txt(t.name, x, 200, 20, 700, "#e6edf3", "center", 200);
+  });
+  const big = m.started || m.finished ? `${m.home.score ?? 0} - ${m.away.score ?? 0}` : timeOf(m.utc);
+  txt(big, W / 2, 124, 36, 800, "#e6edf3", "center", 130);
+  txt(live ? "DEVAM EDİYOR" : m.finished ? "SKOR" : "BAŞLAMA", W / 2, 158, 13, 500, "#8b98a8", "center");
+  // kazanma çubuğu
+  txt(pc(p.p_home), 40, 242, 17, 700, "#58a6ff");
+  txt(pc(p.p_away), W - 40, 242, 17, 700, "#f78166", "right");
+  const bx = 96, bw = W - 192;
+  c.save(); rr(c, bx, 236, bw, 12, 6); c.clip();
+  let x0 = bx;
+  [[p.p_home, "#58a6ff"], [p.p_draw, "#8b98a8"], [p.p_away, "#f78166"]].forEach(([v, col]) => { c.fillStyle = col; c.fillRect(x0, 236, bw * v - 2, 12); x0 += bw * v; });
+  c.restore();
+  // en garanti tercih
+  if (s) {
+    const lost = s.hit === false, amber = s.hit == null && !s.final;
+    rr(c, 40, 268, W - 80, 52, 14);
+    c.fillStyle = lost ? "rgba(248,81,73,.15)" : amber ? "rgba(227,179,65,.12)" : "rgba(46,160,67,.14)"; c.fill();
+    c.strokeStyle = lost ? "rgba(248,81,73,.45)" : amber ? "rgba(227,179,65,.4)" : "rgba(46,160,67,.5)"; c.lineWidth = 1.5; c.stroke();
+    const right = [s.p != null ? pc(s.p) : "", s.odds ? nf(s.odds, 2) : ""].filter(Boolean).join(" · ");
+    txt(right, W - 58, 294, 18, 700, "#e6edf3", "right");
+    const rw = c.measureText(right).width;
+    txt(`${s.hit === true ? "✓" : lost ? "✗" : s.final ? "✅" : "!"} ${s.label.replace(/ \(.*\)$/, "")}`, 58, 294, 18, 700, "#e6edf3", "left", W - 116 - rw - 16);
+  }
+  // 4 kutu
+  const items = boxItems(p.over25, p.btts, p.cpick, p.kpick, p.bodds), vals = items.filter((x) => x[2] != null);
+  const top = vals.length ? Math.max(...vals.map((x) => x[2])) : null;
+  const gap = 10, bww = (W - 80 - gap * 3) / 4;
+  items.forEach(([ic, l, v, , odds], i) => {
+    const x = 40 + i * (bww + gap), y = 336, best = v != null && v === top;
+    rr(c, x, y, bww, 132, 14); c.fillStyle = "#1f2630"; c.fill();
+    c.strokeStyle = best ? "#3fb950" : "#2b3440"; c.lineWidth = best ? 2.5 : 1.5; c.stroke();
+    txt(`${ic} ${l}`, x + bww / 2, y + 26, 13, 500, "#8b98a8", "center", bww - 12);
+    txt(v != null ? pc(v) : "—", x + bww / 2, y + 62, 25, 800, best ? "#56d364" : "#e6edf3", "center");
+    if (odds) txt(nf(odds, 2), x + bww / 2, y + 92, 14, 500, "#8b98a8", "center");
+    rr(c, x + 12, y + 112, bww - 24, 5, 2.5); c.fillStyle = "#2b3440"; c.fill();
+    if (v) { rr(c, x + 12, y + 112, Math.max(5, (bww - 24) * v), 5, 2.5); c.fillStyle = "#58a6ff"; c.fill(); }
+  });
+  return new Promise((ok) => cv.toBlob(ok, "image/png"));
+}
+// önce önizleme açılır: paylaşım ayrı bir dokunuşla başlar, çünkü telefon tarayıcıları dokunuş dışında paylaşıma izin vermez
+async function openCardShare(id, btn) {
+  const m = (dayCache && dayCache.matches || []).find((x) => x.id === id);
+  if (!m || !m.pred) return;
+  btn.disabled = true;
+  let blob = null;
+  try { blob = await cardImage(m); } catch (e) { console.warn("görsel üretilemedi", e); }
+  btn.disabled = false;
+  if (!blob) return;
+  const caption = `${m.home.name} vs ${m.away.name} · ${timeOf(m.utc)}`;
+  const url = URL.createObjectURL(blob);
+  const box = document.createElement("div");
+  box.className = "wn-backdrop";
+  box.innerHTML = `<div class="wn cshare"><img src="${url}" alt=""><div class="cscap">${esc(caption)}</div>
+    <div class="csbtns"><button class="kbtn big wa" data-go>Paylaş</button><button class="kbtn big" data-x>Kapat</button></div><small class="muted cshint"></small></div>`;
+  const close = () => { box.remove(); URL.revokeObjectURL(url); };
+  box.onclick = (e) => { if (e.target === box || e.target.closest("[data-x]")) close(); };
+  $("[data-go]", box).onclick = async () => {
+    const file = new File([blob], `mac-${m.id}.png`, { type: "image/png" });
+    // bazı uygulamalar paylaşılan metni düşürür; açıklama panoda da hazır dursun
+    try { navigator.clipboard.writeText(caption).catch(() => {}); } catch { }
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], text: caption }); close(); } catch (e) { if (e.name !== "AbortError") $(".cshint", box).textContent = "Paylaşılamadı, görsele basılı tutup kaydedebilirsin."; }
+      return;
+    }
+    const a = document.createElement("a");
+    a.href = url; a.download = file.name; a.click();
+    $(".cshint", box).textContent = "Görsel indirildi, açıklama kopyalandı.";
+  };
+  document.body.appendChild(box);
 }
 
 /* ---------- statik mod (GitHub Pages): şifre ve yoklama ---------- */

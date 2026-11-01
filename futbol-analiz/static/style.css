@@ -1244,3 +1244,12 @@ body.sport-bk #toolbar, body.sport-bk .top .right, body.sport-bk #fbNav, body.in
 .bktile b { font-size: 16px; }
 .bktile small { color: var(--muted); font-size: 11px; }
 .bktile.safe { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.mtl { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.cimg { width: 30px; height: 30px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; color: var(--muted); background: var(--panel2); }
+.cimg svg { width: 16px; height: 16px; }
+.cimg:disabled { opacity: .5; }
+.cshare { max-width: 440px; width: 100%; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.cshare img { width: 100%; height: auto; border-radius: 12px; display: block; }
+.cscap { text-align: center; font-weight: 600; }
+.csbtns { display: flex; justify-content: center; gap: 8px; }
+.cshint { text-align: center; }

@@ -28,6 +28,7 @@ SIGMA_ALONE = {"nba": (10.0, 21.5), "el": (10.0, 18.0)}
 TEAM_SIGMA = 11.5        # takım toplamı sapması
 
 MIN_ODDS, MAX_ODDS = 1.15, 2.30   # en garanti tercihin oran aralığı
+ODDS_FROM, MIN_ODDS_NEW, MIN_LEG_ODDS = "2026-11-02", 1.35, 1.30  # bu günden itibaren tek tercih ve kupon ayağı alt sınırı
 REMOVED_COUPONS = {"sayi-2026-10-30-2"}  # istekle silinen kuponlar
 LOCK_BEFORE = timedelta(hours=1)  # kupon, ilk maçına bu kadar kala kesinleşir
 MAX_USE = 1              # aynı tercih günün yalnızca bir kuponunda yer alır
@@ -245,8 +246,9 @@ def options(pr, ev, home, away):
     return [{"code": c, "label": lb, "odds": o, "p": round(p, 3), "group": gr} for c, lb, o, p, gr in out if o and o > 1]
 
 
-def best_pick(opts):
-    ok = [x for x in opts if MIN_ODDS <= x["odds"] <= MAX_ODDS]
+def best_pick(opts, date=""):
+    low = MIN_ODDS_NEW if date >= ODDS_FROM else MIN_ODDS
+    ok = [x for x in opts if low <= x["odds"] <= MAX_ODDS]
     if not ok:
         return None
     # önce olasılık; piyasadan iyi görülen seçenek biraz öne çıkar
@@ -333,6 +335,8 @@ def build_coupons(date, cands, kept=()):
     out, seen = [], {frozenset((l["mid"], l["code"]) for l in c["legs"]) for c in kept}
     use = collections.Counter((l["mid"], l["code"]) for c in kept for l in c["legs"])
     for key, name, icon, ok, pmin, (lo, hi), (tot_lo, tot_hi), quota in THEMES:
+        if date >= ODDS_FROM:
+            lo = max(lo, MIN_LEG_ODDS)
         mine = [c for c in kept if c["theme"] == key]
         used = {l["mid"] for c in mine for l in c["legs"]}
         nums, n = {int(c["id"].rsplit("-", 1)[1]) for c in mine}, 0

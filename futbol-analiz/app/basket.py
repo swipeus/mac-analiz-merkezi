@@ -503,7 +503,7 @@ async def build(src, store, write, now):
                     ev = bm.find_event(g, events) if g["state"] == "pre" else None
                     pr = bm.predict(lg, g, rating if g["state"] == "pre" else rating_before, ev)
                     opts = bm.options(pr, ev, g["home"]["short"], g["away"]["short"])
-                    pick = bm.best_pick(opts)
+                    pick = bm.best_pick(opts, dk)
                     rec = bm.record(store, g, pr, pick, opts)
                     if g["state"] == "pre" and opts:
                         day_cands[dk].append((g, opts))

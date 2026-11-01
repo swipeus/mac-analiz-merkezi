@@ -566,12 +566,6 @@ body.chat-open { overflow: hidden; }
 
 /* ---------- canlı kutu ---------- */
 .live-card .lupd { font-size: 11px; font-weight: 700; color: #ff7b72; background: rgba(248,81,73,.14); padding: 2px 8px; border-radius: 999px; }
-.levs { display: flex; flex-direction: column; gap: 4px; max-height: 360px; overflow-y: auto; }
-.lev { display: grid; grid-template-columns: 44px 24px 1fr auto; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 8px; background: var(--panel2); font-size: 13px; border-left: 3px solid var(--home); }
-.lev.a { border-left-color: var(--away); }
-.lev.goal { background: rgba(46,160,67,.14); }
-.lmin { font-weight: 800; color: var(--muted); font-variant-numeric: tabular-nums; }
-.lsc { font-variant-numeric: tabular-nums; }
 
 /* ---------- maç sekmeleri ---------- */
 .mtabs { position: sticky; top: 52px; z-index: 9; margin: 10px -4px 0; padding: 8px 4px; background: rgba(13,17,23,.92); backdrop-filter: blur(6px); }
@@ -1262,3 +1256,30 @@ body.sport-bk #toolbar, body.sport-bk .top .right, body.sport-bk #fbNav, body.in
 .anar > small { text-align: right; font-weight: 700; }
 .anar.few { opacity: .55; }
 .anasum { margin: 10px 0 0; }
+.trk.on { border-color: rgba(63,185,80,.6); } .trk.off { border-color: rgba(248,81,73,.6); }
+.trk.on .tri { background: rgba(46,160,67,.25); box-shadow: 0 0 10px rgba(63,185,80,.75); }
+.trk.off .tri { background: rgba(218,54,51,.25); box-shadow: 0 0 10px rgba(248,81,73,.75); }
+.trk.on small:not(.muted), .klive.on { color: #56d364; font-weight: 600; }
+.trk.off small:not(.muted), .klive.off { color: #ff7b72; font-weight: 600; }
+.trk.on .tri, .trk.off .tri, .trk.on small:not(.muted), .trk.off small:not(.muted), .klive.on, .klive.off { animation: trkBlink 1.2s ease-in-out infinite; }
+@keyframes trkBlink { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .trk .tri, .trk small, .klive { animation: none !important; } }
+.bkpt b.lv { color: #f85149; }
+.tlhead { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; margin-bottom: 8px; font-size: 13px; font-weight: 700; color: var(--muted); }
+.tlhead span:first-child { text-align: right; }
+.tl { position: relative; display: flex; flex-direction: column; gap: 6px; }
+.tl::before { content: ""; position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; margin-left: -1px; background: var(--line); }
+.tlr { position: relative; display: grid; grid-template-columns: minmax(0,1fr) 56px minmax(0,1fr); align-items: center; gap: 6px; min-height: 40px; }
+.tlm { justify-self: center; min-width: 40px; padding: 3px 7px; border-radius: 9px; text-align: center; font-size: 12px; font-weight: 800; background: var(--panel2); border: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.tlm.g { background: #12306b; border-color: #2a55b0; color: #ffe94d; }
+.tls { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.tls.h { flex-direction: row-reverse; text-align: right; }
+.tlt { min-width: 0; line-height: 1.25; overflow-wrap: anywhere; }
+.tlt b { display: block; font-size: 13px; font-weight: 700; }
+.tlt small { display: block; font-size: 11.5px; color: var(--muted); }
+.tlt em { display: block; font-style: normal; font-size: 12px; font-weight: 800; color: #ffe94d; }
+.tlic { flex: 0 0 22px; display: flex; justify-content: center; font-size: 16px; }
+.tlsub { width: 20px; height: 20px; }
+.tlcard { display: block; width: 12px; height: 17px; border-radius: 2px; }
+.tlcard.y { background: #f5d90a; } .tlcard.r { background: #f85149; }
+.tlsep { position: relative; align-self: center; padding: 2px 12px; border-radius: 9px; font-size: 12px; font-weight: 800; color: #fff; background: #6e7681; }

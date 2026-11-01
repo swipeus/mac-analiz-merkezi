@@ -1187,7 +1187,7 @@ function couponCard(c, draft, open = true, kd = "") {
     <div class="klegs ktl">${c.legs.map((l) => `<div class="ktr ${legState(l)}"><div class="ktime">${esc(timeOf(l.utc))}</div><span class="kdot"></span><div class="kleg ${l.hit === true ? "hit" : l.hit === false ? "miss" : ""}" data-mid="${l.mid}">
       <div class="klt"><img src="${teamLogo(l.home.id)}" alt="" onerror="this.remove()"><span>${esc(l.home.name)} – ${esc(l.away.name)}</span>
         ${l.result ? `<b class="kres">${l.result[0]}-${l.result[1]}</b>` : l.live ? `<b class="kres live">● ${esc(l.live.min || "")} ${l.live.score[0]}-${l.live.score[1]}</b>` : ""}</div>
-      ${l.live && l.hit == null ? (() => { const p = pickProgress(l.code, trackCtx(l.live.score[0], l.live.score[1], false, null), l.home.name, l.away.name); return p ? `<div class="klive">📡 ${esc(p.txt)}</div>` : ""; })() : ""}
+      ${l.live && l.hit == null ? (() => { const p = pickProgress(l.code, trackCtx(l.live.score[0], l.live.score[1], false, null), l.home.name, l.away.name); return p ? `<div class="klive ${trkClass(p)}"><span>${trkMark(p)}</span> ${esc(p.txt)}</div>` : ""; })() : ""}
       <div class="klp"><span class="kpick">${esc(l.label)}</span><small>${pc(l.p)}</small><b>${nf(l.odds, 2)}</b>${legStatus(l)}</div>
       <div class="kpbar"><span style="width:${Math.round(l.p * 100)}%"></span></div>
     </div></div>`).join("")}</div>
@@ -1718,7 +1718,7 @@ function karneRow(r) {
   const why = pick && done && hit === false && r.final ? lossReason(r.pick.code, finalCtx({ final: r.final, home: { score: r.result[0] }, away: { score: r.result[1] }, status: { finished: true } }), r.home.name, r.away.name) : null;
   const linkable = !STATIC || (meta && meta.days && meta.days.includes(trDay(r.utc)));
   return `<div class="bkpk" ${linkable ? `data-mid="${r.id}"` : ""}>${mark}
-    <div class="bkpt"><span class="h">${esc(r.home.name)}<img src="${teamLogo(r.home.id)}" alt="" onerror="this.remove()"></span><b>${mid}</b><span class="a"><img src="${teamLogo(r.away.id)}" alt="" onerror="this.remove()">${esc(r.away.name)}</span></div>
+    <div class="bkpt"><span class="h">${esc(r.home.name)}<img src="${teamLogo(r.home.id)}" alt="" onerror="this.remove()"></span><b class="${r.state !== "done" && r.live ? "lv" : ""}">${mid}</b><span class="a"><img src="${teamLogo(r.away.id)}" alt="" onerror="this.remove()">${esc(r.away.name)}</span></div>
     <div class="bkpp">${line}</div>${why ? `<div class="why ${why.kind}">${REASON_TAG[why.kind]} · ${esc(why.txt.replace(/^[^:]+: /, ""))}</div>` : ""}</div>`;
 }
 
@@ -2164,25 +2164,26 @@ function pickProgress(code, c, H, W) {
     if (parts.some((p) => !p)) return null;
     if (parts.some((p) => p.st === "lost")) return { st: "lost", txt: parts.filter((p) => p.st === "lost").map((p) => p.txt).join(" · ") };
     if (parts.every((p) => p.st === "hit")) return { st: "hit", txt: "Bütün ayaklar tuttu" };
-    return { st: "open", txt: parts.filter((p) => p.st !== "hit").map((p) => p.txt).join(" · ") };
+    const rest = parts.filter((p) => p.st !== "hit");
+    return { st: "open", on: rest.some((p) => p.on === false) ? false : rest.every((p) => p.on) ? true : undefined, txt: rest.map((p) => p.txt).join(" · ") };
   }
   const t = c.hs + c.as, sc = `${c.hs}-${c.as}`;
   const res = { "1": c.hs > c.as, "X": c.hs === c.as, "2": c.hs < c.as, "1X": c.hs >= c.as, "X2": c.hs <= c.as, "12": c.hs !== c.as };
-  if (code in res) return c.fin ? { st: res[code] ? "hit" : "lost", txt: `Skor ${sc}` } : { st: "open", txt: `Şu an ${res[code] ? "tutuyor" : "tutmuyor"} (${sc})` };
+  if (code in res) return c.fin ? { st: res[code] ? "hit" : "lost", txt: `Skor ${sc}` } : { st: "open", on: res[code], txt: `Şu an ${res[code] ? "tutuyor" : "tutmuyor"} (${sc})` };
   if (code === "dnb1" || code === "dnb2") {
     if (c.fin && c.hs === c.as) return { st: "void", txt: "Berabere, iade" };
     const ok = code === "dnb1" ? c.hs > c.as : c.as > c.hs;
-    return c.fin ? { st: ok ? "hit" : "lost", txt: `Skor ${sc}` } : { st: "open", txt: `Şu an ${ok ? "tutuyor" : c.hs === c.as ? "berabere (iade)" : "tutmuyor"} (${sc})` };
+    return c.fin ? { st: ok ? "hit" : "lost", txt: `Skor ${sc}` } : { st: "open", on: c.hs === c.as ? undefined : ok, txt: `Şu an ${ok ? "tutuyor" : c.hs === c.as ? "berabere (iade)" : "tutmuyor"} (${sc})` };
   }
   if (code === "btts_yes") {
     if (c.hs > 0 && c.as > 0) return { st: "hit", txt: `İki takım da gol attı (${sc})` };
     if (c.fin) return { st: "lost", txt: `Skor ${sc}` };
-    return { st: "open", txt: `${c.hs === 0 && c.as === 0 ? "İki takımın da" : c.hs === 0 ? H + " takımının" : W + " takımının"} golü lazım (${sc})` };
+    return { st: "open", on: false, txt: `${c.hs === 0 && c.as === 0 ? "İki takımın da" : c.hs === 0 ? H + " takımının" : W + " takımının"} golü lazım (${sc})` };
   }
   if (code === "btts_no") {
     if (c.hs > 0 && c.as > 0) return { st: "lost", txt: `İki takım da gol attı (${sc})` };
     if (c.fin) return { st: "hit", txt: `Skor ${sc}` };
-    return { st: "open", txt: `Şu an tutuyor (${sc})` };
+    return { st: "open", on: true, txt: `Şu an tutuyor (${sc})` };
   }
   // alt/üst: toplam gol, takım golü, toplam korner, kart/şut/isabetli şut
   let m = code.match(/^([ou])(\d+(?:\.\d+)?)$/), v = null, what = "gol", line, ou;
@@ -2198,22 +2199,25 @@ function pickProgress(code, c, H, W) {
   if (v != null) {
     const need = Math.floor(line) + 1 - v;  // üst için kaç tane daha
     if (ou === "o") return v > line ? { st: "hit", txt: `${cap(what)} ${v}, çizgi geçildi` }
-      : c.fin ? { st: "lost", txt: `${cap(what)} ${v}, çizgi ${line}` } : { st: "open", txt: `${need} ${what} daha lazım (şu an ${v})` };
+      : c.fin ? { st: "lost", txt: `${cap(what)} ${v}, çizgi ${line}` } : { st: "open", on: false, txt: `${need} ${what} daha lazım (şu an ${v})` };
     return v > line ? { st: "lost", txt: `${cap(what)} ${v}, çizgi ${line} aşıldı` }
-      : c.fin ? { st: "hit", txt: `${cap(what)} ${v}, çizgi ${line}` } : { st: "open", txt: `Tutuyor; ${need} ${what} daha olursa yanar (şu an ${v})` };
+      : c.fin ? { st: "hit", txt: `${cap(what)} ${v}, çizgi ${line}` } : { st: "open", on: true, txt: `Tutuyor; ${need} ${what} daha olursa yanar (şu an ${v})` };
   }
   if (/^cm[12X]$/.test(code)) {
     if (!c.corners) return null;
     const [x, y] = c.corners, ok = code === "cm1" ? x > y : code === "cm2" ? y > x : x === y;
-    return c.fin ? { st: ok ? "hit" : "lost", txt: `Korner ${x}-${y}` } : { st: "open", txt: `Şu an ${ok ? "tutuyor" : "tutmuyor"} (korner ${x}-${y})` };
+    return c.fin ? { st: ok ? "hit" : "lost", txt: `Korner ${x}-${y}` } : { st: "open", on: ok, txt: `Şu an ${ok ? "tutuyor" : "tutmuyor"} (korner ${x}-${y})` };
   }
   if (code === "rc_yes" || code === "rc_no") {
     const red = c.red[0] + c.red[1];
-    if (code === "rc_yes") return red ? { st: "hit", txt: "Kırmızı kart çıktı" } : c.fin ? { st: "lost", txt: "Kırmızı kart çıkmadı" } : { st: "open", txt: "Henüz kırmızı kart yok" };
-    return red ? { st: "lost", txt: "Kırmızı kart çıktı" } : c.fin ? { st: "hit", txt: "Kırmızı kart çıkmadı" } : { st: "open", txt: "Şu an tutuyor" };
+    if (code === "rc_yes") return red ? { st: "hit", txt: "Kırmızı kart çıktı" } : c.fin ? { st: "lost", txt: "Kırmızı kart çıkmadı" } : { st: "open", on: false, txt: "Henüz kırmızı kart yok" };
+    return red ? { st: "lost", txt: "Kırmızı kart çıktı" } : c.fin ? { st: "hit", txt: "Kırmızı kart çıkmadı" } : { st: "open", on: true, txt: "Şu an tutuyor" };
   }
   return null;
 }
+// canlıda tercihin o anki durumu: tutuyorsa yeşil, tutmuyorsa kırmızı yanıp söner
+const trkClass = (p) => `${p.st}${p.st !== "open" ? "" : p.on === true ? " on" : p.on === false ? " off" : ""}`;
+const trkMark = (p) => p.st === "hit" ? "✓" : p.st === "lost" ? "✗" : p.st === "void" ? "↩" : p.on === true ? "👍🏻" : p.on === false ? "👎🏻" : "⏳";
 // tutmayan tercihin nedeni: şanssızlık (oyun tercihi destekledi), kıl payı ya da model yanıldı
 function lossReason(code, c, H, W) {
   if (!code || code.includes("&")) return null;
@@ -2253,7 +2257,7 @@ function trackHtml(b, c, title) {
     const p = pickProgress(x.code, c, H, W);
     if (!p) return;
     const why = p.st === "lost" && c.fin ? lossReason(x.code, c, H, W) : null;
-    rows.push(`<div class="trk ${p.st}"><span class="tri">${p.st === "hit" ? "✓" : p.st === "lost" ? "✗" : p.st === "void" ? "↩" : "⏳"}</span>
+    rows.push(`<div class="trk ${trkClass(p)}"><span class="tri">${trkMark(p)}</span>
       <div><b>${ic} ${name}: ${esc(x.label)}</b>${x.odds ? ` <small class="muted">@${nf(x.odds, 2)}</small>` : ""}<small>${esc(p.txt)}</small>
       ${why ? `<small class="why ${why.kind}">${REASON_TAG[why.kind]}${why.short ? " · " + esc(why.short) : ""}</small>` : ""}</div></div>`);
   };
@@ -2271,7 +2275,7 @@ function trackHtml(b, c, title) {
   const dk = trDay(b.utc), dc = dayCache && dayCache.date === dk ? dayCache : couponDay && couponDay.date === dk ? couponDay : null;
   ((dc && dc.coupons) || []).map(normCoupon).forEach((cp) => cp.legs.filter((l) => l.mid === b.id).forEach((l) => {
     const p = pickProgress(l.code, c, H, W);
-    if (p) rows.push(`<div class="trk ${p.st}"><span class="tri">${p.st === "hit" ? "✓" : p.st === "lost" ? "✗" : "⏳"}</span><div><b>${cp.icon || "🧩"} ${esc(cp.name)} ayağı: ${esc(l.label)}</b><small>${esc(p.txt)}</small></div></div>`);
+    if (p) rows.push(`<div class="trk ${trkClass(p)}"><span class="tri">${trkMark(p)}</span><div><b>${cp.icon || "🧩"} ${esc(cp.name)} ayağı: ${esc(l.label)}</b><small>${esc(p.txt)}</small></div></div>`);
   }));
   if (!rows.length) return "";
   return `<div class="card trkcard" style="--c:${c.fin ? "#a371f7" : "#f85149"}">${head(c.fin ? "🏁" : "📡", title)}${c.xg && c.xg[0] != null ? `<p class="muted trkxg">xG ${nf(c.xg[0], 2)} – ${nf(c.xg[1], 2)}</p>` : ""}<div class="trks">${rows.join("")}</div></div>`;

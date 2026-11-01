@@ -58,7 +58,27 @@ async function liveDay() {
 }
 
 /* --- maç sayfası: skor, olaylar, canlı istatistik, resmi 11 --- */
-const EV_IC = { Goal: "⚽", Substitution: "🔁" };
+const SUB_IC = `<svg class="tlsub" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 10a8 8 0 0 1 14-3M19 3v4h-4" fill="none" stroke="#3fb950" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M19 14a8 8 0 0 1-14 3M5 21v-4h4" fill="none" stroke="#f85149" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+// maç olayları: ortada dakika, solda ev sahibi, sağda deplasman; yukarıdan aşağı maçın akışı
+function eventTimeline(d, finished) {
+  const key = (e) => e.min + (e.plus || 0) / 100;
+  const evs = d.events.slice().sort((a, b) => key(a) - key(b));
+  if (!evs.length) return `<p class="muted">Henüz olay yok.</p>`;
+  const body = (e) => {
+    if (e.type === "Goal") {
+      const assist = (e.assist || "").replace(/^assist by /i, "");
+      return `<span class="tlic">⚽</span><span class="tlt">${e.score ? `<em>(${esc(e.score.replace("-", " - "))})</em>` : ""}<b>${esc(e.player || "")}${e.own ? " (k.k.)" : ""}${e.pen ? " (pen.)" : ""}</b>${assist ? `<small>${esc(assist)}</small>` : ""}</span>`;
+    }
+    if (e.type === "Substitution") return `<span class="tlic">${SUB_IC}</span><span class="tlt"><b>${esc(e.player || "")}</b><small>${esc(e.out || "")}</small></span>`;
+    return `<span class="tlic"><i class="tlcard ${e.card === "Red" || e.card === "YellowRed" ? "r" : "y"}"></i></span><span class="tlt"><b>${esc(e.player || "")}</b></span>`;
+  };
+  const row = (e) => `<div class="tlr"><div class="tls h">${e.home ? body(e) : ""}</div><div class="tlm ${e.type === "Goal" ? "g" : ""}">${e.min}'${e.plus ? "+" + e.plus : ""}</div><div class="tls a">${e.home ? "" : body(e)}</div></div>`;
+  const half = evs.findIndex((e) => e.min > 45);
+  const rows = evs.map(row);
+  if (half >= 0) rows.splice(half, 0, `<div class="tlsep">İY</div>`);
+  if (finished) rows.push(`<div class="tlsep">MS</div>`);
+  return `<div class="tlhead"><span>${esc(d.home.name)}</span><span>${esc(d.away.name)}</span></div><div class="tl">${rows.join("")}</div>`;
+}
 async function liveMatch(id) {
   const d = await liveGet(`/match?id=${id}`);
   if (!d || state.current !== id) return;
@@ -77,13 +97,7 @@ async function liveMatch(id) {
     parts.push(trackHtml(lastB, trackCtx(d.home.score, d.away.score, !!st.finished, d.stats), live ? `Tercihlerin durumu <span class="muted">· ${esc(st.live || "canlı")}</span>` : "Maç sonu değerlendirmesi"));
   }
   if (st.started) {
-    const evs = d.events.slice().sort((a, b) => (b.min + (b.plus || 0) / 100) - (a.min + (a.plus || 0) / 100));
-    const evHtml = evs.length ? evs.map((e) => {
-      const ic = e.type === "Card" ? (e.card === "Red" || e.card === "YellowRed" ? "🟥" : "🟨") : EV_IC[e.type] || "•";
-      const txt = e.type === "Substitution" ? `${esc(e.player || "")} <span class="muted">↔ ${esc(e.out || "")}</span>`
-        : `${esc(e.player || "")}${e.own ? " (k.k.)" : ""}${e.pen ? " (pen.)" : ""}${e.assist ? ` <span class="muted">${esc(e.assist)}</span>` : ""}`;
-      return `<div class="lev ${e.home ? "h" : "a"} ${e.type === "Goal" ? "goal" : ""}"><span class="lmin">${e.min}'${e.plus ? "+" + e.plus : ""}</span><span class="lic">${ic}</span><span class="ltx">${txt}</span>${e.type === "Goal" && e.score ? `<b class="lsc">${esc(e.score)}</b>` : ""}</div>`;
-    }).join("") : `<p class="muted">Henüz olay yok.</p>`;
+    const evHtml = eventTimeline(d, !!st.finished);
     const LAB = { possession: "Topla oynama %", xg: "xG", shots: "Şut", sot: "İsabetli şut", big: "Net pozisyon", corners: "Korner", yellow: "Sarı kart", red: "Kırmızı kart", fouls: "Faul", offsides: "Ofsayt" };
     const stHtml = Object.entries(LAB).filter(([k]) => d.stats[k]).map(([k, l]) => {
       const [x, y] = d.stats[k].map((v) => parseFloat(String(v).replace("%", "")) || 0);
@@ -93,7 +107,7 @@ async function liveMatch(id) {
         <span class="cv r">${esc(String(d.stats[k][1]))}</span></div>`;
     }).join("");
     parts.push(`<div class="card live-card" style="--c:#f85149">${head(live ? "🔴" : "🏁", `${live ? `Canlı · ${esc(st.live || "")}` : "Maç sonu"} <span class="muted">· ${esc(d.home.name)} ${d.home.score}-${d.away.score} ${esc(d.away.name)}</span>`, `<span class="muted lupd">anlık</span>`)}
-      <div class="grid2"><div><h3>Maç olayları</h3><div class="levs">${evHtml}</div></div>
+      <div class="grid2"><div><h3>Maç olayları</h3>${evHtml}</div>
       <div><h3>Canlı istatistik</h3>${stHtml || `<p class="muted">İstatistik henüz yok.</p>`}</div></div></div>`);
   }
   // resmi 11 analiz yayınından önce açıklandıysa

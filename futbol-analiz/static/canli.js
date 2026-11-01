@@ -48,7 +48,7 @@ async function liveDay() {
     card.classList.toggle("is-live", live);
     const mid = card.querySelector(".mid");
     if (mid && (m.started || m.finished)) mid.innerHTML = `<div class="sc">${m.hs ?? 0} - ${m.as ?? 0}</div><div class="sub">${live ? "devam ediyor" : "skor"}</div>`;
-    const top = card.querySelector(".mtop > :first-child");
+    const top = card.querySelector(".mtl > :first-child");
     if (top) {
       if (m.cancelled) top.outerHTML = `<span class="when">İptal</span>`;
       else if (live) top.outerHTML = `<span class="badge-live">CANLI ${esc(m.live || "")}</span>`;

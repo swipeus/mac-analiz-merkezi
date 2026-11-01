@@ -208,7 +208,7 @@ body.in-match .top { justify-content: flex-start; }
 .hero-league img { width: 22px; height: 22px; object-fit: contain; }
 .hero-league b { color: var(--text); }
 .hero .team span { line-height: 1.2; }
-.hero .score.live small { color: var(--bad); }
+.hero .score.live, .hero .score.live small, .mcard.is-live .sc { color: var(--bad); }
 .chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 4px 0 12px; }
 .mchip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 4px 10px; border-radius: 999px;
   background: rgba(255,255,255,.05); border: 1px solid var(--line); }

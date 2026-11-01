@@ -1,6 +1,6 @@
 "use strict";
 /* Canlı katman: Cloudflare köprüsü üzerinden (meta.live.url) skor, dakika, olaylar, canlı istatistik ve resmi 11'i
-   saniyeler içinde getirir; GitHub'daki 6 dakikalık analiz yayınını beklemez. Köprü yoksa sessizce devre dışı kalır. */
+   saniyeler içinde getirir; GitHub'daki 3 dakikalık analiz yayınını beklemez. Köprü yoksa sessizce devre dışı kalır. */
 
 const LIVE = { key: null, last: {}, timer: null, busy: false };
 const liveUrl = () => (STATIC && meta && meta.live && meta.live.url) || null;

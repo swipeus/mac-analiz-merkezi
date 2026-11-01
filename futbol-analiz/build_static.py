@@ -66,6 +66,7 @@ async def main(out):
     log.info("karne dersleri: %s · kanıtlanmış türler: %s", analysis.LESSON, sorted(analysis.PROVEN))
     analysis.LEAGUE_LESSON = karne.league_lessons(store)[0]
     log.info("lig dersleri: %s", analysis.LEAGUE_LESSON or "yok")
+    log.info("değerli oran özeti: %s", karne.value_report(store))
     await up.cycle()
     store.prune()
 

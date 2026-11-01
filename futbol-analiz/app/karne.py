@@ -117,6 +117,21 @@ def record(store, b):
         store.pred_put(mid, old)
 
 
+def value_report(store):
+    """Değerli oran kayıtlarının sıkılaştırılmış kurallarla özeti; kuralı değiştirmez, günlüğe yazılır."""
+    rows = [r for r in store.pred_all() if r.get("value") and r.get("state") == "done" and r.get("value_hit") in (True, False)]
+
+    def line(sel):
+        pl = sum(r["value"]["odds"] - 1 if r["value_hit"] else -1 for r in sel)
+        return f"{sum(1 for r in sel if r['value_hit'])}/{len(sel)} birim {pl:+.1f}"
+
+    edge = lambda r: r["value"].get("edge") or 0  # noqa: E731
+    return {"hepsi": line(rows), "avantaj>=10": line([r for r in rows if edge(r) >= 0.1]),
+            "avantaj>=15": line([r for r in rows if edge(r) >= 0.15]),
+            "oran<2.2": line([r for r in rows if r["value"]["odds"] < 2.2]),
+            "oran>=2.2": line([r for r in rows if r["value"]["odds"] >= 2.2])}
+
+
 CALIB_MIN_N = 40
 
 

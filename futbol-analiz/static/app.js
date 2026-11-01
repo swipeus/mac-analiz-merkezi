@@ -353,7 +353,7 @@ function cardHtml(m, sorted) {
     ${probBoxes(boxItems(p.over25, p.btts, p.cpick, p.kpick, p.bodds), m.id)}` : `<div class="pending">Analiz hazırlanıyor…</div>`;
   const stc = matchState(m);
   return `<div class="mcard ${live ? "is-live" : ""} st-${stc}" data-id="${m.id}" title="${STATE_LABEL[stc]}">
-    <div class="mtop"><span class="mtl">${top}${p ? `<button class="cimg" data-cimg="${m.id}" title="Görsel olarak paylaş" aria-label="Görsel olarak paylaş"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4m0 0L8 8m4-4 4 4M5 13v6a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>` : ""}</span><div class="mtags">${sorted ? `<span class="tag lgt"><img src="${leagueLogo(m.league_id)}" alt="" onerror="this.remove()">${esc(m.league)}</span>${sortBadge(m)}` : tags}</div></div>
+    <div class="mtop"><span class="mtl">${top}${p ? SHARE_BTN("data-cimg", m.id) : ""}</span><div class="mtags">${sorted ? `<span class="tag lgt"><img src="${leagueLogo(m.league_id)}" alt="" onerror="this.remove()">${esc(m.league)}</span>${sortBadge(m)}` : tags}</div></div>
     <div class="mteams">
       <div class="tm">${crestHtml(m.home, fav === "home", p && p.p_home)}<div class="nm">${esc(m.home.name)}</div></div>
       <div class="mid">${mid}</div>
@@ -1194,7 +1194,7 @@ function couponCard(c, draft, open = true, kd = "") {
     ${couponBar(c)}
     <div class="kfoot ksum">
       ${stake == null ? `<span class="kstake">Tutar önceki kupon sonuçlanınca belli olur</span>` : `<span class="kstake ${done ? (c.won ? "pos" : "neg") : ""}">${tl(stake)} → ${done ? (c.won ? tl(ret) + ` (${tl(ret - stake, true)})` : `0 ₺ (${tl(-stake, true)})`) : tl(ret)}</span>`}${status}</div>
-    <div class="kshare"><button class="kbtn" data-share="copy" data-cid="${esc(c.id)}">📋 Kopyala</button>${shareBtn("k:" + c.id, `${c.icon || "🧩"} ${c.name} · ${nf(c.odds, 2)}`, couponText(c))}</div>
+    <div class="kshare"><button class="kbtn" data-share="copy" data-cid="${esc(c.id)}">📋 Kopyala</button><button class="kbtn" data-cimgc="${esc(c.id)}">Görsel</button>${shareBtn("k:" + c.id, `${c.icon || "🧩"} ${c.name} · ${nf(c.odds, 2)}`, couponText(c))}</div>
   </details>`;
 }
 async function renderCoupons() {
@@ -1365,8 +1365,8 @@ function drawKarne() {
         S[k].nOdds ? tl(S[k].pl, true) : "—", `${S[k].h}/${S[k].n} tuttu${S[k].n ? " · " + rate(S[k].h, S[k].n) : ""} · ${stake.toLocaleString("tr-TR")} ₺/${unit}`)).join("")}
     </div>${weeklySummary()}</div>`;
   const tabs = `<div class="ptabs">${Object.entries(KARNE_TABS).map(([k, [ic, name]]) =>
-    `<button class="ptab ${karneTab === k ? "on" : ""}" data-kt="${k}">${ic} ${name} <small>${S[k].h}/${S[k].n}</small></button>`).join("")}</div>`;
-  const body = karneTab === "kupon" ? couponKarneHtml(S.kupon) : singlesKarneHtml(S[karneTab]);
+    `<button class="ptab ${karneTab === k ? "on" : ""}" data-kt="${k}">${ic} ${name} <small>${S[k].h}/${S[k].n}</small></button>`).join("")}<button class="ptab ${karneTab === "analiz" ? "on" : ""}" data-kt="analiz">📊 Analiz</button></div>`;
+  const body = karneTab === "analiz" ? karneAnalysisHtml() : karneTab === "kupon" ? couponKarneHtml(S.kupon) : singlesKarneHtml(S[karneTab]);
   $("#view").innerHTML = head1 + tabs + body + `<div id="plCal">${calendarHtml()}</div>`;
   $("#view").querySelectorAll("[data-kt]").forEach((b) => b.onclick = () => { karneTab = b.dataset.kt; drawKarne(); });
   $("#view").querySelectorAll("[data-kd]").forEach((d) => d.ontoggle = () => { d.open ? karneOpen.add(d.dataset.kd) : karneOpen.delete(d.dataset.kd); });
@@ -1658,6 +1658,54 @@ function bindCalendar() {
     bindCalendar();
   });
 }
+/* ---------- karne analizi: hangi tercih para kazandırıyor ---------- */
+const anaStat = (rows) => {
+  const n = rows.length, h = rows.filter((r) => r.hit).length;
+  const pl = rows.reduce((a, r) => a + (r.hit ? STAKE * (r.odds - 1) : -STAKE), 0);
+  return { n, h, pl, roi: n ? pl / (n * STAKE) : 0 };
+};
+function anaGroup(rows, keyOf) {
+  const g = new Map();
+  rows.forEach((r) => { const k = keyOf(r); if (k == null) return; g.has(k) ? g.get(k).push(r) : g.set(k, [r]); });
+  return [...g].map(([k, list]) => [k, anaStat(list)]);
+}
+const anaRow = ([label, x]) => `<div class="anar ${x.n < 10 ? "few" : ""}"><span>${esc(label)}<small>${x.h}/${x.n} · %${Math.round(x.h / x.n * 100)}</small></span><b class="${x.pl >= 0 ? "pos" : "neg"}">${tl(x.pl, true)}</b><small class="${x.pl >= 0 ? "pos" : "neg"}">${x.roi >= 0 ? "+" : "−"}%${Math.abs(Math.round(x.roi * 100))}</small></div>`;
+const anaCard = (ic, title, rows) => rows.length ? `<div class="card">${head(ic, title)}<div class="anat">${rows.map(anaRow).join("")}</div></div>` : "";
+const anaBand = (edges, v) => { for (const [lim, l] of edges) if (v < lim) return l; return null; };
+const ODDS_BANDS = [[1.3, "1,30 altı"], [1.5, "1,30 – 1,50"], [1.8, "1,50 – 1,80"], [2.5, "1,80 – 2,50"], [Infinity, "2,50 üstü"]];
+const EDGE_BANDS = [[-0.05, "Piyasadan belirgin geride"], [0, "Piyasadan biraz geride"], [0.05, "Piyasadan biraz önde"], [Infinity, "Piyasadan belirgin önde"]];
+// rows: { type, lg, odds, p, hit }; 1.000 ₺ tercih başına, az veri (10 altı) soluk gösterilir
+function analysisHtml(rows) {
+  if (!rows.length) return `<div class="card"><p class="muted">Analiz için henüz sonuçlanmış tercih yok.</p></div>`;
+  const byPl = (g) => g.sort((a, b) => b[1].pl - a[1].pl);
+  const types = byPl(anaGroup(rows, (r) => r.type)), lgs = byPl(anaGroup(rows, (r) => r.lg));
+  const order = (bands, g) => bands.map((b) => g.find((x) => x[0] === b[1])).filter(Boolean);
+  const odds = order(ODDS_BANDS, anaGroup(rows, (r) => anaBand(ODDS_BANDS, r.odds)));
+  const edge = order(EDGE_BANDS, anaGroup(rows, (r) => r.p == null ? null : anaBand(EDGE_BANDS, r.p * r.odds - 1)));
+  const T = anaStat(rows), solid = [...types, ...lgs].filter((x) => x[1].n >= 10).sort((a, b) => b[1].roi - a[1].roi);
+  const top = solid[0], low = solid[solid.length - 1];
+  return `<div class="card" style="--c:#58a6ff">${head("📊", "Para ne kazandırıyor?")}
+    <div class="bkexp"><div><small>Tercih</small><b>${T.h}/${T.n}</b></div><div><small>Kâr / zarar</small><b class="${T.pl >= 0 ? "pos" : "neg"}">${tl(T.pl, true)}</b></div><div><small>Yatırım getirisi</small><b class="${T.pl >= 0 ? "pos" : "neg"}">%${Math.round(T.roi * 100)}</b></div></div>
+    ${top && top !== low ? `<p class="anasum">En iyi: <b class="pos">${esc(top[0])}</b> · En zayıf: <b class="neg">${esc(low[0])}</b></p>` : ""}
+    <p class="muted">Tercih başına 1.000 ₺ üzerinden. Soluk satırlarda 10'dan az sonuç var, tek başına karar verdirmez.</p></div>
+    ${anaCard("🧩", "Tercih türüne göre", types)}${anaCard("🏆", "Lige göre", lgs)}${anaCard("🎯", "Oran aralığına göre", odds)}${anaCard("⚖️", "Modelin piyasaya göre durumu", edge)}`;
+}
+// değerli oran kuralının sıkılaştırılmış hallerini sonuçlanmış gerçek kayıtlarda dener; kuralı değiştirmez
+function valueTestHtml(all) {
+  const v = all.filter((r) => r.value && r.value.odds && r.state === "done" && (r.value_hit === true || r.value_hit === false))
+    .map((r) => ({ type: pickType(r.value), odds: r.value.odds, edge: r.value.edge ?? (r.value.p * r.value.odds - 1), p: r.value.p, hit: r.value_hit }));
+  if (!v.length) return `<div class="card">${head("🧪", "Değerli oran testi")}<p class="muted">Henüz sonuçlanmış değerli oran tercihi yok.</p></div>`;
+  const tests = [["Şu anki kural", () => true], ["Avantaj %10 ve üstü", (r) => r.edge >= 0.1], ["Avantaj %15 ve üstü", (r) => r.edge >= 0.15], ["Oran 2,20 altı", (r) => r.odds < 2.2], ["Oran 2,20 ve üstü", (r) => r.odds >= 2.2], ["Olasılık %50 ve üstü", (r) => r.p >= 0.5]];
+  const rows = tests.map(([l, f]) => [l, v.filter(f)]).filter((x) => x[1].length).map(([l, list]) => [l, anaStat(list)]);
+  return `<div class="card">${head("🧪", "Değerli oran testi")}<div class="anat">${rows.map(anaRow).join("")}</div>
+    <p class="muted">Siteye düşen gerçek değerli oran tercihleri, daha sıkı kurallarla baştan süzülür. Kural değiştirilmedi, yalnızca karşılaştırma.</p></div>${anaCard("🧩", "Değerli oran: türe göre", anaGroup(v, (r) => r.type).sort((a, b) => b[1].pl - a[1].pl))}`;
+}
+function karneAnalysisHtml() {
+  const rows = karneRows.filter((r) => pickDecided(r) && r.pick.odds && (r.pick_hit === true || r.pick_hit === false))
+    .map((r) => ({ type: cap(pickType(r.pick)), lg: r.league, odds: r.pick.odds, p: r.pick.p, hit: r.pick_hit }));
+  return analysisHtml(rows) + valueTestHtml(karneRows);
+}
+
 function karneRow(r) {
   const pick = karneTab === "pick";
   const done = r.state === "done" || (pick && pickDecided(r));
@@ -2581,6 +2629,8 @@ $("#view").addEventListener("click", (e) => {
   if (ob) { e.stopPropagation(); e.preventDefault(); openOddsAt(+ob.dataset.omid, ob.dataset.ocode); return; }
   const sa = e.target.closest("[data-sadd]");
   if (sa) { e.stopPropagation(); e.preventDefault(); toggleShare(sa.dataset.sadd, sa); return; }
+  const ci = e.target.closest("[data-cimgc]");
+  if (ci) { e.stopPropagation(); e.preventDefault(); openCouponShare(ci.dataset.cimgc, ci); return; }
   const sh = e.target.closest("[data-share]");
   if (sh) { e.stopPropagation(); e.preventDefault(); copyCoupon(sh.dataset.cid, sh); return; }
   const el = e.target.closest("[data-pid]");
@@ -2602,22 +2652,22 @@ function renderDays() {
 
 /* ---------- maç kartını görsel olarak paylaşma ---------- */
 const rr = (c, x, y, w, h, r) => { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); };
-// logolar köprüden gelir; gelmezse kart logosuz çizilir (görsel yine de çıkar)
-function logoImg(kind, id) {
+// logolar köprüden gelir; gelmezse görsel logosuz çizilir
+function logoImg(path) {
   const base = meta && meta.live && meta.live.url;
-  if (!base) return Promise.resolve(null);
+  if (!base || !path) return Promise.resolve(null);
   return new Promise((ok) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
     const t = setTimeout(() => ok(null), 5000);
     img.onload = () => { clearTimeout(t); ok(img); };
     img.onerror = () => { clearTimeout(t); ok(null); };
-    img.src = `${base}/logo?t=${kind}&id=${id}`;
+    img.src = base + path;
   });
 }
-async function cardImage(m) {
-  const W = 590, H = 500, S = 2, p = m.pred, s = p.safe, live = m.started && !m.finished;
-  const cv = document.createElement("canvas");
+const SHARE_BTN = (attr, id) => `<button class="cimg" ${attr}="${esc(String(id))}" title="Görsel olarak paylaş" aria-label="Görsel olarak paylaş"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4m0 0L8 8m4-4 4 4M5 13v6a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`;
+function canvasKit(W, H) {
+  const S = 2, cv = document.createElement("canvas");
   cv.width = W * S; cv.height = H * S;
   const c = cv.getContext("2d");
   c.scale(S, S);
@@ -2629,62 +2679,62 @@ async function cardImage(m) {
     c.fillStyle = color; c.textAlign = align; c.textBaseline = "middle";
     c.fillText(t, x, y);
   };
-  const [hl, al, ll] = await Promise.all([logoImg("team", m.home.id), logoImg("team", m.away.id), logoImg("league", m.league_id)]);
-  c.fillStyle = "#0d1117"; c.fillRect(0, 0, W, H);
-  rr(c, 10, 10, W - 20, H - 20, 24); c.fillStyle = "#161b22"; c.fill();
-  c.save(); c.clip();
-  c.fillStyle = { live: "#f85149", final: "#3fb950", open: "#e3b341", wait: "#6e7681" }[matchState(m)] || "#30363d";
-  c.fillRect(10, 10, 7, H - 20);
-  c.restore();
-  rr(c, 10, 10, W - 20, H - 20, 24); c.strokeStyle = "#2b3440"; c.lineWidth = 1.5; c.stroke();
-  // lig etiketi ve durum
+  const frame = (color) => {
+    c.fillStyle = "#0d1117"; c.fillRect(0, 0, W, H);
+    rr(c, 10, 10, W - 20, H - 20, 24); c.fillStyle = "#161b22"; c.fill();
+    c.save(); c.clip();
+    c.fillStyle = color; c.fillRect(10, 10, 7, H - 20);
+    c.restore();
+    rr(c, 10, 10, W - 20, H - 20, 24); c.strokeStyle = "#2b3440"; c.lineWidth = 1.5; c.stroke();
+  };
+  return { cv, c, txt, frame, FONT, blob: () => new Promise((ok) => cv.toBlob(ok, "image/png")) };
+}
+// o: league, leagueLogo, color, top, topColor, home/away {name, logo}, fav, big, sub, p [ev, ber, dep], safe {text, right, tone}, boxes
+async function drawCard(o) {
+  const W = 590, H = o.boxes.length ? 500 : o.safe ? 348 : 270;
+  const { c, txt, frame, FONT, blob } = canvasKit(W, H);
+  const [hl, al, ll] = await Promise.all([logoImg(o.home.logo), logoImg(o.away.logo), logoImg(o.leagueLogo)]);
+  frame(o.color);
   c.font = `600 14px ${FONT}`;
-  const lw = Math.min(c.measureText(m.league).width, 240) + (ll ? 28 : 0) + 24;
+  const lw = Math.min(c.measureText(o.league).width, 240) + (ll ? 28 : 0) + 24;
   rr(c, W - 30 - lw, 28, lw, 30, 9); c.fillStyle = "#1f2630"; c.fill(); c.strokeStyle = "#2b3440"; c.stroke();
   if (ll) c.drawImage(ll, W - 30 - lw + 11, 34, 18, 18);
-  txt(m.league, W - 42, 43, 14, 600, "#8b98a8", "right", 240);
-  if (live) txt(`CANLI ${m.live || ""}`.trim(), 40, 43, 15, 800, "#f85149");
-  else if (m.finished) txt("Maç sonu", 40, 43, 15, 600, "#8b98a8");
-  // takımlar
-  const fav = favoriteSide(p);
-  [[m.home, hl, 135, "home"], [m.away, al, 455, "away"]].forEach(([t, img, x, side]) => {
+  txt(o.league, W - 42, 43, 14, 600, "#8b98a8", "right", 240);
+  if (o.top) txt(o.top, 40, 43, 15, 800, o.topColor || "#8b98a8", "left", 270);
+  [[o.home, hl, 135, "home"], [o.away, al, 455, "away"]].forEach(([t, img, x, side]) => {
     c.beginPath(); c.arc(x, 128, 42, 0, Math.PI * 2); c.fillStyle = "#1f2630"; c.fill();
-    if (fav === side) { c.beginPath(); c.arc(x, 128, 45, 0, Math.PI * 2); c.strokeStyle = "rgba(240,180,41,.75)"; c.lineWidth = 3; c.stroke(); }
+    if (o.fav === side) { c.beginPath(); c.arc(x, 128, 45, 0, Math.PI * 2); c.strokeStyle = "rgba(240,180,41,.75)"; c.lineWidth = 3; c.stroke(); }
     if (img) c.drawImage(img, x - 30, 98, 60, 60);
     else txt((t.name || "?").split(" ").map((w) => w[0]).join("").slice(0, 3), x, 128, 22, 800, "#8b98a8", "center");
-    if (fav === side) {
+    if (o.fav === side) {
       c.beginPath(); c.arc(x, 84, 15, 0, Math.PI * 2); c.fillStyle = "#f0c14b"; c.fill();
       txt("★", x, 85, 18, 800, "#0d1117", "center");
     }
     txt(t.name, x, 200, 20, 700, "#e6edf3", "center", 200);
   });
-  const big = m.started || m.finished ? `${m.home.score ?? 0} - ${m.away.score ?? 0}` : timeOf(m.utc);
-  txt(big, W / 2, 124, 36, 800, "#e6edf3", "center", 130);
-  txt(live ? "DEVAM EDİYOR" : m.finished ? "SKOR" : "BAŞLAMA", W / 2, 158, 13, 500, "#8b98a8", "center");
-  // kazanma çubuğu
-  txt(pc(p.p_home), 40, 242, 17, 700, "#58a6ff");
-  txt(pc(p.p_away), W - 40, 242, 17, 700, "#f78166", "right");
-  const bx = 96, bw = W - 192;
-  c.save(); rr(c, bx, 236, bw, 12, 6); c.clip();
-  let x0 = bx;
-  [[p.p_home, "#58a6ff"], [p.p_draw, "#8b98a8"], [p.p_away, "#f78166"]].forEach(([v, col]) => { c.fillStyle = col; c.fillRect(x0, 236, bw * v - 2, 12); x0 += bw * v; });
-  c.restore();
-  // en garanti tercih
-  if (s) {
-    const lost = s.hit === false, amber = s.hit == null && !s.final;
-    rr(c, 40, 268, W - 80, 52, 14);
-    c.fillStyle = lost ? "rgba(248,81,73,.15)" : amber ? "rgba(227,179,65,.12)" : "rgba(46,160,67,.14)"; c.fill();
-    c.strokeStyle = lost ? "rgba(248,81,73,.45)" : amber ? "rgba(227,179,65,.4)" : "rgba(46,160,67,.5)"; c.lineWidth = 1.5; c.stroke();
-    const right = [s.p != null ? pc(s.p) : "", s.odds ? nf(s.odds, 2) : ""].filter(Boolean).join(" · ");
-    txt(right, W - 58, 294, 18, 700, "#e6edf3", "right");
-    const rw = c.measureText(right).width;
-    txt(`${s.hit === true ? "✓" : lost ? "✗" : s.final ? "✅" : "!"} ${s.label.replace(/ \(.*\)$/, "")}`, 58, 294, 18, 700, "#e6edf3", "left", W - 116 - rw - 16);
+  txt(o.big, W / 2, 124, 36, 800, "#e6edf3", "center", 130);
+  txt(o.sub, W / 2, 158, 13, 500, "#8b98a8", "center");
+  if (o.p && o.p[0] != null) {
+    txt(pc(o.p[0]), 40, 242, 17, 700, "#58a6ff");
+    txt(pc(o.p[2]), W - 40, 242, 17, 700, "#f78166", "right");
+    const bx = 96, bw = W - 192;
+    c.save(); rr(c, bx, 236, bw, 12, 6); c.clip();
+    let x0 = bx;
+    [[o.p[0], "#58a6ff"], [o.p[1] || 0, "#8b98a8"], [o.p[2], "#f78166"]].forEach(([v, col]) => { c.fillStyle = col; c.fillRect(x0, 236, Math.max(0, bw * v - 2), 12); x0 += bw * v; });
+    c.restore();
   }
-  // 4 kutu
-  const items = boxItems(p.over25, p.btts, p.cpick, p.kpick, p.bodds), vals = items.filter((x) => x[2] != null);
-  const top = vals.length ? Math.max(...vals.map((x) => x[2])) : null;
+  if (o.safe) {
+    const t = o.safe.tone, tint = { lost: ["248,81,73", .15, .45], open: ["227,179,65", .12, .4], ok: ["46,160,67", .14, .5] }[t];
+    rr(c, 40, 268, W - 80, 52, 14);
+    c.fillStyle = `rgba(${tint[0]},${tint[1]})`; c.fill();
+    c.strokeStyle = `rgba(${tint[0]},${tint[2]})`; c.lineWidth = 1.5; c.stroke();
+    txt(o.safe.right, W - 58, 294, 18, 700, "#e6edf3", "right");
+    const rw = c.measureText(o.safe.right).width;
+    txt(o.safe.text, 58, 294, 18, 700, "#e6edf3", "left", W - 116 - rw - 16);
+  }
+  const vals = o.boxes.filter((x) => x[2] != null), top = vals.length ? Math.max(...vals.map((x) => x[2])) : null;
   const gap = 10, bww = (W - 80 - gap * 3) / 4;
-  items.forEach(([ic, l, v, , odds], i) => {
+  o.boxes.forEach(([ic, l, v, , odds], i) => {
     const x = 40 + i * (bww + gap), y = 336, best = v != null && v === top;
     rr(c, x, y, bww, 132, 14); c.fillStyle = "#1f2630"; c.fill();
     c.strokeStyle = best ? "#3fb950" : "#2b3440"; c.lineWidth = best ? 2.5 : 1.5; c.stroke();
@@ -2694,18 +2744,54 @@ async function cardImage(m) {
     rr(c, x + 12, y + 112, bww - 24, 5, 2.5); c.fillStyle = "#2b3440"; c.fill();
     if (v) { rr(c, x + 12, y + 112, Math.max(5, (bww - 24) * v), 5, 2.5); c.fillStyle = "#58a6ff"; c.fill(); }
   });
-  return new Promise((ok) => cv.toBlob(ok, "image/png"));
+  return blob();
+}
+async function drawCoupon(c0) {
+  const legs = [...c0.legs].sort((a, b) => a.utc.localeCompare(b.utc));
+  const W = 590, H = 112 + legs.length * 76 + 70;
+  const { c, txt, frame, blob } = canvasKit(W, H);
+  const logos = await Promise.all(legs.map((l) => logoImg(l.home.id ? `/logo?t=team&id=${l.home.id}` : l.hlogo ? `/logo?u=${encodeURIComponent(l.hlogo)}` : null)));
+  const done = c0.state === "done";
+  frame(done ? (c0.won ? "#3fb950" : "#f85149") : "#e3b341");
+  txt(c0.name, 40, 48, 24, 800, "#e6edf3", "left", 340);
+  txt(new Date(c0.date + "T12:00:00").toLocaleDateString("tr-TR", { day: "numeric", month: "long", weekday: "long" }), 40, 78, 14, 500, "#8b98a8", "left", 340);
+  txt(nf(c0.odds, 2), W - 40, 48, 28, 800, "#56d364", "right");
+  txt("toplam oran", W - 40, 78, 13, 500, "#8b98a8", "right");
+  legs.forEach((l, i) => {
+    const y = 106 + i * 76;
+    c.strokeStyle = "#2b3440"; c.lineWidth = 1; c.beginPath(); c.moveTo(40, y); c.lineTo(W - 40, y); c.stroke();
+    txt(timeOf(l.utc), 40, y + 38, 15, 700, "#8b98a8");
+    if (logos[i]) c.drawImage(logos[i], 98, y + 22, 32, 32);
+    txt(`${l.home.name} – ${l.away.name}`, 142, y + 26, 16, 700, "#e6edf3", "left", W - 142 - 40);
+    txt(l.label, 142, y + 51, 15, 500, "#58a6ff", "left", W - 142 - 110);
+    txt(`${l.hit === true ? "✓ " : l.hit === false ? "✗ " : ""}${nf(l.odds, 2)}`, W - 40, y + 51, 16, 800, l.hit === true ? "#56d364" : l.hit === false ? "#f85149" : "#e6edf3", "right");
+  });
+  const y = 106 + legs.length * 76;
+  c.strokeStyle = "#2b3440"; c.lineWidth = 1; c.beginPath(); c.moveTo(40, y); c.lineTo(W - 40, y); c.stroke();
+  txt(done ? (c0.won ? "Kazandı" : "Kaybetti") : `Tutma ihtimali ${pc(c0.p)}`, 40, y + 34, 16, 700, done ? (c0.won ? "#56d364" : "#f85149") : "#e6edf3");
+  txt(`${legs.length} maç`, W - 40, y + 34, 15, 500, "#8b98a8", "right");
+  return blob();
+}
+function footballCardData(m) {
+  const p = m.pred, s = p.safe, live = m.started && !m.finished, lost = s && s.hit === false, amber = s && s.hit == null && !s.final;
+  return {
+    league: m.league, leagueLogo: `/logo?t=league&id=${m.league_id}`,
+    color: { live: "#f85149", final: "#3fb950", open: "#e3b341", wait: "#6e7681" }[matchState(m)] || "#30363d",
+    top: live ? `CANLI ${m.live || ""}`.trim() : m.finished ? "Maç sonu" : "", topColor: live ? "#f85149" : "#8b98a8",
+    home: { name: m.home.name, logo: `/logo?t=team&id=${m.home.id}` }, away: { name: m.away.name, logo: `/logo?t=team&id=${m.away.id}` },
+    fav: favoriteSide(p), big: m.started || m.finished ? `${m.home.score ?? 0} - ${m.away.score ?? 0}` : timeOf(m.utc),
+    sub: live ? "DEVAM EDİYOR" : m.finished ? "SKOR" : "BAŞLAMA", p: [p.p_home, p.p_draw, p.p_away],
+    safe: s ? { text: `${s.hit === true ? "✓" : lost ? "✗" : s.final ? "✅" : "!"} ${s.label.replace(/ \(.*\)$/, "")}`, right: [s.p != null ? pc(s.p) : "", s.odds ? nf(s.odds, 2) : ""].filter(Boolean).join(" · "), tone: lost ? "lost" : amber ? "open" : "ok" } : null,
+    boxes: boxItems(p.over25, p.btts, p.cpick, p.kpick, p.bodds),
+  };
 }
 // önce önizleme açılır: paylaşım ayrı bir dokunuşla başlar, çünkü telefon tarayıcıları dokunuş dışında paylaşıma izin vermez
-async function openCardShare(id, btn) {
-  const m = (dayCache && dayCache.matches || []).find((x) => x.id === id);
-  if (!m || !m.pred) return;
+async function shareImage(btn, make, caption, name) {
   btn.disabled = true;
   let blob = null;
-  try { blob = await cardImage(m); } catch (e) { console.warn("görsel üretilemedi", e); }
+  try { blob = await make(); } catch (e) { console.warn("görsel üretilemedi", e); }
   btn.disabled = false;
   if (!blob) return;
-  const caption = `${m.home.name} vs ${m.away.name} · ${timeOf(m.utc)}`;
   const url = URL.createObjectURL(blob);
   const box = document.createElement("div");
   box.className = "wn-backdrop";
@@ -2714,7 +2800,7 @@ async function openCardShare(id, btn) {
   const close = () => { box.remove(); URL.revokeObjectURL(url); };
   box.onclick = (e) => { if (e.target === box || e.target.closest("[data-x]")) close(); };
   $("[data-go]", box).onclick = async () => {
-    const file = new File([blob], `mac-${m.id}.png`, { type: "image/png" });
+    const file = new File([blob], `${name}.png`, { type: "image/png" });
     // bazı uygulamalar paylaşılan metni düşürür; açıklama panoda da hazır dursun
     try { navigator.clipboard.writeText(caption).catch(() => {}); } catch { }
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -2726,6 +2812,17 @@ async function openCardShare(id, btn) {
     $(".cshint", box).textContent = "Görsel indirildi, açıklama kopyalandı.";
   };
   document.body.appendChild(box);
+}
+function openCardShare(id, btn) {
+  const m = (dayCache && dayCache.matches || []).find((x) => x.id === id);
+  if (!m || !m.pred) return;
+  shareImage(btn, () => drawCard(footballCardData(m)), `${m.home.name} vs ${m.away.name} · ${timeOf(m.utc)}`, `mac-${m.id}`);
+}
+function openCouponShare(id, btn) {
+  const c = COUPON_BY_ID.get(id);
+  if (!c) return;
+  const day = new Date(c.date + "T12:00:00").toLocaleDateString("tr-TR", { day: "numeric", month: "long" });
+  shareImage(btn, () => drawCoupon(c), `${c.name} · ${day} · Oran ${nf(c.odds, 2)}`, `kupon-${id}`);
 }
 
 /* ---------- statik mod (GitHub Pages): şifre ve yoklama ---------- */
@@ -2757,6 +2854,15 @@ async function unlockWith(raw) {
   catch (e) { KEY = null; if (e.message === "NOTFOUND") throw new Error("Site verisi henüz yayınlanmadı"); return false; }
 }
 // yeni sürüm yayınlandıysa sayfa önbelleği aşılarak yenilenir (GitHub sayfayı 10 dakika önbellekte tutar); her sürüm için bir kez denenir
+// veri 15 dakikadan eskiyse yayın durmuş demektir (normalde 3 dakikada bir yenilenir)
+function checkStale(m) {
+  if (!STATIC || !m || !m.updated) return;
+  const min = Math.floor((Date.now() / 1000 - m.updated) / 60);
+  let bar = $("#staleBar");
+  if (min < 15) { if (bar) bar.remove(); return; }
+  if (!bar) { bar = Object.assign(document.createElement("div"), { id: "staleBar", className: "stalebar" }); $("#view").before(bar); }
+  bar.textContent = `Veriler ${min >= 120 ? Math.floor(min / 60) + " saattir" : min + " dakikadır"} güncellenmiyor, gösterilenler eski olabilir.`;
+}
 function checkVersion(m) {
   const v = m && m.site_ver;
   if (!v || !window.SITE_VER || v === window.SITE_VER) return;
@@ -2769,10 +2875,12 @@ function checkVersion(m) {
 function startPolling() {
   let lastEv = +(safeGet("lastEventId") || 0);
   checkVersion(meta);
+  checkStale(meta);
   const tick = async () => {
     try {
       const m = await getData("meta.json");
       checkVersion(m);
+      checkStale(m);
       if (meta && m.updated === meta.updated) return;
       meta = m;
       const evs = await getData("events.json");

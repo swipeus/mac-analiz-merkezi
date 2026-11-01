@@ -132,6 +132,24 @@ def value_report(store):
             "oran>=2.2": line([r for r in rows if r["value"]["odds"] >= 2.2])}
 
 
+def odds_report(store):
+    """Garanti tercihlerin oran aralığı ve model avantajına göre özeti (1 birim bahisle); günlüğe yazılır."""
+    rows = [r for r in store.pred_all() if r.get("state") == "done" and (r.get("pick") or {}).get("odds")
+            and r.get("pick_hit") in (True, False) and tr_day(r.get("utc")) >= KARNE_START]
+
+    def line(sel):
+        pl = sum(r["pick"]["odds"] - 1 if r["pick_hit"] else -1 for r in sel)
+        avg = sum(r["pick"]["odds"] for r in sel) / len(sel) if sel else 0
+        return f"{sum(1 for r in sel if r['pick_hit'])}/{len(sel)} ort {avg:.2f} {pl:+.1f}"
+
+    def band(key, cuts):
+        return {f"{a}-{b}": line([r for r in rows if a <= key(r) < b]) for a, b in zip(cuts, cuts[1:])}
+
+    return {"oran": band(lambda r: r["pick"]["odds"], [1, 1.25, 1.3, 1.35, 1.4, 1.5, 1.8, 9]),
+            "avantaj": band(lambda r: (r["pick"].get("p") or 0) * r["pick"]["odds"] - 1, [-1, -0.05, 0, 0.05, 9]),
+            "toplam": line(rows)}
+
+
 def league_report(store):
     """Garanti tercihlerin lig bazında özeti (1 birim bahisle); en zayıftan güçlüye, günlüğe yazılır."""
     rows = {}

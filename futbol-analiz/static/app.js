@@ -195,6 +195,10 @@ function skel(kind) {
 
 /* ---------- gün listesi ---------- */
 let dayCache = null;
+// biten maçlar açılır kapanır düğmenin altında toplanır (futbol ve basketbol ana sayfası)
+let doneOpen = false;
+const doneBox = (n, cards) => `<details class="donebox" ${doneOpen ? "open" : ""}><summary><span>🏁 Bitenler <small>${n}</small></span></summary><div class="mgrid">${cards}</div></details>`;
+const bindDoneBox = (v) => { const d = $(".donebox", v); if (d) d.ontoggle = () => { doneOpen = d.open; }; };
 async function renderDay(silent) {
   const v = $("#view");
   if (!silent) v.innerHTML = skel("cards");
@@ -207,7 +211,10 @@ async function renderDay(silent) {
   const all = dayCache.matches.filter((m) => !state.off.has(m.league_id));
   if (!all.length) { v.innerHTML = `<div class="loading">Bu tarihte seçili liglerde maç yok.</div>`; return; }
   if (lgOf(quick) && !all.some((m) => m.league_id === lgOf(quick))) quick = "all";  // seçili lig bu gün oynamıyorsa
-  const ms = all.filter(lgOf(quick) ? (m) => m.league_id === lgOf(quick) : QUICK[quick][2]);
+  const picked = all.filter(lgOf(quick) ? (m) => m.league_id === lgOf(quick) : QUICK[quick][2]);
+  // hepsi bittiyse ya da Bitenler filtresi seçiliyse liste olduğu gibi kalır
+  const finished = picked.filter((m) => m.finished), fold = finished.length && finished.length < picked.length && quick !== "done";
+  const ms = fold ? picked.filter((m) => !m.finished) : picked;
   // Map: sunucunun lig sırasını korur (sayısal anahtarlı nesne sırayı bozar)
   const groups = new Map();
   ms.forEach((m) => { if (!groups.has(m.league_id)) groups.set(m.league_id, []); groups.get(m.league_id).push(m); });
@@ -231,7 +238,8 @@ async function renderDay(silent) {
   const mineHtml = mine.length ? `<section class="lg-block mine-block">
       <div class="lg-title"><span class="sorticon">★</span><b>Takımlarım</b><span>${mine.length} maç</span></div>
       <div class="mgrid">${mine.map((m) => cardHtml(m, true)).join("")}</div></section>` : "";
-  v.innerHTML = quickBar(all) + (ms.length ? mineHtml + body : `<div class="card"><p class="muted">Bu filtreye uyan maç yok.</p></div>`);
+  v.innerHTML = quickBar(all) + (fold ? doneBox(finished.length, finished.map((m) => cardHtml(m, true)).join("")) : "") + (ms.length ? mineHtml + body : `<div class="card"><p class="muted">Bu filtreye uyan maç yok.</p></div>`);
+  bindDoneBox(v);
   v.querySelectorAll("[data-quick]").forEach((x) => x.onclick = () => { quick = x.dataset.quick; safeSet("quick", quick); renderDay(true); });
   v.querySelectorAll("[data-id]").forEach((r) => r.onclick = (e) => {
     const im = e.target.closest("[data-cimg]");

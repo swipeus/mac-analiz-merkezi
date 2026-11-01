@@ -1283,3 +1283,10 @@ body.sport-bk #toolbar, body.sport-bk .top .right, body.sport-bk #fbNav, body.in
 .tlcard { display: block; width: 12px; height: 17px; border-radius: 2px; }
 .tlcard.y { background: #f5d90a; } .tlcard.r { background: #f85149; }
 .tlsep { position: relative; align-self: center; padding: 2px 12px; border-radius: 9px; font-size: 12px; font-weight: 800; color: #fff; background: #6e7681; }
+.donebox { margin: 10px 0; }
+.donebox > summary { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-radius: 12px; background: var(--panel2); border: 1px solid var(--line); font-weight: 700; cursor: pointer; list-style: none; }
+.donebox > summary::-webkit-details-marker { display: none; }
+.donebox > summary small { color: var(--muted); margin-left: 4px; }
+.donebox > summary::after { content: "▾"; color: var(--muted); transition: transform .15s; }
+.donebox[open] > summary::after { transform: rotate(180deg); }
+.donebox > .mgrid { margin-top: 10px; }

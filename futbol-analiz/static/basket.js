@@ -121,13 +121,16 @@ async function renderBasketHome() {
   const lgBar = present.length > 1 ? `<div class="chiprow quickbar"><button class="chipbtn ${BK.lg === "all" ? "on" : ""}" data-bkl="all">Tümü <small>${D.matches.length}</small></button>${present.map((k) =>
     `<button class="chipbtn ${BK.lg === k ? "on" : ""}" data-bkl="${k}">${BK_LOGO[k]} ${BK_LG[k]} <small>${D.matches.filter((m) => m.lg === k).length}</small></button>`).join("")}</div>` : "";
   const shown = Object.keys(BK_LG).filter((k) => (BK.lg === "all" || BK.lg === k));
+  const visible = D.matches.filter((m) => shown.includes(m.lg)), finished = visible.filter((m) => m.state === "post");
+  const fold = finished.length && finished.length < visible.length;
   const sections = shown.map((k) => {
-    const list = D.matches.filter((m) => m.lg === k);
+    const list = visible.filter((m) => m.lg === k && !(fold && m.state === "post"));
     return list.length ? `<section class="lg-block"><a class="lg-title" href="#/basket/lig/${k}"><span class="sorticon">${BK_LOGO[k]}</span><b>${BK_LG[k]}</b><span>${list.length} maç</span></a>
       <div class="mgrid">${list.map(bkCard).join("")}</div></section>` : "";
   }).join("");
   const leagues = `<div class="bkleagues">${Object.keys(BK_LG).map((k) => `<a class="bklg" href="#/basket/lig/${k}">${BK_LOGO[k]} ${BK_LG[k]} <small>puan durumu</small></a>`).join("")}</div>`;
-  v.innerHTML = bar + lgBar + (sections || `<div class="card"><p class="muted">Bu tarihte maç yok.</p></div>`) + leagues;
+  v.innerHTML = bar + lgBar + (fold ? doneBox(finished.length, finished.map(bkCard).join("")) : "") + (sections || `<div class="card"><p class="muted">Bu tarihte maç yok.</p></div>`) + leagues;
+  bindDoneBox(v);
   bkBindDays();
   v.querySelectorAll("[data-bkl]").forEach((b) => b.onclick = () => { BK.lg = b.dataset.bkl; renderBasketHome(); });
   v.querySelectorAll("[data-bk]").forEach(bkBindCard);

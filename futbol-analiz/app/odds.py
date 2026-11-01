@@ -25,7 +25,7 @@ KAMBI_PATH = {
     42: "champions_league/all", 73: "europa_league/all", 10216: "conference_league/all",
 }
 LIST_TTL = 10 * 60
-ODDS_TTL = 5 * 60
+ODDS_TTL = 170
 PROVIDER = "Unibet"
 
 # FotMob yedeği: bölgelere göre sağlayıcı değişir, en çok pazar veren tek sağlayıcı kullanılır

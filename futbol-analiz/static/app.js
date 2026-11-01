@@ -432,7 +432,7 @@ function bindMatch() {
     btn.textContent = STATIC ? "Kontrol ediliyor…" : "Yenileniyor…";
     try {
       if (STATIC) {
-        // çevrimiçi sürümde analiz GitHub'da 6 dk'da bir üretilir; burada sadece yenisi yayınlanmış mı bakılır
+        // çevrimiçi sürümde analiz GitHub'da 3 dk'da bir üretilir; burada sadece yenisi yayınlanmış mı bakılır
         const m = await getData("meta.json");
         const fresh = !meta || m.updated !== meta.updated;
         meta = m;
@@ -480,7 +480,7 @@ function matchHtml(b) {
     </div>
     <div class="chips">${chips}</div>
     <div class="updated">${b.status.finished ? "Maç sona erdi · tahminler maç öncesi hâliyle saklanıyor"
-      : `Son güncelleme: ${ago(b.updated)}${STATIC ? " (analizler 6 dk'da bir, skorlar anlık yenilenir)" : ""} · <button id="refreshBtn">${REFRESH_LABEL()}</button>`}</div>
+      : `Son güncelleme: ${ago(b.updated)}${STATIC ? " (analizler 3 dk'da bir, skorlar anlık yenilenir)" : ""} · <button id="refreshBtn">${REFRESH_LABEL()}</button>`}</div>
   </div>
   ${matchTabsHtml(b)}
   <div class="mtab-body">${matchTabBody(b)}</div>`;

@@ -1,0 +1,35 @@
+name: Siteyi yayınla
+
+# guncelle.yml her tur gh-pages dalını yeniler ve bu işi tetikler. Yayın Actions üzerinden yapıldığı için
+# GitHub Pages'in saatlik 10 derleme sınırı geçerli olmaz; 3 dakikada bir yayın bu sayede mümkün.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: gh-pages
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: .
+          retention-days: 1
+
+      - id: deploy
+        uses: actions/deploy-pages@v4

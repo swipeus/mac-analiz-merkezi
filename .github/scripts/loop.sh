@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Sürekli güncelleme döngüsü: LOOP_MINUTES boyunca her PUBLISH_EVERY saniyede bir veriyi toplar, analiz eder,
-# şifreler ve gh-pages dalına yayınlar (GitHub Pages bu daldan sunar).
+# şifreler, gh-pages dalına yazar ve yayın işini (yayin.yml) tetikler.
 # main dalına yeni kod gelirse döngüden çıkar; iş akışı kendini yeni kodla yeniden başlatır.
 set -u
 END=$(( $(date +%s) + ${LOOP_MINUTES:-320} * 60 ))
-EVERY=${PUBLISH_EVERY:-360}
+EVERY=${PUBLISH_EVERY:-180}
 REPO_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 n=0
 while [ "$(date +%s)" -lt "$END" ]; do
@@ -16,7 +16,9 @@ while [ "$(date +%s)" -lt "$END" ]; do
       ( cd ../_site && rm -rf .git && git init -q -b gh-pages && git add -A \
         && git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
              commit -qm "Veri güncellemesi $(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-        && git push -qf "$REPO_URL" gh-pages ) && echo "yayınlandı" || echo "yayın hatası"
+        && git push -qf "$REPO_URL" gh-pages ) \
+        && gh workflow run yayin.yml --repo "$GITHUB_REPOSITORY" --ref main \
+        && echo "yayınlandı" || echo "yayın hatası"
     fi
   else
     echo "derleme hatası (bir sonraki turda tekrar denenecek)"

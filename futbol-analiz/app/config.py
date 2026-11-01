@@ -33,10 +33,10 @@ LEAGUES = {
 
 # Güncelleme aralıkları (saniye)
 CYCLE_SECONDS = 120          # ana döngü
-DAY_LIST_TTL = 180           # günün maç listesi
+DAY_LIST_TTL = 170           # günün maç listesi (her 3 dakikalık turda yenilenir)
 LIVE_INTERVAL = 120          # canlı maç
-NEAR_INTERVAL = 300          # başlamaya 3 saatten az kalan maç
-TODAY_INTERVAL = 300         # aynı gün içindeki diğer maçlar (her 6 dakikalık turda yenilenir)
+NEAR_INTERVAL = 170          # başlamaya 3 saatten az kalan maç (her turda)
+TODAY_INTERVAL = 300         # aynı gün içindeki diğer maçlar (iki turda bir, yani 6 dakikada bir)
 FAR_INTERVAL = 30 * 60       # yarının maçları
 SEASON_TTL = 6 * 3600        # sezon istatistikleri
 NEWS_TTL = 10 * 60           # haberler

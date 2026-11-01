@@ -1,6 +1,6 @@
 name: Verileri güncelle ve yayınla
 
-# Tek bir iş ~5.5 saat açık kalır ve 6 dakikada bir veriyi yeniler (GitHub'ın zamanlayıcısı 15 dk ayarını
+# Tek bir iş ~5.5 saat açık kalır ve 3 dakikada bir veriyi yeniler (GitHub'ın zamanlayıcısı 15 dk ayarını
 # 30-45 dakikaya geciktirdiği için). Bitince kendini yeniden başlatır; saatlik zamanlama yedek olarak durur.
 on:
   schedule:
@@ -37,7 +37,7 @@ jobs:
           key: veri-${{ github.run_id }}
           restore-keys: veri-
 
-      - name: Sürekli güncelle (6 dakikada bir yayın)
+      - name: Sürekli güncelle (3 dakikada bir yayın)
         working-directory: futbol-analiz
         env:
           SITE_PASSWORD: ${{ secrets.SITE_PASSWORD }}
@@ -45,8 +45,8 @@ jobs:
           PAGES_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
           GH_TOKEN: ${{ github.token }}
           LOOP_MINUTES: "320"
-          PUBLISH_EVERY: "360"
-          PLAYER_BUDGET: "150"
+          PUBLISH_EVERY: "180"
+          PLAYER_BUDGET: "40"
           LIVE_URL: https://mac-analiz-canli.macanaliz-8spa.workers.dev
         run: bash ../.github/scripts/loop.sh
 

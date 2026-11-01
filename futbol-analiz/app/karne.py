@@ -132,6 +132,19 @@ def value_report(store):
             "oran>=2.2": line([r for r in rows if r["value"]["odds"] >= 2.2])}
 
 
+def league_report(store):
+    """Garanti tercihlerin lig bazında özeti (1 birim bahisle); en zayıftan güçlüye, günlüğe yazılır."""
+    rows = {}
+    for r in store.pred_all():
+        o = (r.get("pick") or {}).get("odds")
+        if r.get("state") == "done" and o and r.get("pick_hit") in (True, False) and tr_day(r.get("utc")) >= KARNE_START:
+            x = rows.setdefault(r.get("league"), [0, 0, 0.0])
+            x[0] += 1
+            x[1] += 1 if r["pick_hit"] else 0
+            x[2] += o - 1 if r["pick_hit"] else -1
+    return [f"{k}: {h}/{n} {pl:+.1f}" for k, (n, h, pl) in sorted(rows.items(), key=lambda kv: kv[1][2])]
+
+
 CALIB_MIN_N = 40
 
 

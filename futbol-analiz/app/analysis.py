@@ -1,6 +1,9 @@
 """Kural tabanlı Türkçe takım analizi, senaryolar ve Poisson tahmin modeli."""
+from datetime import datetime
 import math
 import re
+
+from .config import TR_TZ
 
 HOME_ADV = 1.08
 AWAY_ADJ = 0.93
@@ -327,6 +330,16 @@ MARKET_WEIGHT = 0.6      # gol beklentisi / toplam gol dağılımı
 MARKET_WEIGHT_1X2 = 0.9  # maç sonucu olasılıkları
 MOVE_K = 1.0         # oran hareketi açılıştan bu yana bir o kadar daha devam eder sayılır (0 = sadece güncel oran)
 MIN_ODDS = 1.30      # en garanti tercih bu orandan düşük olamaz
+MIN_ODDS_NEW, MIN_ODDS_FROM = 1.35, "2026-11-02"  # karne: 1.30-1.35 arası zarar yazdırıyor; bu günün maçlarından itibaren
+
+
+def min_odds(utc):
+    """Maçın Türkiye gününe göre en garanti tercihin alt oran sınırı."""
+    try:
+        day = datetime.fromisoformat(utc.replace("Z", "+00:00")).astimezone(TR_TZ).strftime("%Y-%m-%d")
+    except (AttributeError, ValueError):
+        return MIN_ODDS
+    return MIN_ODDS_NEW if day >= MIN_ODDS_FROM else MIN_ODDS
 N_GOALS = 10
 
 
@@ -636,8 +649,8 @@ def code_odds(odds, code):
     return None, None
 
 
-def make_picks(pr, odds, home, away, league=None):
-    """En garanti tercih (oran >= 1.30) ve olası sürpriz."""
+def make_picks(pr, odds, home, away, league=None, floor=MIN_ODDS):
+    """En garanti tercih (oran >= floor) ve olası sürpriz."""
     sel = []  # (kod, model olasılığı, oran)
     for m in (odds or {}).get("markets") or []:
         for s in m["selections"]:
@@ -645,12 +658,12 @@ def make_picks(pr, odds, home, away, league=None):
                 sel.append((s["code"], pr[s["code"]], s["odds"]))
     safe = None
     fav = fav_side(pr)
-    cands = [c for c in sel if c[2] >= MIN_ODDS and c[1] >= 0.5 and safe_ok(c[0]) and not fav_under(c[0], fav)]
+    cands = [c for c in sel if c[2] >= floor and c[1] >= 0.5 and safe_ok(c[0]) and not fav_under(c[0], fav)]
     if cands:
         code, p, o = max(cands, key=lambda c: (safe_score(c[1], c[2], c[0], league), c[2]))
         safe = {"code": code, "p": round(p, 3), "odds": o}
-    else:  # oran yoksa: adil oranı (1/olasılık) 1.30'un altında kalan seçenekler elenir
-        model = [(c, pr[c]) for c in SAFE_CODES if c in pr and 1 / max(pr[c], 1e-9) >= MIN_ODDS]
+    else:  # oran yoksa: adil oranı (1/olasılık) alt sınırın altında kalan seçenekler elenir
+        model = [(c, pr[c]) for c in SAFE_CODES if c in pr and 1 / max(pr[c], 1e-9) >= floor]
         if model:
             code, p = max(model, key=lambda c: c[1])
             safe = {"code": code, "p": round(p, 3), "odds": None}
@@ -974,7 +987,7 @@ def predict(b, prof_h, prof_a):
             f_ = CALIB.get(pick_type(c))
             if f_ and pr[c] is not None:
                 pr[c] = min(0.97, pr[c] * f_)
-    safe, surprise, value = make_picks(pr, odds, H, A, b.get("league_id"))
+    safe, surprise, value = make_picks(pr, odds, H, A, b.get("league_id"), min_odds(b.get("utc")))
     score_pick = coherent_score(smat, pr, lam_h, lam_a)
     cs_m = _odds_market(odds, "odds_correct_score")
     if cs_m:  # skor tahmininin oranı (karnede 10 ₺'lik skor bahsi için)

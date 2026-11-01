@@ -639,7 +639,7 @@ function oddsHtml(b) {
       <small class="muted">${note}</small></div></div>` : "";
   const top = `<div class="card" style="--c:#e3b341">${head("💰", `Bahis oranları <span class="muted">· ${esc((o.providers || []).join(", "))} · ${o.markets.length} pazar, ${nSel} seçenek</span>`)}
     <div class="opicks">
-      ${pickCard("safe", "✅", "En garanti tercih " + finalBadge(bestFinal(b)), P.best_pick, "Oranı 1.30 ve üstü seçenekler (kombineler dahil) arasında modelin en yüksek olasılık verdiği tercih. Resmi ilk 11'ler açıklanınca son kontrol yapılır ve tercih kesinleşir.")}
+      ${pickCard("safe", "✅", "En garanti tercih " + finalBadge(bestFinal(b)), P.best_pick, "Oranı 1.35 ve üstü seçenekler (kombineler dahil) arasında modelin en yüksek olasılık verdiği tercih. Resmi ilk 11'ler açıklanınca son kontrol yapılır ve tercih kesinleşir.")}
       ${pickCard("val", "💎", "Değerli oran", P.value_pick, "Oranı 1.60-3.20 arasında, modelin piyasadan en az %5 daha olası gördüğü ve türü karnede kendini kanıtlamış tercih. Karnede ayrı izlenir.")}
       ${pickCard("sur", "⚡", "Olası sürpriz", P.surprise, "Oranı yüksek ama modelin piyasadan daha olası gördüğü seçenek. Karnede yer almaz.")}
     </div>

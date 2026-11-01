@@ -59,6 +59,7 @@ THEMES = [
      lambda c: True, 0.58, (1.45, 2.20), (3.0, 6.0)),
 ]
 MIN_LEG_ODDS = 1.25
+MIN_LEG_ODDS_NEW, MIN_LEG_FROM = 1.30, "2026-11-02"  # bu günün kuponlarından itibaren
 MAX_SAME = 2  # bir kuponda aynı pazardan en çok kaç tercih
 
 
@@ -178,7 +179,8 @@ def build(bundles, date, reserved=()):
     """bundles: o günün başlamamış, oranı olan maç paketleri. Banko 5, diğer temalar en fazla 3 kupon (veri yetmezse daha az).
     reserved: kilitli katlama kuponundaki (maç, tercih) çiftleri; bu kuponlarda da sayılır."""
     pool = [(b, _cands(b)) for b in bundles]
-    pool = [(b, [x for x in cs if x[2] >= MIN_LEG_ODDS]) for b, cs in pool]
+    floor = MIN_LEG_ODDS_NEW if date >= MIN_LEG_FROM else MIN_LEG_ODDS
+    pool = [(b, [x for x in cs if x[2] >= floor]) for b, cs in pool]
     pool = [(b, cs) for b, cs in pool if cs]
     coupons, seen, use = [], set(), Counter(reserved)
     theme_use = {t[0]: Counter() for t in THEMES}

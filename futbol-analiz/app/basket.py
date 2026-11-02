@@ -495,6 +495,7 @@ async def build(src, store, write, now):
     all_cards, out_lg = {d: [] for d in shown}, []
     bm.drop_removed(store)
     events = await bm.odds_events(src, store)
+    iddaa = await bm.iddaa_events(src, store)
     day_cands = {d: [] for d in shown}
     for lg, info in LEAGUES.items():
         try:
@@ -538,8 +539,10 @@ async def build(src, store, write, now):
                 dk = tr_day(g["utc"])
                 if dk in shown:
                     ev = bm.find_event(g, events) if g["state"] == "pre" else None
-                    pr = bm.predict(lg, g, rating if g["state"] == "pre" else rating_before, ev)
-                    opts = bm.options(pr, ev, g["home"]["short"], g["away"]["short"])
+                    use_iddaa = g["state"] == "pre" and dk >= bm.IDDAA_FROM
+                    iev = bm.find_event(g, iddaa) if use_iddaa else None
+                    pr = bm.predict(lg, g, rating if g["state"] == "pre" else rating_before, ev or iev)
+                    opts = bm.options(pr, iev if use_iddaa else ev, g["home"]["short"], g["away"]["short"])
                     pick = bm.best_pick(opts, dk)
                     rec = bm.record(store, g, pr, pick, opts)
                     if g["state"] == "pre" and opts:

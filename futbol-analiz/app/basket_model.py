@@ -29,6 +29,10 @@ TEAM_SIGMA = 11.5        # takım toplamı sapması
 
 MIN_ODDS, MAX_ODDS = 1.15, 2.30   # en garanti tercihin oran aralığı
 ODDS_FROM, MIN_ODDS_NEW, MIN_LEG_ODDS = "2026-11-02", 1.35, 1.30  # bu günden itibaren tek tercih ve kupon ayağı alt sınırı
+IDDAA_FROM = "2026-11-03"  # bu günün maçlarından itibaren tercih ve kupon oranları iddaa'dan; model çizgisi Unibet'ten kalır
+IDDAA_EVENTS = "https://sportsbookv2.iddaa.com/sportsbook/events?st=2&type=0&version=0"
+IDDAA_LEAGUES = {138, 251000}  # NBA, EuroLeague
+IDDAA_NAMES = {"Bayern Münih": "Bayern Munich", "Hap Tel Aviv": "Hapoel Tel Aviv", "Kızıl Yıldız": "Crvena Zvezda"}
 REMOVED_COUPONS = {"sayi-2026-10-30-2"}  # istekle silinen kuponlar
 LOCK_BEFORE = timedelta(hours=1)  # kupon, ilk maçına bu kadar kala kesinleşir
 MAX_USE = 1              # aynı tercih günün yalnızca bir kuponunda yer alır
@@ -159,6 +163,43 @@ async def odds_events(src, store):
     if not out and hit:
         return hit[1]
     store.cache_put("bk:kambi", out)
+    return out
+
+
+def _iddaa_markets(e):
+    """Uzatmalar dahil pazarlar; handikap ev sahibine göre, _kambi_markets ile aynı yapı."""
+    mk = {"ml": None, "sp": [], "tot": [], "ht": [], "at": []}
+    for m in e.get("m", []):
+        o = {x.get("no"): x.get("odd") for x in m.get("o", [])}
+        if m.get("s") != 1 or not o.get(1) or not o.get(2) or len(o) != 2:
+            continue
+        kind = (m.get("t"), m.get("st"))
+        if kind == (1, 2):
+            mk["ml"] = [o[1], o[2]]
+        elif m.get("sov") is None:
+            continue
+        elif kind == (2, 113):
+            mk["sp"].append([float(m["sov"]), o[1], o[2]])
+        elif kind[0] == 2 and kind[1] in (114, 619, 620):
+            mk[{114: "tot", 619: "ht", 620: "at"}[kind[1]]].append([float(m["sov"]), o[1], o[2]])  # 1: alt, 2: üst
+    return mk
+
+
+async def iddaa_events(src, store):
+    """NBA ve EuroLeague maçlarının iddaa oranları; alınamazsa son kopya kullanılır."""
+    hit = store.cache_get("bk:iddaa")
+    if hit and time.time() - hit[0] < 150:
+        return hit[1]
+    try:
+        d = await src.fetch_json(IDDAA_EVENTS)
+    except Exception as e:  # noqa: BLE001
+        log.warning("iddaa listesi alınamadı: %s", e)
+        return hit[1] if hit else []
+    out = [{"id": e["i"], "home": IDDAA_NAMES.get(e["hn"], e["hn"]), "away": IDDAA_NAMES.get(e["an"], e["an"]), "ts": e["d"], "mk": _iddaa_markets(e)}
+           for e in (d.get("data") or {}).get("events", []) if e.get("ci") in IDDAA_LEAGUES]
+    if not out and hit:
+        return hit[1]
+    store.cache_put("bk:iddaa", out)
     return out
 
 

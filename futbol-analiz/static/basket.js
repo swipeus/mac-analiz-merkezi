@@ -210,7 +210,7 @@ function bkComment(b) {
 }
 function bkOdds(b) {
   const pick = (b.rec && b.rec.pick) || {};
-  const groups = ["Maç sonucu", "Handikap", "Toplam sayı", "Takım toplamı"];
+  const groups = ["Maç sonucu", "Handikap", "Toplam sayı", "Takım toplamı", "Oyuncu sayısı", "Oyuncu ribaundu", "Oyuncu asisti", "Oyuncu 3'lüğü"];
   return groups.map((g) => {
     const rows = b.options.filter((o) => o.group === g);
     return rows.length ? `<div class="card">${head("💰", g)}<div class="bktiles">${rows.map((o) => `<div class="bktile ${o.code === pick.code ? "safe" : ""}"><span>${esc(o.label)}</span><b>${nf(o.odds, 2)}</b><small>model ${pc(o.p)}</small></div>`).join("")}</div></div>` : "";
@@ -451,7 +451,7 @@ function bkCouponKarne(K) {
   }).join("") : `<div class="card"><p class="muted">Bu hafta için kupon yok.</p></div>`;
   return top + bkWeekBar(dates.sort()[0] || null, wk.filter((c) => c.won).length, wk.length, sum(wk)) + list + bkCalendar(series, "kupon");
 }
-const bkPickType = (c) => /^ms/.test(c) ? "Maç sonucu" : /^[ha][+-]/.test(c) ? "Handikap" : /^[ou]/.test(c) ? "Toplam sayı" : "Takım toplamı";
+const bkPickType = (c) => /^pl:/.test(c) ? "Oyuncu" : /^ms/.test(c) ? "Maç sonucu" : /^[ha][+-]/.test(c) ? "Handikap" : /^[ou]/.test(c) ? "Toplam sayı" : "Takım toplamı";
 async function renderBasketKarne() {
   const v = $("#view");
   v.innerHTML = bkNav("karne") + skel("list");

@@ -29,6 +29,11 @@ TEAM_SIGMA = 11.5        # takım toplamı sapması
 
 MIN_ODDS, MAX_ODDS = 1.15, 2.30   # en garanti tercihin oran aralığı
 ODDS_FROM, MIN_ODDS_NEW, MIN_LEG_ODDS = "2026-11-02", 1.35, 1.30  # bu günden itibaren tek tercih ve kupon ayağı alt sınırı
+# oyuncu pazarları (Unibet, uzatmalar dahil): etiket -> istatistik, ad, oran grubu, varyans/ortalama katsayısı
+PLAYER_STATS = {"Points scored by the player": ("pts", "Sayı", "Oyuncu sayısı", 2.5), "Rebounds by the player": ("reb", "Ribaund", "Oyuncu ribaundu", 1.6),
+                "Assists by the player": ("ast", "Asist", "Oyuncu asisti", 1.6), "3-point field goals made by the player": ("tp", "3'lük", "Oyuncu 3'lüğü", 1.4)}
+PLAYER_FROM = "2026-11-03"  # bu günün maçlarından itibaren oyuncu seçenekleri tek tercih olabilir (kupona girmez)
+PLAYER_MODEL_W = 0.25       # oyuncu olasılığında sezon ortalamasının payı; kalanı piyasa (henüz sınanmadı, düşük tutuldu)
 REMOVED_COUPONS = {"sayi-2026-10-30-2"}  # istekle silinen kuponlar
 LOCK_BEFORE = timedelta(hours=1)  # kupon, ilk maçına bu kadar kala kesinleşir
 MAX_USE = 1              # aynı tercih günün yalnızca bir kuponunda yer alır
@@ -110,14 +115,18 @@ def _outcomes(bo):
 
 def _kambi_markets(raw, home, away):
     """Tam maç pazarları (uzatmalar dahil): hepsi ev sahibine göre, oranlar ondalık."""
-    mk = {"ml": None, "sp": [], "tot": [], "ht": [], "at": []}
+    mk = {"ml": None, "sp": [], "tot": [], "ht": [], "at": [], "pl": []}
     for bo in raw.get("betOffers", []):
         name = (bo.get("criterion") or {}).get("englishLabel") or ""
         if "Including Overtime" not in name:
             continue
         o = _outcomes(bo)
         one, two, over, under = o.get("OT_ONE"), o.get("OT_TWO"), o.get("OT_OVER"), o.get("OT_UNDER")
-        if name.startswith("Moneyline") and one and two:
+        stat = PLAYER_STATS.get(name.split(" - ")[0])
+        if stat:
+            if over and under and over.get("line") is not None and over.get("participant"):
+                mk["pl"].append([name.split(" - ")[0], over["participant"], over["line"] / 1000, under["odds"] / 1000, over["odds"] / 1000])
+        elif name.startswith("Moneyline") and one and two:
             mk["ml"] = [one["odds"] / 1000, two["odds"] / 1000]
         elif name.startswith("Point Spread") and one and two and one.get("line") is not None:
             mk["sp"].append([one["line"] / 1000, one["odds"] / 1000, two["odds"] / 1000])
@@ -220,8 +229,18 @@ def fnum(x):
     return f"{x:g}"
 
 
-def options(pr, ev, home, away):
-    """Bültendeki seçenekler: kod, ad, oran, model olasılığı, grup."""
+def _player_p(stat, line, under, over, row):
+    """Üst olasılığı: piyasanın marjsız olasılığı, en az 3 maçlık sezon ortalamasıyla hafifçe düzeltilir."""
+    fair = (1 / over) / (1 / over + 1 / under)
+    avg = row.get(stat[0]) if row and (row.get("gp") or 0) >= 3 else None
+    if avg is None:
+        return fair
+    sd = math.sqrt(stat[3] * max(avg, 0.5))
+    return (1 - PLAYER_MODEL_W) * fair + PLAYER_MODEL_W * (1 - Phi((line - avg) / sd))
+
+
+def options(pr, ev, home, away, roster=None, out_names=()):
+    """Bültendeki seçenekler: kod, ad, oran, model olasılığı, grup. roster: oyuncu ortalamaları (sadeleşmiş ad -> satır)."""
     if not ev or not pr:
         return []
     m, t, sm, st = pr["margin"], pr["total"], pr["sm"], pr["st"]
@@ -243,16 +262,42 @@ def options(pr, ev, home, away):
                 p = 1 - Phi((line - exp) / TEAM_SIGMA)
                 out.append((f"{pre}o{fnum(line)}", f"{name} {fnum(line)} Üst", over, p, "Takım toplamı"))
                 out.append((f"{pre}u{fnum(line)}", f"{name} {fnum(line)} Alt", under, 1 - p, "Takım toplamı"))
+    for label, name, line, under, over in mk.get("pl") or []:
+        key = _fold(name).strip()
+        if key in out_names:
+            continue
+        stat = PLAYER_STATS[label]
+        p = _player_p(stat, line, under, over, (roster or {}).get(key))
+        out.append((f"pl:{stat[0]}:o{fnum(line)}:{key}", f"{name} {fnum(line)} {stat[1]} Üst", over, p, stat[2]))
+        out.append((f"pl:{stat[0]}:u{fnum(line)}:{key}", f"{name} {fnum(line)} {stat[1]} Alt", under, 1 - p, stat[2]))
     return [{"code": c, "label": lb, "odds": o, "p": round(p, 3), "group": gr} for c, lb, o, p, gr in out if o and o > 1]
 
 
 def best_pick(opts, date=""):
     low = MIN_ODDS_NEW if date >= ODDS_FROM else MIN_ODDS
-    ok = [x for x in opts if low <= x["odds"] <= MAX_ODDS]
+    ok = [x for x in opts if low <= x["odds"] <= MAX_ODDS and (date >= PLAYER_FROM or not x["code"].startswith("pl:"))]
     if not ok:
         return None
     # önce olasılık; piyasadan iyi görülen seçenek biraz öne çıkar
     return max(ok, key=lambda x: x["p"] + 0.5 * max(-0.10, min(x["p"] * x["odds"] - 1, 0.10)))
+
+
+def player_hit(code, box):
+    """Oyuncu tercihi: True / False / None (oynamadıysa iade). box: maç kutusu {home, away}."""
+    _, stat, side, name = code.split(":", 3)
+    rows = (box.get("home") or []) + (box.get("away") or [])
+    keys = {_fold(r.get("name")).strip(): r for r in rows}
+    row = keys.get(name)
+    if row is None:  # 'Jr.' gibi ekler: aynı soyad ve ilk harf
+        parts = name.split()
+        row = next((r for k, r in keys.items() if k.split() and k.split()[0][0] == parts[0][0] and parts[1:2] and k.split()[1:2] == parts[1:2]), None)
+    if not row or not row.get("min"):
+        return None
+    v = row.get(stat)
+    if stat == "tp":
+        v = int(str(v).split("-")[0])
+    diff = float(v) - float(side[1:])
+    return None if diff == 0 else (diff > 0) == (side[0] == "o")
 
 
 def pick_hit(code, hs, as_):
@@ -272,6 +317,8 @@ def pick_hit(code, hs, as_):
 
 
 def pick_type(code):
+    if code.startswith("pl:"):
+        return "Oyuncu"
     if code in ("ms1", "ms2"):
         return "Maç sonucu"
     if code[0] in "ha" and code[1] in "+-":
@@ -305,7 +352,7 @@ def boxes(opts, pr):
     return out
 
 
-def record(store, g, pr, pick, opts=None):
+def record(store, g, pr, pick, opts=None, box=None):
     """Maç başlayana kadar tahmin güncellenir, başlayınca donar; bitince sonuçlanır."""
     old = store.bk_get("pred", g["id"])
     if g["state"] == "pre":
@@ -322,8 +369,11 @@ def record(store, g, pr, pick, opts=None):
         old["state"] = "void"
         store.bk_put("pred", g["id"], old)
     if g["state"] == "post" and old and old["state"] == "pending" and g["home"]["score"] is not None:
+        code = old["pick"]["code"]
+        if code.startswith("pl:") and not (box and (box.get("home") or box.get("away"))):
+            return old  # maç kutusu gelince sonuçlanır
         old.update({"state": "done", "result": [g["home"]["score"], g["away"]["score"]],
-                    "hit": pick_hit(old["pick"]["code"], g["home"]["score"], g["away"]["score"])})
+                    "hit": player_hit(code, box) if code.startswith("pl:") else pick_hit(code, g["home"]["score"], g["away"]["score"])})
         store.bk_put("pred", g["id"], old)
     return old
 
@@ -343,7 +393,7 @@ def build_coupons(date, cands, kept=()):
         while len(nums) < quota:
             pool = []  # kullanım sayısı her kuponda değişir
             for g, opts in cands:
-                good = [x for x in opts if ok(x["code"]) and x["p"] >= pmin and lo <= x["odds"] <= hi and use[(g["id"], x["code"])] < limit]
+                good = [x for x in opts if not x["code"].startswith("pl:") and ok(x["code"]) and x["p"] >= pmin and lo <= x["odds"] <= hi and use[(g["id"], x["code"])] < limit]
                 if good:
                     pool.append((max(good, key=lambda x: (round(x["p"], 2), x["odds"])), g))
             pool.sort(key=lambda t: t[0]["p"], reverse=True)
@@ -445,7 +495,7 @@ def karne(store):
     cd = [c for c in coupons if c.get("state") == "done"]
     slim = [{k: v for k, v in r.items() if k not in ("options", "comment")} for r in rows]  # karne dosyası küçük kalsın
     return {"stake": STAKE, "total": tally(done), "by_lg": {k: tally([r for r in done if r["lg"] == k]) for k in ("nba", "el")},
-            "by_type": {k: tally([r for r in done if pick_type(r["pick"]["code"]) == k]) for k in ("Maç sonucu", "Handikap", "Toplam sayı", "Takım toplamı")},
+            "by_type": {k: tally([r for r in done if pick_type(r["pick"]["code"]) == k]) for k in ("Maç sonucu", "Handikap", "Oyuncu", "Toplam sayı", "Takım toplamı")},
             "coupons": {"n": len(cd), "won": sum(1 for c in cd if c.get("won"))},
             "recent": [r for r in slim if r.get("pick")][:60], "store": {"pred": slim, "coupons": store.bk_all("coupons")}}
 

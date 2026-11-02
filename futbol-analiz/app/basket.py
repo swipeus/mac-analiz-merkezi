@@ -539,9 +539,12 @@ async def build(src, store, write, now):
                 if dk in shown:
                     ev = bm.find_event(g, events) if g["state"] == "pre" else None
                     pr = bm.predict(lg, g, rating if g["state"] == "pre" else rating_before, ev)
-                    opts = bm.options(pr, ev, g["home"]["short"], g["away"]["short"])
+                    both = roster(g["home"]["id"]) + roster(g["away"]["id"])
+                    gone = [x for sd in ("home", "away") for x in d["injuries"].get(g[sd]["id"]) or [] if x.get("out")]
+                    opts = bm.options(pr, ev, g["home"]["short"], g["away"]["short"], {bm._fold(p["name"]).strip(): p for p in both},
+                                      {bm._fold(x["name"]).strip() for x in gone})
                     pick = bm.best_pick(opts, dk)
-                    rec = bm.record(store, g, pr, pick, opts)
+                    rec = bm.record(store, g, pr, pick, opts, boxes.get(g["id"]))
                     if g["state"] == "pre" and opts:
                         day_cands[dk].append((g, opts))
                     if g["state"] != "pre" and rec and rec.get("pred"):

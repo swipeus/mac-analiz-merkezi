@@ -199,6 +199,42 @@ def _num(v):
         return None
 
 
+# takım sezon ortalamaları: ribaund, asist, top kaybı ve isabet yüzdeleri (skordan çıkmayan istatistikler)
+async def _nba_team_stats(src, store, ids):
+    async def one(tid):
+        async def make():
+            d = await src.fetch_json(f"{ESPN}/teams/{tid}/statistics")
+            st = {s.get("name"): s.get("displayValue") for c in ((d.get("results") or {}).get("stats") or {}).get("categories", []) for s in c.get("stats", [])}
+            return {k: _num(st.get(v)) for k, v in (("reb", "avgRebounds"), ("oreb", "avgOffensiveRebounds"), ("dreb", "avgDefensiveRebounds"),
+                    ("ast", "avgAssists"), ("to", "avgTurnovers"), ("stl", "avgSteals"), ("blk", "avgBlocks"),
+                    ("fg", "fieldGoalPct"), ("tp", "threePointFieldGoalPct"), ("ft", "freeThrowPct"))}
+        try:
+            return tid, await cached(store, f"bk:nba:ts:{tid}", 6 * 3600, make)
+        except Exception as e:  # noqa: BLE001
+            log.warning("takım istatistiği alınamadı (%s): %s", tid, e)
+            return tid, None
+    return dict(await asyncio.gather(*[one(t) for t in ids]))
+
+
+async def _el_team_stats(src, store):
+    async def make():
+        d = await src.fetch_json(f"{EL_FEED}/statistics/teams/traditional?seasonMode=Single&seasonCode={EL_SEASON}&limit=30")
+        out = {}
+        for r in d.get("teams", []):
+            made = (r.get("twoPointersMade") or 0) + (r.get("threePointersMade") or 0)
+            att = (r.get("twoPointersAttempted") or 0) + (r.get("threePointersAttempted") or 0)
+            out[(r.get("team") or {}).get("code")] = {
+                "reb": _num(r.get("totalRebounds")), "oreb": _num(r.get("offensiveRebounds")), "dreb": _num(r.get("defensiveRebounds")),
+                "ast": _num(r.get("assists")), "to": _num(r.get("turnovers")), "stl": _num(r.get("steals")), "blk": _num(r.get("blocks")),
+                "fg": round(100 * made / att, 1) if att else None, "tp": _num(r.get("threePointersPercentage")), "ft": _num(r.get("freeThrowsPercentage"))}
+        return out
+    try:
+        return await cached(store, "bk:el:ts", 3 * 3600, make)
+    except Exception as e:  # noqa: BLE001
+        log.warning("EuroLeague takım istatistiği alınamadı: %s", e)
+        return {}
+
+
 async def _nba_injuries(src, store):
     async def make():
         d = await src.fetch_json(f"{ESPN}/injuries")
@@ -259,7 +295,8 @@ async def load_nba(src, store, now):
         games += rows
     players, injuries, groups = await asyncio.gather(
         _nba_players(src, store), _nba_injuries(src, store), _nba_groups(src, store))
-    return {"games": games, "players": players, "injuries": injuries, "groups": groups, "rank": {}}
+    tstats = await _nba_team_stats(src, store, sorted({g[s]["id"] for g in games for s in ("home", "away")}))
+    return {"games": games, "players": players, "injuries": injuries, "groups": groups, "rank": {}, "tstats": tstats}
 
 
 # ---------- EuroLeague ----------
@@ -330,7 +367,7 @@ async def load_el(src, store, now):
         d = await src.fetch_json(EL_API.format(s=EL_SEASON))
         return [_el_game(g) for g in d.get("data", []) if g.get("home") and g.get("away")]
     games = await cached(store, "bk:el:games", LIVE_TTL, make)
-    return {"games": games, "players": await _el_players(src, store), "injuries": {}, "groups": {}, "rank": {}}
+    return {"games": games, "players": await _el_players(src, store), "injuries": {}, "groups": {}, "rank": {}, "tstats": await _el_team_stats(src, store)}
 
 
 async def prior_games(src, store, lg):
@@ -541,7 +578,9 @@ async def build(src, store, write, now):
         doc = bm.update_coupons(store, d, day_cands[d]) if d >= today else (store.bk_get("coupons", d) or {})
         write(f"bk-day-{d}.json", {"date": d, "matches": sorted(all_cards[d], key=lambda m: (list(LEAGUES).index(m["lg"]), m["utc"])),
                                    "coupons": doc.get("coupons") or []})
-    write("bk-karne.json", bm.karne(store))
+    k = bm.karne(store)
+    log.info("basketbol karnesi: %s · %s · %s", k["total"], k["by_lg"], k["by_type"])
+    write("bk-karne.json", k)
     log.info("basketbol günleri: %s (%s)", {k: len(v) for k, v in all_cards.items()}, today)
     return out_lg
 
@@ -654,8 +693,8 @@ async def bundle(src, g, lg, d, table, games, roster, box, last_box):
     refs = g.get("refs") or (box or {}).get("refs")
     return {
         **{k: g[k] for k in ("id", "lg", "utc", "state", "clock", "q", "venue", "round")}, "lg_name": LEAGUES[lg]["name"], "refs": refs,
-        "home": {**g["home"], "rec": team_summary(table.get(h)), "rest": rest_days(table.get(h), g["utc"]), "log": (table.get(h) or {}).get("log", [])[-5:][::-1]},
-        "away": {**g["away"], "rec": team_summary(table.get(a)), "rest": rest_days(table.get(a), g["utc"]), "log": (table.get(a) or {}).get("log", [])[-5:][::-1]},
+        "home": {**g["home"], "ts": d["tstats"].get(h), "rec": team_summary(table.get(h)), "rest": rest_days(table.get(h), g["utc"]), "log": (table.get(h) or {}).get("log", [])[-5:][::-1]},
+        "away": {**g["away"], "ts": d["tstats"].get(a), "rec": team_summary(table.get(a)), "rest": rest_days(table.get(a), g["utc"]), "log": (table.get(a) or {}).get("log", [])[-5:][::-1]},
         "players": {"home": pack(h), "away": pack(a)},
         "injuries": {"home": d["injuries"].get(h) or [], "away": d["injuries"].get(a) or []},
         "absent": {"home": absences(roster(h), last_box.get(h)) if lg != "nba" else [],

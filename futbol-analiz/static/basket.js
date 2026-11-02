@@ -142,6 +142,8 @@ function bkBindDays() {
 
 /* ---------- maç sayfası ---------- */
 const bkRec = (r) => r ? `${r.w}-${r.l}` : "—";
+const BK_TS = [["reb", "Maç başı ribaund"], ["oreb", "Hücum ribaundu"], ["dreb", "Savunma ribaundu"], ["ast", "Maç başı asist"], ["to", "Maç başı top kaybı", true],
+  ["stl", "Top çalma"], ["blk", "Blok"], ["fg", "Saha isabeti"], ["tp", "3 sayı isabeti"], ["ft", "Serbest atış isabeti"]];
 function bkCompare(b) {
   const H = b.home, A = b.away, x = H.rec, y = A.rec;
   if (!x && !y) return `<div class="card"><p class="muted">Bu sezon henüz oynanmış maçları yok.</p></div>`;
@@ -163,6 +165,7 @@ function bkCompare(b) {
       ${row("Son 5 maç yenilen", x && x.l5opp, y && y.l5opp, n1, true)}
       <tr><td>${bkDots(x && x.l5)}</td><td>Son maçlar</td><td>${bkDots(y && y.l5)}</td></tr>
       ${row("Dinlenme (gün)", H.rest, A.rest, plain)}
+      ${H.ts && A.ts ? BK_TS.map(([k, l, less]) => row(l, H.ts[k], A.ts[k], k.length === 2 && "fgtpft".includes(k) ? (z) => z == null ? "—" : "%" + nf(z, 1) : n1, less)).join("") : ""}
     </tbody></table></div></div>`;
 }
 function bkLog(t, lg) {

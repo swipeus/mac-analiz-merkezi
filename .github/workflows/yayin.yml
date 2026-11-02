@@ -31,5 +31,12 @@ jobs:
           path: .
           retention-days: 1
 
+      # sürüm numarası main'in değil gh-pages'in son kaydından gelir: main değişmeden yapılan
+      # yayınlar aynı numarayı taşırsa Pages yeni içeriği almadan "başarılı" der
+      - id: ver
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
       - id: deploy
         uses: actions/deploy-pages@v4
+        env:
+          GITHUB_SHA: ${{ steps.ver.outputs.sha }}

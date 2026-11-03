@@ -20,23 +20,36 @@ jobs:
     timeout-minutes: 10
     environment:
       name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v5
         with:
           ref: gh-pages
 
-      - uses: actions/upload-pages-artifact@v4
+      - id: art
+        uses: actions/upload-pages-artifact@v4
         with:
           path: .
           retention-days: 1
 
-      # sürüm numarası main'in değil gh-pages'in son kaydından gelir: main değişmeden yapılan
-      # yayınlar aynı numarayı taşırsa Pages yeni içeriği almadan "başarılı" der
-      - id: ver
-        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
-      - id: deploy
-        uses: actions/deploy-pages@v4
+      # Yayın Pages API'siyle elle yapılır: actions/deploy-pages sürüm numarasını her zaman main'in kaydından
+      # alıyor; main değişmeden gelen yayınlar aynı numarayı taşıyınca Pages yeni içeriği almadan "başarılı" diyordu.
+      # Burada numara gh-pages'in her turda yeni olan kaydıdır.
+      - name: Yayınla
         env:
-          GITHUB_SHA: ${{ steps.ver.outputs.sha }}
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT: ${{ steps.art.outputs.artifact_id }}
+        run: |
+          set -eu
+          VER=$(git rev-parse HEAD)
+          OIDC=$(curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL" | jq -r .value)
+          gh api -X POST "repos/$GITHUB_REPOSITORY/pages/deployments" -F artifact_id="$ARTIFACT" -f pages_build_version="$VER" -f oidc_token="$OIDC" --jq .id
+          for i in $(seq 1 60); do
+            st=$(gh api "repos/$GITHUB_REPOSITORY/pages/deployments/$VER" --jq .status)
+            echo "durum: $st"
+            case "$st" in
+              succeed) exit 0 ;;
+              deployment_failed|deployment_content_failed|deployment_cancelled|deployment_lost|syncing_files_failed) exit 1 ;;
+            esac
+            sleep 5
+          done
+          exit 1

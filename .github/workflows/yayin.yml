@@ -55,7 +55,7 @@ jobs:
           exit 1
 
       # sitede gerçekten yeni veri var mı: yayındaki meta.json gh-pages'teki ile aynı olmalı; değilse iş kırmızı
-      # biter ve GitHub e-postayla haber verir ("başarılı" deyip eski veriyi bırakma hatası bir daha sessiz kalmasın)
+      # biter ("başarılı" deyip eski veriyi bırakma hatası bir daha sessiz kalmasın)
       - name: Sitede doğrula
         run: |
           URL="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/data/meta.json"

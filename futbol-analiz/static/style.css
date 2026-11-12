@@ -1615,3 +1615,17 @@ body:not(.sport-bk):not(.in-match):not(.locked) .foot { padding-bottom: 104px; }
 @media (max-width: 600px) { #fbNav a { font-size: 10.5px; } }
 .hero { --hc: #3b82f6; --ac: #f97316; }
 .hero a.team { color: var(--text); text-decoration: none; }
+
+/* görsel sepeti */
+.imgcart { position: fixed; right: 16px; bottom: calc(100px + env(safe-area-inset-bottom)); z-index: 31; display: inline-flex; align-items: center; gap: 6px;
+  padding: 10px 14px; border-radius: 999px; border: 0; color: #04140b; font-weight: 800; background: linear-gradient(135deg, #22c55e, #38bdf8); box-shadow: 0 12px 28px -10px rgba(34,197,94,.9); }
+.imgcart[hidden] { display: none; }
+.imgcart svg { width: 20px; height: 20px; }
+body.in-match .imgcart, body.sport-bk .imgcart { bottom: calc(20px + env(safe-area-inset-bottom)); }
+.carthd { display: flex; align-items: baseline; justify-content: space-between; }
+.carthd b { font-family: "Barlow Condensed", sans-serif; font-size: 22px; text-transform: uppercase; letter-spacing: .05em; }
+.cartgrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; max-height: 55vh; overflow-y: auto; }
+.cartit { position: relative; }
+.cartit img { width: 100%; border-radius: 10px; display: block; }
+.cartit button { position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; padding: 0; border-radius: 50%; font-size: 17px; line-height: 1; background: rgba(0,0,0,.65); border: 1px solid rgba(255,255,255,.25); }
+.csbtns { flex-wrap: wrap; }

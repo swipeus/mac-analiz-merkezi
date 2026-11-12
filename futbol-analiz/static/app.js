@@ -2699,127 +2699,199 @@ function logoImg(path) {
   });
 }
 const SHARE_BTN = (attr, id) => `<button class="cimg" ${attr}="${esc(String(id))}" title="Görsel olarak paylaş" aria-label="Görsel olarak paylaş"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4m0 0L8 8m4-4 4 4M5 13v6a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`;
+const COND = `"Barlow Condensed", "Plus Jakarta Sans", sans-serif`;
 function canvasKit(W, H) {
   const S = 2, cv = document.createElement("canvas");
   cv.width = W * S; cv.height = H * S;
   const c = cv.getContext("2d");
   c.scale(S, S);
-  const FONT = getComputedStyle(document.body).fontFamily;
-  const txt = (t, x, y, size, weight, color, align = "left", maxW = 0) => {
+  const FONT = `"Plus Jakarta Sans", system-ui, sans-serif`;
+  // cond: başlık ve rakamlar için dar yazı tipi
+  const txt = (t, x, y, size, weight, color, align = "left", maxW = 0, cond = false) => {
+    const f = cond ? COND : FONT;
     let z = size;
-    c.font = `${weight} ${z}px ${FONT}`;
-    while (maxW && z > 10 && c.measureText(t).width > maxW) { z -= 1; c.font = `${weight} ${z}px ${FONT}`; }
+    c.font = `${weight} ${z}px ${f}`;
+    while (maxW && z > 10 && c.measureText(t).width > maxW) { z -= 1; c.font = `${weight} ${z}px ${f}`; }
     c.fillStyle = color; c.textAlign = align; c.textBaseline = "middle";
     c.fillText(t, x, y);
+    return c.measureText(t).width;
   };
-  const frame = (color) => {
-    c.fillStyle = "#0d1117"; c.fillRect(0, 0, W, H);
-    rr(c, 10, 10, W - 20, H - 20, 24); c.fillStyle = "#161b22"; c.fill();
-    c.save(); c.clip();
-    c.fillStyle = color; c.fillRect(10, 10, 7, H - 20);
-    c.restore();
-    rr(c, 10, 10, W - 20, H - 20, 24); c.strokeStyle = "#2b3440"; c.lineWidth = 1.5; c.stroke();
+  const frame = () => {
+    const g = c.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, "#0d1a2b"); g.addColorStop(1, "#060a12");
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
   };
-  return { cv, c, txt, frame, FONT, blob: () => new Promise((ok) => cv.toBlob(ok, "image/png")) };
+  return { cv, c, txt, frame, blob: () => new Promise((ok) => cv.toBlob(ok, "image/png")) };
 }
-// o: league, leagueLogo, color, top, topColor, home/away {name, logo}, fav, big, sub, p [ev, ber, dep], safe {text, right, tone}, boxes
+const fontsReady = () => Promise.all([document.fonts.load(`800 30px "Barlow Condensed"`), document.fonts.load(`700 20px "Plus Jakarta Sans"`)]).catch(() => {});
+// kutu simgeleri: gol halkası, karşılıklı ok, kırmızı bayrak, sarı kart
+function boxIcon(c, kind, x, y) {
+  c.save(); c.lineWidth = 2; c.strokeStyle = "#cbd5e1"; c.fillStyle = "#cbd5e1";
+  if (kind === "⚽") { c.beginPath(); c.arc(x, y, 7, 0, Math.PI * 2); c.stroke(); c.beginPath(); c.arc(x, y, 2.5, 0, Math.PI * 2); c.fill(); }
+  else if (kind === "🔁") { c.beginPath(); c.moveTo(x - 7, y - 3); c.lineTo(x + 7, y - 3); c.moveTo(x + 4, y - 6); c.lineTo(x + 7, y - 3); c.lineTo(x + 4, y); c.moveTo(x + 7, y + 4); c.lineTo(x - 7, y + 4); c.moveTo(x - 4, y + 1); c.lineTo(x - 7, y + 4); c.lineTo(x - 4, y + 7); c.stroke(); }
+  else if (kind === "🚩") { c.beginPath(); c.moveTo(x - 6, y + 8); c.lineTo(x - 6, y - 8); c.stroke(); c.fillStyle = "#f85149"; c.beginPath(); c.moveTo(x - 6, y - 8); c.lineTo(x + 7, y - 8); c.lineTo(x + 3, y - 3.5); c.lineTo(x + 7, y + 1); c.lineTo(x - 6, y + 1); c.fill(); }
+  else { c.translate(x, y); c.rotate(0.14); c.fillStyle = "#f5c518"; rr(c, -5, -8, 10, 16, 2); c.fill(); }
+  c.restore();
+}
+// o: league, leagueLogo, status {t, c}, ko {big, small, live}, home/away {name, logo, color, val, fav, shown}, boxes [[ic, etiket, p, oran, en iyi]], pick {mark, text, tone, p, odds}
 async function drawCard(o) {
-  const W = 590, H = o.boxes.length ? 500 : o.safe ? 348 : 270;
-  const { c, txt, frame, FONT, blob } = canvasKit(W, H);
+  await fontsReady();
+  const W = 600, P = 20, IW = W - 2 * P, RH = 68, KW = 104;
+  const yBoard = 62, yBoxes = yBoard + 2 * RH + 14, boxH = 54;
+  const yPick = o.boxes.length ? yBoxes + 2 * boxH + 10 + 14 : yBoxes;
+  const H = (o.pick ? yPick + 64 : yPick) + P;
+  const { c, txt, frame, blob } = canvasKit(W, H);
   const [hl, al, ll] = await Promise.all([logoImg(o.home.logo), logoImg(o.away.logo), logoImg(o.leagueLogo)]);
-  frame(o.color);
-  c.font = `600 14px ${FONT}`;
-  const lw = Math.min(c.measureText(o.league).width, 240) + (ll ? 28 : 0) + 24;
-  rr(c, W - 30 - lw, 28, lw, 30, 9); c.fillStyle = "#1f2630"; c.fill(); c.strokeStyle = "#2b3440"; c.stroke();
-  if (ll) c.drawImage(ll, W - 30 - lw + 11, 34, 18, 18);
-  txt(o.league, W - 42, 43, 14, 600, "#8b98a8", "right", 240);
-  if (o.top) txt(o.top, 40, 43, 15, 800, o.topColor || "#8b98a8", "left", 270);
-  [[o.home, hl, 135, "home"], [o.away, al, 455, "away"]].forEach(([t, img, x, side]) => {
-    c.beginPath(); c.arc(x, 128, 42, 0, Math.PI * 2); c.fillStyle = "#1f2630"; c.fill();
-    if (o.fav === side) { c.beginPath(); c.arc(x, 128, 45, 0, Math.PI * 2); c.strokeStyle = "rgba(240,180,41,.75)"; c.lineWidth = 3; c.stroke(); }
-    if (img) c.drawImage(img, x - 30, 98, 60, 60);
-    else txt((t.name || "?").split(" ").map((w) => w[0]).join("").slice(0, 3), x, 128, 22, 800, "#8b98a8", "center");
-    if (o.fav === side) {
-      c.beginPath(); c.arc(x, 84, 15, 0, Math.PI * 2); c.fillStyle = "#f0c14b"; c.fill();
-      txt("★", x, 85, 18, 800, "#0d1117", "center");
-    }
-    txt(t.name, x, 200, 20, 700, "#e6edf3", "center", 200);
+  frame();
+  // başlık: lig ve durum
+  if (ll) c.drawImage(ll, P, 22, 24, 24);
+  txt((o.league || "").toLocaleUpperCase("tr"), P + (ll ? 32 : 0), 35, 20, 800, "#cbd5e1", "left", 380, true);
+  if (o.status) {
+    c.font = `800 15px ${COND}`;
+    const tw = c.measureText(o.status.t).width + 22;
+    rr(c, W - P - tw, 22, tw, 26, 7); c.fillStyle = o.status.c; c.fill();
+    txt(o.status.t, W - P - tw / 2, 36, 15, 800, "#fff", "center", 0, true);
+  }
+  // skorbord: iki takım satırı ve saat kutusu
+  c.save(); rr(c, P, yBoard, IW, 2 * RH, 18); c.clip();
+  c.fillStyle = "#121c2c"; c.fillRect(P, yBoard, IW, 2 * RH);
+  [[o.home, hl], [o.away, al]].forEach(([t, img], i) => {
+    const y = yBoard + i * RH;
+    c.fillStyle = t.color; c.fillRect(P, y, 8, RH);
+    if (img) c.drawImage(img, P + 24, y + RH / 2 - 19, 38, 38);
+    txt(t.name, P + 76, y + RH / 2, 25, 700, "#eef3fa", "left", IW - KW - 76 - 80);
+    txt(t.val, P + IW - KW - 16, y + RH / 2 + 1, t.shown ? 34 : 28, 800, t.fav || t.shown ? "#ffffff" : "#8b98b0", "right", 0, true);
   });
-  txt(o.big, W / 2, 124, 36, 800, "#e6edf3", "center", 130);
-  txt(o.sub, W / 2, 158, 13, 500, "#8b98a8", "center");
-  if (o.p && o.p[0] != null) {
-    txt(pc(o.p[0]), 40, 242, 17, 700, "#58a6ff");
-    txt(pc(o.p[2]), W - 40, 242, 17, 700, "#f78166", "right");
-    const bx = 96, bw = W - 192;
-    c.save(); rr(c, bx, 236, bw, 12, 6); c.clip();
-    let x0 = bx;
-    [[o.p[0], "#58a6ff"], [o.p[1] || 0, "#8b98a8"], [o.p[2], "#f78166"]].forEach(([v, col]) => { c.fillStyle = col; c.fillRect(x0, 236, Math.max(0, bw * v - 2), 12); x0 += bw * v; });
+  c.strokeStyle = "rgba(255,255,255,.07)"; c.lineWidth = 1.5; c.beginPath(); c.moveTo(P + 8, yBoard + RH); c.lineTo(P + IW - KW, yBoard + RH); c.stroke();
+  c.fillStyle = o.ko.live ? "#e11d48" : "#0b1220"; c.fillRect(P + IW - KW, yBoard, KW, 2 * RH);
+  txt(o.ko.big, P + IW - KW / 2, yBoard + RH - 10, 40, 800, "#ffffff", "center", KW - 12, true);
+  txt(o.ko.small, P + IW - KW / 2, yBoard + RH + 24, 13, 700, o.ko.live ? "#ffe4e6" : "#64748b", "center", KW - 10);
+  c.restore();
+  rr(c, P, yBoard, IW, 2 * RH, 18); c.strokeStyle = "rgba(255,255,255,.09)"; c.lineWidth = 1.5; c.stroke();
+  // 4 kutu: olasılık kadar dolan
+  const bw = (IW - 10) / 2;
+  o.boxes.forEach(([ic, label, v, odds, best], i) => {
+    const x = P + (i % 2) * (bw + 10), y = yBoxes + Math.floor(i / 2) * (boxH + 10);
+    c.save(); rr(c, x, y, bw, boxH, 13); c.clip();
+    c.fillStyle = "rgba(255,255,255,.05)"; c.fillRect(x, y, bw, boxH);
+    const g = c.createLinearGradient(x, 0, x + bw, 0);
+    g.addColorStop(0, best ? "rgba(34,197,94,.38)" : "rgba(56,189,248,.26)"); g.addColorStop(1, best ? "rgba(34,197,94,.06)" : "rgba(56,189,248,.05)");
+    c.fillStyle = g; c.fillRect(x, y, bw * (v || 0), boxH);
     c.restore();
-  }
-  if (o.safe) {
-    const t = o.safe.tone, tint = { lost: ["248,81,73", .15, .45], open: ["227,179,65", .12, .4], ok: ["46,160,67", .14, .5] }[t];
-    rr(c, 40, 268, W - 80, 52, 14);
-    c.fillStyle = `rgba(${tint[0]},${tint[1]})`; c.fill();
-    c.strokeStyle = `rgba(${tint[0]},${tint[2]})`; c.lineWidth = 1.5; c.stroke();
-    txt(o.safe.right, W - 58, 294, 18, 700, "#e6edf3", "right");
-    const rw = c.measureText(o.safe.right).width;
-    txt(o.safe.text, 58, 294, 18, 700, "#e6edf3", "left", W - 116 - rw - 16);
-  }
-  const vals = o.boxes.filter((x) => x[2] != null), top = vals.length ? Math.max(...vals.map((x) => x[2])) : null;
-  const gap = 10, bww = (W - 80 - gap * 3) / 4;
-  o.boxes.forEach(([ic, l, v, , odds], i) => {
-    const x = 40 + i * (bww + gap), y = 336, best = v != null && v === top;
-    rr(c, x, y, bww, 132, 14); c.fillStyle = "#1f2630"; c.fill();
-    c.strokeStyle = best ? "#3fb950" : "#2b3440"; c.lineWidth = best ? 2.5 : 1.5; c.stroke();
-    txt(`${ic} ${l}`, x + bww / 2, y + 26, 13, 500, "#8b98a8", "center", bww - 12);
-    txt(v != null ? pc(v) : "—", x + bww / 2, y + 62, 25, 800, best ? "#56d364" : "#e6edf3", "center");
-    if (odds) txt(nf(odds, 2), x + bww / 2, y + 92, 14, 500, "#8b98a8", "center");
-    rr(c, x + 12, y + 112, bww - 24, 5, 2.5); c.fillStyle = "#2b3440"; c.fill();
-    if (v) { rr(c, x + 12, y + 112, Math.max(5, (bww - 24) * v), 5, 2.5); c.fillStyle = "#58a6ff"; c.fill(); }
+    if (best) { rr(c, x, y, bw, boxH, 13); c.strokeStyle = "rgba(74,222,128,.75)"; c.lineWidth = 2; c.stroke(); }
+    boxIcon(c, ic, x + 22, y + boxH / 2);
+    txt(label, x + 40, y + boxH / 2, 19, 700, "#dbe3ee", "left", bw - 150);
+    const ow = odds ? txt(nf(odds, 2), x + bw - 14, y + boxH / 2 + 1, 16, 600, "#8b98b0", "right") : 0;
+    txt(v != null ? pc(v) : "—", x + bw - 14 - (ow ? ow + 8 : 0), y + boxH / 2 + 1, 28, 800, best ? "#4ade80" : "#ffffff", "right", 0, true);
   });
+  // tercih satırı
+  if (o.pick) {
+    const tone = { won: ["rgba(34,197,94,.20)", "rgba(34,197,94,.45)", "#22c55e"], lost: ["rgba(239,68,68,.18)", "rgba(239,68,68,.45)", "#ef4444"],
+      fin: ["rgba(34,197,94,.12)", "rgba(34,197,94,.35)", "#22c55e"], tbd: ["rgba(227,179,65,.12)", "rgba(227,179,65,.4)", "#e3b341"] }[o.pick.tone];
+    rr(c, P, yPick, IW, 58, 15); c.fillStyle = tone[0]; c.fill(); c.strokeStyle = tone[1]; c.lineWidth = 1.5; c.stroke();
+    c.beginPath(); c.arc(P + 30, yPick + 29, 13, 0, Math.PI * 2); c.fillStyle = tone[2]; c.fill();
+    txt(o.pick.mark, P + 30, yPick + 30, 15, 800, "#fff", "center");
+    const ow = o.pick.odds ? txt(nf(o.pick.odds, 2), W - P - 18, yPick + 30, 34, 800, o.pick.tone === "lost" ? "#fca5a5" : "#4ade80", "right", 0, true) : 0;
+    const pw = o.pick.p != null ? txt(pc(o.pick.p), W - P - 18 - ow - 12, yPick + 30, 17, 700, "#8b98b0", "right") : 0;
+    txt(o.pick.text, P + 54, yPick + 29, 22, 700, "#eef3fa", "left", IW - 54 - ow - pw - 50);
+  }
   return blob();
 }
 async function drawCoupon(c0) {
+  await fontsReady();
   const legs = [...c0.legs].sort((a, b) => a.utc.localeCompare(b.utc));
-  const W = 590, H = 112 + legs.length * 76 + 70;
+  const W = 600, P = 20, LH = 78, H = 108 + legs.length * (LH + 8) + 70;
   const { c, txt, frame, blob } = canvasKit(W, H);
   const logos = await Promise.all(legs.map((l) => logoImg(l.home.id ? `/logo?t=team&id=${l.home.id}` : l.hlogo ? `/logo?u=${encodeURIComponent(l.hlogo)}` : null)));
   const done = c0.state === "done";
-  frame(done ? (c0.won ? "#3fb950" : "#f85149") : "#e3b341");
-  txt(c0.name, 40, 48, 24, 800, "#e6edf3", "left", 340);
-  txt(new Date(c0.date + "T12:00:00").toLocaleDateString("tr-TR", { day: "numeric", month: "long", weekday: "long" }), 40, 78, 14, 500, "#8b98a8", "left", 340);
-  txt(nf(c0.odds, 2), W - 40, 48, 28, 800, "#56d364", "right");
-  txt("toplam oran", W - 40, 78, 13, 500, "#8b98a8", "right");
+  frame();
+  txt(c0.name.toLocaleUpperCase("tr"), P, 40, 32, 800, "#eef3fa", "left", 360, true);
+  txt(new Date(c0.date + "T12:00:00").toLocaleDateString("tr-TR", { day: "numeric", month: "long", weekday: "long" }), P, 72, 16, 600, "#8b98b0", "left", 360);
+  txt(nf(c0.odds, 2), W - P, 42, 44, 800, "#fde68a", "right", 0, true);
+  txt("TOPLAM ORAN", W - P, 74, 14, 800, "#8b98b0", "right", 0, true);
   legs.forEach((l, i) => {
-    const y = 106 + i * 76;
-    c.strokeStyle = "#2b3440"; c.lineWidth = 1; c.beginPath(); c.moveTo(40, y); c.lineTo(W - 40, y); c.stroke();
-    txt(timeOf(l.utc), 40, y + 38, 15, 700, "#8b98a8");
-    if (logos[i]) c.drawImage(logos[i], 98, y + 22, 32, 32);
-    txt(`${l.home.name} – ${l.away.name}`, 142, y + 26, 16, 700, "#e6edf3", "left", W - 142 - 40);
-    txt(l.label, 142, y + 51, 15, 500, "#58a6ff", "left", W - 142 - 110);
-    txt(`${l.hit === true ? "✓ " : l.hit === false ? "✗ " : ""}${nf(l.odds, 2)}`, W - 40, y + 51, 16, 800, l.hit === true ? "#56d364" : l.hit === false ? "#f85149" : "#e6edf3", "right");
+    const y = 100 + i * (LH + 8);
+    const col = l.hit === true ? "#22c55e" : l.hit === false ? "#ef4444" : "#38bdf8";
+    c.save(); rr(c, P, y, W - 2 * P, LH, 15); c.clip();
+    c.fillStyle = "#121c2c"; c.fillRect(P, y, W - 2 * P, LH);
+    c.fillStyle = col; c.fillRect(P, y, 6, LH);
+    c.fillStyle = "#0b1220"; c.fillRect(P + 6, y, 76, LH);
+    c.restore();
+    txt(timeOf(l.utc), P + 44, y + LH / 2, 24, 800, "#e2e8f0", "center", 70, true);
+    if (logos[i]) c.drawImage(logos[i], P + 94, y + 14, 26, 26);
+    txt(`${l.home.name} – ${l.away.name}`, P + 128, y + 27, 18, 700, "#eef3fa", "left", W - 2 * P - 128 - 16);
+    txt(l.label, P + 96, y + 56, 18, 700, "#7dd3fc", "left", W - 2 * P - 96 - 100);
+    txt(`${l.hit === true ? "✓ " : l.hit === false ? "✗ " : ""}${nf(l.odds, 2)}`, W - P - 16, y + 56, 26, 800, l.hit === false ? "#fca5a5" : "#4ade80", "right", 0, true);
   });
-  const y = 106 + legs.length * 76;
-  c.strokeStyle = "#2b3440"; c.lineWidth = 1; c.beginPath(); c.moveTo(40, y); c.lineTo(W - 40, y); c.stroke();
-  txt(done ? (c0.won ? "Kazandı" : "Kaybetti") : `Tutma ihtimali ${pc(c0.p)}`, 40, y + 34, 16, 700, done ? (c0.won ? "#56d364" : "#f85149") : "#e6edf3");
-  txt(`${legs.length} maç`, W - 40, y + 34, 15, 500, "#8b98a8", "right");
+  const y = 100 + legs.length * (LH + 8) + 6;
+  txt(done ? (c0.won ? "KAZANDI" : "KAYBETTİ") : `TUTMA İHTİMALİ ${pc(c0.p)}`, P, y + 26, 24, 800, done ? (c0.won ? "#4ade80" : "#fca5a5") : "#eef3fa", "left", 0, true);
+  txt(`${legs.length} MAÇ`, W - P, y + 26, 22, 800, "#8b98b0", "right", 0, true);
   return blob();
 }
 function footballCardData(m) {
-  const p = m.pred, s = p.safe, live = m.started && !m.finished, lost = s && s.hit === false, amber = s && s.hit == null && !s.final;
+  const p = m.pred, s = p.safe, live = m.started && !m.finished, shown = m.started || m.finished, fav = favoriteSide(p), col = m.colors || {};
+  const items = boxItems(p.over25, p.btts, p.cpick, p.kpick, p.bodds), top = Math.max(...items.map((x) => x[2] ?? -1));
+  const side = (t, sd, pct) => ({ name: t.name, logo: `/logo?t=team&id=${t.id}`, color: teamColor(col[sd], sd), val: shown ? String(t.score ?? 0) : pc(pct), fav: fav === sd, shown });
   return {
     league: m.league, leagueLogo: `/logo?t=league&id=${m.league_id}`,
-    color: { live: "#f85149", final: "#3fb950", open: "#e3b341", wait: "#6e7681" }[matchState(m)] || "#30363d",
-    top: live ? `CANLI ${m.live || ""}`.trim() : m.finished ? "Maç sonu" : "", topColor: live ? "#f85149" : "#8b98a8",
-    home: { name: m.home.name, logo: `/logo?t=team&id=${m.home.id}` }, away: { name: m.away.name, logo: `/logo?t=team&id=${m.away.id}` },
-    fav: favoriteSide(p), big: m.started || m.finished ? `${m.home.score ?? 0} - ${m.away.score ?? 0}` : timeOf(m.utc),
-    sub: live ? "DEVAM EDİYOR" : m.finished ? "SKOR" : "BAŞLAMA", p: [p.p_home, p.p_draw, p.p_away],
-    safe: s ? { text: `${s.hit === true ? "✓" : lost ? "✗" : s.final ? "✅" : "!"} ${s.label.replace(/ \(.*\)$/, "")}`, right: [s.p != null ? pc(s.p) : "", s.odds ? nf(s.odds, 2) : ""].filter(Boolean).join(" · "), tone: lost ? "lost" : amber ? "open" : "ok" } : null,
-    boxes: boxItems(p.over25, p.btts, p.cpick, p.kpick, p.bodds),
+    status: live ? { t: `CANLI ${m.live || ""}`.trim(), c: "#e11d48" } : m.finished ? { t: "MAÇ SONU", c: "#334155" } : null,
+    ko: m.cancelled ? { big: "—", small: "İPTAL" } : live ? { big: m.live || "CANLI", small: "CANLI", live: true } : m.finished ? { big: "MS", small: "BİTTİ" } : { big: timeOf(m.utc), small: "BAŞLAMA" },
+    home: side(m.home, "home", p.p_home), away: side(m.away, "away", p.p_away),
+    boxes: items.map(([ic, l, v, , odds]) => [ic, l, v, odds, v != null && v === top]),
+    pick: s ? { mark: s.hit === true ? "✓" : s.hit === false ? "✗" : s.final ? "✓" : "!", text: s.label.replace(/ \(.*\)$/, ""), tone: s.hit === true ? "won" : s.hit === false ? "lost" : s.final ? "fin" : "tbd", p: s.p, odds: s.odds } : null,
   };
 }
+
+/* görsel sepeti: birden fazla görsel toplanır, tek seferde paylaşılır (sayfa yenilenince boşalır) */
+const CART = [];
+function cartAdd(blob, name) {
+  CART.push({ blob, name: `${name}-${CART.length + 1}`, url: URL.createObjectURL(blob) });
+  cartBadge();
+}
+function cartBadge() {
+  let b = $("#imgCart");
+  if (!b) {
+    b = Object.assign(document.createElement("button"), { id: "imgCart", className: "imgcart", title: "Görsel sepeti" });
+    b.onclick = openCart;
+    document.body.appendChild(b);
+  }
+  b.hidden = !CART.length;
+  b.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="10" r="1.8" fill="currentColor"/><path d="M4 17l5-5 4 4 3-3 4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><b>${CART.length}</b>`;
+}
+async function shareFiles(items, hint) {
+  const files = items.map((x) => new File([x.blob], `${x.name}.png`, { type: "image/png" }));
+  if (navigator.canShare && navigator.canShare({ files })) {
+    try { await navigator.share({ files }); return true; } catch (e) { if (e.name !== "AbortError" && hint) hint.textContent = "Paylaşılamadı, görsellere basılı tutup kaydedebilirsin."; return false; }
+  }
+  items.forEach((x) => { const a = document.createElement("a"); a.href = x.url; a.download = `${x.name}.png`; a.click(); });
+  if (hint) hint.textContent = "Bu tarayıcı toplu paylaşımı desteklemiyor, görseller indirildi.";
+  return false;
+}
+function openCart() {
+  const box = document.createElement("div");
+  box.className = "wn-backdrop";
+  const draw = () => {
+    box.innerHTML = `<div class="wn cshare"><div class="carthd"><b>Görsel sepeti</b><span class="muted">${CART.length} görsel</span></div>
+      <div class="cartgrid">${CART.map((x, i) => `<div class="cartit"><img src="${x.url}" alt=""><button data-rm="${i}" aria-label="Çıkar">×</button></div>`).join("")}</div>
+      <div class="csbtns"><button class="kbtn big wa" data-all ${CART.length ? "" : "disabled"}>Hepsini paylaş</button><button class="kbtn big" data-clear>Boşalt</button><button class="kbtn big" data-x>Kapat</button></div>
+      <small class="muted cshint"></small></div>`;
+  };
+  const close = () => box.remove();
+  box.onclick = async (e) => {
+    const rm = e.target.closest("[data-rm]");
+    if (rm) { const [x] = CART.splice(+rm.dataset.rm, 1); URL.revokeObjectURL(x.url); cartBadge(); if (!CART.length) close(); else draw(); return; }
+    if (e.target.closest("[data-clear]")) { CART.splice(0).forEach((x) => URL.revokeObjectURL(x.url)); cartBadge(); close(); return; }
+    if (e.target.closest("[data-all]")) {
+      if (await shareFiles(CART, $(".cshint", box))) { CART.splice(0).forEach((x) => URL.revokeObjectURL(x.url)); cartBadge(); close(); }
+      return;
+    }
+    if (e.target === box || e.target.closest("[data-x]")) close();
+  };
+  draw();
+  document.body.appendChild(box);
+}
 // önce önizleme açılır: paylaşım ayrı bir dokunuşla başlar, çünkü telefon tarayıcıları dokunuş dışında paylaşıma izin vermez
-async function shareImage(btn, make, caption, name) {
+async function shareImage(btn, make, name) {
   btn.disabled = true;
   let blob = null;
   try { blob = await make(); } catch (e) { console.warn("görsel üretilemedi", e); }
@@ -2828,34 +2900,26 @@ async function shareImage(btn, make, caption, name) {
   const url = URL.createObjectURL(blob);
   const box = document.createElement("div");
   box.className = "wn-backdrop";
-  box.innerHTML = `<div class="wn cshare"><img src="${url}" alt=""><div class="cscap">${esc(caption)}</div>
-    <div class="csbtns"><button class="kbtn big wa" data-go>Paylaş</button><button class="kbtn big" data-x>Kapat</button></div><small class="muted cshint"></small></div>`;
-  const close = () => { box.remove(); URL.revokeObjectURL(url); };
-  box.onclick = (e) => { if (e.target === box || e.target.closest("[data-x]")) close(); };
-  $("[data-go]", box).onclick = async () => {
-    const file = new File([blob], `${name}.png`, { type: "image/png" });
-    // bazı uygulamalar paylaşılan metni düşürür; açıklama panoda da hazır dursun
-    try { navigator.clipboard.writeText(caption).catch(() => {}); } catch { }
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      try { await navigator.share({ files: [file], text: caption }); close(); } catch (e) { if (e.name !== "AbortError") $(".cshint", box).textContent = "Paylaşılamadı, görsele basılı tutup kaydedebilirsin."; }
-      return;
-    }
-    const a = document.createElement("a");
-    a.href = url; a.download = file.name; a.click();
-    $(".cshint", box).textContent = "Görsel indirildi, açıklama kopyalandı.";
+  box.innerHTML = `<div class="wn cshare"><img src="${url}" alt="">
+    <div class="csbtns"><button class="kbtn big wa" data-go>Paylaş</button><button class="kbtn big" data-cart>Sepete ekle</button><button class="kbtn big" data-x>Kapat</button></div><small class="muted cshint"></small></div>`;
+  let kept = false;
+  const close = () => { box.remove(); if (!kept) URL.revokeObjectURL(url); };
+  box.onclick = async (e) => {
+    if (e.target.closest("[data-cart]")) { cartAdd(blob, name); kept = false; close(); return; }
+    if (e.target.closest("[data-go]")) { if (await shareFiles([{ blob, name, url }], $(".cshint", box))) close(); return; }
+    if (e.target === box || e.target.closest("[data-x]")) close();
   };
   document.body.appendChild(box);
 }
 function openCardShare(id, btn) {
   const m = (dayCache && dayCache.matches || []).find((x) => x.id === id);
   if (!m || !m.pred) return;
-  shareImage(btn, () => drawCard(footballCardData(m)), `${m.home.name} vs ${m.away.name} · ${timeOf(m.utc)}`, `mac-${m.id}`);
+  shareImage(btn, () => drawCard(footballCardData(m)), `mac-${m.id}`);
 }
 function openCouponShare(id, btn) {
   const c = COUPON_BY_ID.get(id);
   if (!c) return;
-  const day = new Date(c.date + "T12:00:00").toLocaleDateString("tr-TR", { day: "numeric", month: "long" });
-  shareImage(btn, () => drawCoupon(c), `${c.name} · ${day} · Oran ${nf(c.odds, 2)}`, `kupon-${id}`);
+  shareImage(btn, () => drawCoupon(c), `kupon-${id}`);
 }
 
 /* ---------- statik mod (GitHub Pages): şifre ve yoklama ---------- */

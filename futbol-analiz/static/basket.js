@@ -77,29 +77,33 @@ function bkBindCard(c) {
 function bkCardShare(id, btn) {
   const m = BK.D && BK.D.matches.find((x) => x.id === id);
   if (!m || !m.pred) return;
-  const p = m.pred, live = m.state === "live", done = m.state === "post", lg = (u) => u ? `/logo?u=${encodeURIComponent(u)}` : null;
+  const p = m.pred, live = m.state === "live", done = m.state === "post", shown = live || done, fav = bkFav(p), lg = (u) => u ? `/logo?u=${encodeURIComponent(u)}` : null;
+  const [big, small] = bkKoParts(m);
+  const side = (t, sd) => ({ name: t.short, logo: lg(t.logo), color: sd === "home" ? "#3b82f6" : "#f97316", val: shown ? String(t.score ?? 0) : pc(p["p_" + sd]), fav: fav === sd, shown });
   const o = {
-    league: BK_LG[m.lg], leagueLogo: null, color: live ? "#f85149" : done ? "#30363d" : "#e3b341",
-    top: live ? `CANLI ${m.clock || ""}`.trim() : done ? "Maç sonu" : "", topColor: live ? "#f85149" : "#8b98a8",
-    home: { name: m.home.short, logo: lg(m.home.logo) }, away: { name: m.away.short, logo: lg(m.away.logo) }, fav: bkFav(p),
-    big: live || done ? `${m.home.score ?? 0} - ${m.away.score ?? 0}` : timeOf(m.utc), sub: live ? "DEVAM EDİYOR" : done ? "SKOR" : "BAŞLAMA",
-    p: [p.p_home, 0, p.p_away], boxes: [],
-    safe: p.safe ? { text: `${p.hit === true ? "✓" : p.hit === false ? "✗" : "✅"} ${p.safe.label}`, right: `${pc(p.safe.p)} · ${nf(p.safe.odds, 2)}`, tone: p.hit === false ? "lost" : "ok" } : null,
+    league: BK_LG[m.lg], leagueLogo: null,
+    status: live ? { t: "CANLI", c: "#e11d48" } : done ? { t: "MAÇ SONU", c: "#334155" } : null,
+    ko: { big, small, live }, home: side(m.home, "home"), away: side(m.away, "away"), boxes: [],
+    pick: p.safe ? { mark: p.hit === false ? "✗" : "✓", text: p.safe.label, tone: p.hit === true ? "won" : p.hit === false ? "lost" : "fin", p: p.safe.p, odds: p.safe.odds } : null,
   };
-  shareImage(btn, () => drawCard(o), `${m.home.short} vs ${m.away.short} · ${timeOf(m.utc)}`, `basket-${id}`);
+  shareImage(btn, () => drawCard(o), `basket-${id}`);
 }
 // sağdaki kutu: başlamadıysa saat, canlıysa çeyrek ve süre, bitince MS
-function bkKo(m) {
-  if (m.state === "off") return `—<small>İPTAL</small>`;
-  if (m.state === "post") return `MS<small>BİTTİ</small>`;
+function bkKoParts(m) {
+  if (m.state === "off") return ["—", "İPTAL"];
+  if (m.state === "post") return ["MS", "BİTTİ"];
   if (m.state === "live") {
     const c = m.clock || "", q = c.match(/^(\d)\. çeyrek\s*(.*)$/);
-    if (q) return `${q[1]}Ç<small>${esc(q[2] || "CANLI")}</small>`;
-    if (/^Uzatma/.test(c)) return `UZ<small>${esc(c.replace(/^Uzatma\s*/, "") || "CANLI")}</small>`;
-    if (/Devre/.test(c)) return `DA<small>DEVRE ARASI</small>`;
-    return `CANLI<small>${esc(c)}</small>`;
+    if (q) return [`${q[1]}Ç`, q[2] || "CANLI"];
+    if (/^Uzatma/.test(c)) return ["UZ", c.replace(/^Uzatma\s*/, "") || "CANLI"];
+    if (/Devre/.test(c)) return ["DA", "DEVRE ARASI"];
+    return ["CANLI", c];
   }
-  return `${esc(timeOf(m.utc))}<small>BAŞLAMA</small>`;
+  return [timeOf(m.utc), "BAŞLAMA"];
+}
+function bkKo(m) {
+  const [big, small] = bkKoParts(m);
+  return `${esc(big)}<small>${esc(small)}</small>`;
 }
 function bkCard(m) {
   const live = m.state === "live", done = m.state === "post", shown = live || done;

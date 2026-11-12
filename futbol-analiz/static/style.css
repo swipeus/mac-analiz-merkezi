@@ -1555,3 +1555,63 @@ body:has(.sports a[data-sport="bk"].on) .ptab.on { background: linear-gradient(1
 body:not(.sport-bk):not(.in-match):not(.locked) main { padding-bottom: 110px; }
 body:not(.sport-bk):not(.in-match):not(.locked) .foot { padding-bottom: 104px; }
 @media (max-width: 600px) { #fbNav.fbnav { width: calc(100% - 20px); } #fbNav a { font-size: 10.5px; padding: 4px 0; } }
+
+/* ================= Tasarım 3: diğer sayfalar ================= */
+/* başlıklar ve sekmeler yayın grafiği diliyle */
+.ch .ct { font-family: "Barlow Condensed", "Plus Jakarta Sans", sans-serif; font-size: 19px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+.ch .ct .muted, .ch .ct small, .ch .ct .kodds, .ch .ct .kmini, .ch .ct .kpl { font-family: "Plus Jakarta Sans", sans-serif; text-transform: none; letter-spacing: 0; }
+.ch .ct .muted { font-size: 13px; font-weight: 600; }
+.ptabs:not(.ctabs) .ptab.on { background: #fff; color: #0a1322; box-shadow: 0 6px 16px -8px rgba(255,255,255,.4); }
+.ptabs:not(.ctabs) .ptab.on small { color: rgba(10,19,34,.6); }
+.mtabs .ptab, #view > .ptabs .ptab { font-family: "Barlow Condensed", sans-serif; font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+.mtabs .ptab small { font-family: "Plus Jakarta Sans", sans-serif; text-transform: none; letter-spacing: 0; }
+.kpi .v, .bkexp b, .vkarne b { font-family: "Barlow Condensed", sans-serif; font-size: 27px; font-weight: 800; letter-spacing: .01em; }
+.kpi .l, .bkexp small { font-family: "Barlow Condensed", sans-serif; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+
+/* maç sayfası: TV skor çubuğu */
+.hero { padding: 0 0 14px !important; background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.01)), var(--panel) !important; }
+.hero .hero-league { padding: 12px 14px 0; }
+.hero .teams { margin: 12px 0 12px; gap: 0; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: stretch; }
+.hero .team { padding: 14px 8px 12px; font-family: "Barlow Condensed", sans-serif; font-size: 21px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; }
+.hero .team:first-child { background: linear-gradient(90deg, color-mix(in srgb, var(--hc) 50%, transparent), color-mix(in srgb, var(--hc) 8%, transparent)); }
+.hero .team:last-child { background: linear-gradient(270deg, color-mix(in srgb, var(--ac) 50%, transparent), color-mix(in srgb, var(--ac) 8%, transparent)); }
+.hero .team .tlink { border-bottom: 0; }
+.hero .score { display: flex; flex-direction: column; justify-content: center; padding: 0 16px; background: #0b1220; font-family: "Barlow Condensed", sans-serif; font-size: 44px; letter-spacing: .01em; text-shadow: none; }
+.hero .score small { font-family: "Plus Jakarta Sans", sans-serif; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: #64748b; margin-top: 2px; }
+.hero .score.live { background: linear-gradient(180deg, #e11d48, #be123c); color: #fff !important; }
+.hero .score.live small { color: #ffe4e6 !important; }
+.hero .chips, .hero .meta, .hero .updated { padding: 0 14px; }
+@media (max-width: 600px) { .hero .team { font-size: 17px; } .hero .score { font-size: 36px; padding: 0 10px; } }
+
+/* kuponlar: ayaklar skorbord satırı gibi */
+.ktime { font-family: "Barlow Condensed", sans-serif; font-size: 17px; font-weight: 800; letter-spacing: .02em; color: #cbd5e1; }
+.kleg { border-left: 3px solid rgba(56,189,248,.55); }
+.kleg.hit { border-left-color: #22c55e; } .kleg.miss { border-left-color: #ef4444; }
+.klt span { font-weight: 700; color: #e2e8f0; }
+.klp .kpick { font-weight: 700; }
+.klp b { font-family: "Barlow Condensed", sans-serif; font-size: 19px; font-weight: 800; color: #4ade80; }
+.kodds { font-family: "Barlow Condensed", sans-serif; font-size: 19px; }
+.kres { font-family: "Barlow Condensed", sans-serif; font-size: 16px; }
+
+/* karne satırları */
+.bkpt b { font-family: "Barlow Condensed", sans-serif; font-size: 18px; font-weight: 800; padding: 2px 9px; border-radius: 8px; background: rgba(0,0,0,.3); }
+.bkpt b.lv { background: #e11d48; color: #fff !important; }
+.bkpp b { font-family: "Barlow Condensed", sans-serif; font-size: 16px; }
+.kdayh, .kday > summary .ch .ct { font-family: "Barlow Condensed", sans-serif; }
+
+/* oranlar */
+.orow .oo, .mvrow b { font-family: "Barlow Condensed", sans-serif; font-size: 16px; }
+
+/* basketbol kartı: futbolla aynı skorbord */
+.gnm .grec { flex: 0 0 auto; font-size: 11px; color: var(--muted); font-weight: 600; }
+.gcard .gko small { white-space: nowrap; }
+.sport-bk .gcard .gpk .gpl i { background: #f97316; }
+.sport-bk .gcard .gpk.lost .gpl i { background: #ef4444; }
+.sport-bk .gcard .gpr b { color: #fdba74; }
+.sport-bk .gcard .gpk.won { background: linear-gradient(90deg, rgba(34,197,94,.18), transparent); }
+.sport-bk .gcard .gpk.won .gpr b { color: #4ade80; }
+.bknav a { font-family: "Barlow Condensed", sans-serif; font-size: 15px; text-transform: uppercase; letter-spacing: .06em; }
+#fbNav a { font-family: "Plus Jakarta Sans", sans-serif; font-size: 11px; text-transform: none; letter-spacing: 0; }
+@media (max-width: 600px) { #fbNav a { font-size: 10.5px; } }
+.hero { --hc: #3b82f6; --ac: #f97316; }
+.hero a.team { color: var(--text); text-decoration: none; }

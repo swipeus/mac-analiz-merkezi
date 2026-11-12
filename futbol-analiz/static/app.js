@@ -504,7 +504,7 @@ function matchHtml(b) {
   ].filter(Boolean).join("");
   const conf = { "Yüksek": "#3fb950", "Orta": "#d29922", "Düşük": "#f85149" }[P.confidence] || "#8b98a8";
   return `
-  <div class="hero" ${b.colors ? `style="--home:${esc(b.colors.home)};--away:${esc(b.colors.away)}"` : ""}>
+  <div class="hero" style="--hc:${teamColor((b.colors || {}).home, "home")};--ac:${teamColor((b.colors || {}).away, "away")}">
     <a class="hero-league" href="#/lig/${b.league_id}" title="Puan durumu"><img src="${leagueLogo(b.league_id)}" alt="" onerror="this.remove()"><b>${esc(lgName(b.league_id, b.league_name))}</b><small>· puan durumu ›</small></a>
     <div class="teams">
       <div class="team">${crestHtml(b.home, fav === "home", P.p_home, 84)}<span><a class="tlink" href="#/takim/${b.home.id}" title="Takım sayfası">${esc(H)}</a> ${starBtn(b.home.id, H)}</span>${formDots(b.recent.home.rows)}</div>

@@ -88,20 +88,31 @@ function bkCardShare(id, btn) {
   };
   shareImage(btn, () => drawCard(o), `${m.home.short} vs ${m.away.short} · ${timeOf(m.utc)}`, `basket-${id}`);
 }
+// sağdaki kutu: başlamadıysa saat, canlıysa çeyrek ve süre, bitince MS
+function bkKo(m) {
+  if (m.state === "off") return `—<small>İPTAL</small>`;
+  if (m.state === "post") return `MS<small>BİTTİ</small>`;
+  if (m.state === "live") {
+    const c = m.clock || "", q = c.match(/^(\d)\. çeyrek\s*(.*)$/);
+    if (q) return `${q[1]}Ç<small>${esc(q[2] || "CANLI")}</small>`;
+    if (/^Uzatma/.test(c)) return `UZ<small>${esc(c.replace(/^Uzatma\s*/, "") || "CANLI")}</small>`;
+    if (/Devre/.test(c)) return `DA<small>DEVRE ARASI</small>`;
+    return `CANLI<small>${esc(c)}</small>`;
+  }
+  return `${esc(timeOf(m.utc))}<small>BAŞLAMA</small>`;
+}
 function bkCard(m) {
-  const live = m.state === "live", done = m.state === "post";
-  const top = live ? `<span class="badge-live">CANLI ${esc(m.clock || "")}</span>` : done ? `<span class="when">Maç sonu</span>` : `<span></span>`;
-  const mid = live || done
-    ? `<div class="sc">${m.home.score ?? 0} - ${m.away.score ?? 0}</div><div class="sub">${live ? "devam ediyor" : "skor"}</div>`
-    : `<div class="ko">${esc(timeOf(m.utc))}</div><div class="sub">başlama</div>`;
-  const quarters = m.q && m.q[0] && m.q[0].length ? `<div class="bkq">${m.q[0].map((x, i) => `<span>${x ?? "–"}-${(m.q[1] || [])[i] ?? "–"}</span>`).join("")}</div>` : "";
+  const live = m.state === "live", done = m.state === "post", shown = live || done;
   const p = m.pred, fav = bkFav(p);
-  const tm = (t, sd) => `<div class="tm">${bkCrest(t, 56, fav === sd, p && p["p_" + sd])}<div class="nm">${esc(t.short)}</div>${t.rec ? `<small class="muted">${esc(t.rec)}</small>` : ""}</div>`;
-  const bar = p && p.p_home != null ? `<div class="probs"><span class="ph">${pc(p.p_home)}</span><div class="probbar"><span style="width:${p.p_home * 100}%"></span><span style="width:0"></span><span style="width:${p.p_away * 100}%"></span></div><span class="pa">${pc(p.p_away)}</span></div>` : "";
-  const safe = p && p.safe ? `<div class="bksafe ${p.hit === true ? "won" : p.hit === false ? "lost" : ""}"><span>${p.hit === true ? "✓" : p.hit === false ? "✗" : "✅"} ${esc(p.safe.label)}</span><b>${pc(p.safe.p)} · ${nf(p.safe.odds, 2)}</b></div>` : "";
-  return `<div class="mcard ${live ? "is-live" : ""} st-${live ? "live" : done ? "done" : "open"}" data-bk="${esc(m.id)}">
-    <div class="mtop"><span class="mtl">${top}${p ? SHARE_BTN("data-cimgb", m.id) : ""}</span><div class="mtags">${m.round ? `<span class="tag">${esc(typeof m.round === "number" ? m.round + ". hafta" : m.round)}</span>` : ""}</div></div>
-    <div class="mteams">${tm(m.home, "home")}<div class="mid">${mid}</div>${tm(m.away, "away")}</div>${quarters}${bar}${safe}
+  const line = (t, sd) => `<div class="gln ${fav === sd ? "fav" : ""}"><span class="gtc" style="--c:${sd === "home" ? "#3b82f6" : "#f97316"}"></span>
+    <span class="gnm">${t.logo ? `<img src="${esc(t.logo)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.visibility='hidden'">` : ""}<span class="nm">${esc(t.short)}</span>${t.rec ? `<small class="grec">${esc(t.rec)}</small>` : ""}</span>
+    <span class="gp">${shown ? t.score ?? 0 : p && p["p_" + sd] != null ? pc(p["p_" + sd]) : ""}</span></div>`;
+  const pick = p && p.safe ? `<div class="gpk ${p.hit === true ? "won" : p.hit === false ? "lost" : "fin"}">
+    <span class="gpl"><i>${p.hit === false ? "✗" : "✓"}</i>${esc(p.safe.label)}</span>
+    <span class="gpr"><small>${pc(p.safe.p)}</small><b>${nf(p.safe.odds, 2)}</b>${SHARE_BTN("data-cimgb", m.id)}</span></div>` : "";
+  const round = m.round ? `<div class="gtop"><span class="tag">${esc(typeof m.round === "number" ? m.round + ". hafta" : m.round)}</span></div>` : "";
+  return `<div class="mcard gcard ${live ? "is-live" : ""} st-${live ? "live" : done ? "done" : "open"}" data-bk="${esc(m.id)}">${round}
+    <div class="gsb"><div class="gteams">${line(m.home, "home")}${line(m.away, "away")}</div><div class="gko ${live ? "l" : done ? "f" : ""}">${bkKo(m)}</div></div>${pick}
   </div>`;
 }
 async function renderBasketHome() {

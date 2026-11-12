@@ -238,7 +238,7 @@ async function renderDay(silent) {
   const mineHtml = mine.length ? `<section class="lg-block mine-block">
       <div class="lg-title"><span class="sorticon">★</span><b>Takımlarım</b><span>${mine.length} maç</span></div>
       <div class="mgrid">${mine.map((m) => cardHtml(m, true)).join("")}</div></section>` : "";
-  v.innerHTML = quickBar(all) + (fold ? doneBox(finished.length, finished.map((m) => cardHtml(m, true)).join("")) : "") + (ms.length ? mineHtml + body : `<div class="card"><p class="muted">Bu filtreye uyan maç yok.</p></div>`);
+  v.innerHTML = (quick === "all" && state.sort === "league" ? homeTop(all) : "") + quickBar(all) + (fold ? doneBox(finished.length, finished.map((m) => cardHtml(m, true)).join("")) : "") + (ms.length ? mineHtml + body : `<div class="card"><p class="muted">Bu filtreye uyan maç yok.</p></div>`);
   bindDoneBox(v);
   v.querySelectorAll("[data-quick]").forEach((x) => x.onclick = () => { quick = x.dataset.quick; safeSet("quick", quick); renderDay(true); });
   v.querySelectorAll("[data-id]").forEach((r) => r.onclick = (e) => {
@@ -339,36 +339,57 @@ function matchState(m) {
   if (!m.pred) return "wait";
   return m.lineup_type && !["predicted", "lastStarting11"].includes(m.lineup_type) ? "final" : "open";
 }
+// takım rengi: çok koyu ya da geçersizse ev sahibi mavi, deplasman turuncu
+function teamColor(hex, side) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex || "");
+  if (m) {
+    const n = parseInt(m[1], 16), lum = (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+    if (lum > 0.16) return "#" + m[1];
+  }
+  return side === "home" ? "#3b82f6" : "#f97316";
+}
+// sağdaki saat kutusu: başlamadıysa saat, canlıysa dakika, bitince MS
+function koHtml(m) {
+  if (m.cancelled) return `—<small>İPTAL</small>`;
+  if (m.started && !m.finished) return `${esc(m.live || "Canlı")}<small>CANLI</small>`;
+  if (m.finished) return `MS<small>BİTTİ</small>`;
+  return `${esc(timeOf(m.utc))}<small>BAŞLAMA</small>`;
+}
 function cardHtml(m, sorted) {
-  const live = m.started && !m.finished;
-  const p = m.pred;
-  const fav = favoriteSide(p);
-  let top = m.cancelled ? `<span class="when">İptal</span>`
-    : live ? `<span class="badge-live">CANLI ${esc(m.live || "")}</span>`
-    : m.finished ? `<span class="when">Maç sonu</span>` : `<span></span>`;
-  const tags = p ? [m.lineup_type && !["predicted", "lastStarting11"].includes(m.lineup_type) ? lineupTag(m.lineup_type, false) : "",
-    ""].join("") : "";
-  const mid = (m.started || m.finished)
-    ? `<div class="sc">${m.home.score ?? 0} - ${m.away.score ?? 0}</div><div class="sub">${live ? "devam ediyor" : "skor"}</div>`
-    : `<div class="ko">${esc(timeOf(m.utc))}</div><div class="sub">başlama</div>`;
+  const live = m.started && !m.finished, shown = m.started || m.finished;
+  const p = m.pred, fav = favoriteSide(p), col = m.colors || {};
+  const tags = p && m.lineup_type && !["predicted", "lastStarting11"].includes(m.lineup_type) ? lineupTag(m.lineup_type, false) : "";
+  const top = sorted ? `<span class="tag lgt"><img src="${leagueLogo(m.league_id)}" alt="" onerror="this.remove()">${esc(m.league)}</span>${sortBadge(m)}` : tags;
+  const line = (t, sd, pct) => `<div class="gln ${fav === sd ? "fav" : ""}"><span class="gtc" style="--c:${teamColor(col[sd], sd)}"></span>
+    <span class="gnm"><img src="${teamLogo(t.id)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"><span class="nm">${esc(t.name)}</span></span>
+    <span class="gp">${shown ? t.score ?? 0 : p ? pc(pct) : ""}</span></div>`;
   const s = p && p.safe;
-  const safe = s ? `<div class="bksafe ${s.hit === true ? "won" : s.hit === false ? "lost" : ""}" title="${s.hit === true ? "Tuttu" : s.hit === false ? "Tutmadı" : s.final ? "Son tercih (resmi 11'ler sonrası)" : "Resmi 11'ler açıklanınca kesinleşir, değişebilir"}"><span>${s.hit === true ? "✓" : s.hit === false ? "✗" : s.final ? "✅" : "!"} ${esc(s.label.replace(/ \(.*\)$/, ""))}</span><b>${[s.p != null ? pc(s.p) : "", s.odds ? nf(s.odds, 2) : ""].filter(Boolean).join(" · ")}</b></div>` : "";
-  const bottom = p ? `
-    <div class="probs"><span class="ph">${pc(p.p_home)}</span>
-      <div class="probbar"><span style="width:${p.p_home * 100}%"></span><span style="width:${p.p_draw * 100}%"></span><span style="width:${p.p_away * 100}%"></span></div>
-      <span class="pa">${pc(p.p_away)}</span></div>
-    ${safe}
-    ${probBoxes(boxItems(p.over25, p.btts, p.cpick, p.kpick, p.bodds), m.id)}` : `<div class="pending">Analiz hazırlanıyor…</div>`;
+  const pick = s ? `<div class="gpk ${s.hit === true ? "won" : s.hit === false ? "lost" : s.final ? "fin" : "tbd"}" title="${s.hit === true ? "Tuttu" : s.hit === false ? "Tutmadı" : s.final ? "Son tercih (resmi 11'ler sonrası)" : "Resmi 11'ler açıklanınca kesinleşir, değişebilir"}">
+    <span class="gpl"><i>${s.hit === true ? "✓" : s.hit === false ? "✗" : s.final ? "✓" : "!"}</i>${esc(s.label.replace(/ \(.*\)$/, ""))}</span>
+    <span class="gpr">${s.p != null ? `<small>${pc(s.p)}</small>` : ""}${s.odds ? `<b>${nf(s.odds, 2)}</b>` : ""}${SHARE_BTN("data-cimg", m.id)}</span></div>` : "";
   const stc = matchState(m);
-  return `<div class="mcard ${live ? "is-live" : ""} st-${stc}" data-id="${m.id}" title="${STATE_LABEL[stc]}">
-    <div class="mtop"><span class="mtl">${top}${p ? SHARE_BTN("data-cimg", m.id) : ""}</span><div class="mtags">${sorted ? `<span class="tag lgt"><img src="${leagueLogo(m.league_id)}" alt="" onerror="this.remove()">${esc(m.league)}</span>${sortBadge(m)}` : tags}</div></div>
-    <div class="mteams">
-      <div class="tm">${crestHtml(m.home, fav === "home", p && p.p_home)}<div class="nm">${esc(m.home.name)}</div></div>
-      <div class="mid">${mid}</div>
-      <div class="tm">${crestHtml(m.away, fav === "away", p && p.p_away)}<div class="nm">${esc(m.away.name)}</div></div>
-    </div>
-    ${bottom}
+  return `<div class="mcard gcard ${live ? "is-live" : ""} st-${stc}" data-id="${m.id}" data-utc="${esc(m.utc || "")}" title="${STATE_LABEL[stc]}">
+    ${top ? `<div class="gtop">${top}</div>` : ""}
+    <div class="gsb"><div class="gteams">${line(m.home, "home", p && p.p_home)}${line(m.away, "away", p && p.p_away)}</div>
+      <div class="gko ${live ? "l" : m.finished ? "f" : ""}">${koHtml(m)}</div></div>
+    ${p ? probBoxes(boxItems(p.over25, p.btts, p.cpick, p.kpick, p.bodds), m.id) + pick : `<div class="pending">Analiz hazırlanıyor…</div>`}
   </div>`;
+}
+// ana sayfanın üstü: günün en garantisi, kısa özet ve canlı maç şeridi
+function homeTop(all) {
+  const open = all.filter((m) => !m.started && !m.cancelled && m.pred && m.pred.safe && m.pred.safe.odds);
+  const best = open.sort((x, y) => (y.pred.safe.final - x.pred.safe.final) || ((y.pred.safe.p || 0) - (x.pred.safe.p || 0)))[0];
+  const live = all.filter((m) => m.started && !m.finished);
+  const fin = all.filter((m) => m.pred && m.pred.safe && m.pred.safe.final && !m.finished).length;
+  const col = (best && best.colors) || {};
+  const hero = best ? `<div class="ghero" data-id="${best.id}">
+    <div class="ghs"><div class="gside h" style="--c:${teamColor(col.home, "home")}"><img src="${teamLogo(best.home.id)}" alt="" onerror="this.style.visibility='hidden'"><span>${esc(best.home.name)}</span></div>
+      <div class="gmid">${esc(timeOf(best.utc))}</div>
+      <div class="gside a" style="--c:${teamColor(col.away, "away")}"><span>${esc(best.away.name)}</span><img src="${teamLogo(best.away.id)}" alt="" onerror="this.style.visibility='hidden'"></div></div>
+    <div class="gbest"><div><small>★ GÜNÜN EN GARANTİSİ${best.pred.safe.final ? "" : " · DEĞİŞEBİLİR"}</small><span>${esc(best.pred.safe.label.replace(/ \(.*\)$/, ""))}</span></div><b>${nf(best.pred.safe.odds, 2)}</b></div></div>` : "";
+  const stats = `<div class="gstats"><div><small>Maç</small><b>${all.length}</b></div><div><small>Kesin tercih</small><b class="pos">${fin}</b></div><div><small>Canlı</small><b class="${live.length ? "neg" : ""}">${live.length}</b></div></div>`;
+  const tick = live.length ? `<div class="gtick">${live.map((m) => `<div data-id="${m.id}"><i></i>${esc(m.home.name)} ${m.home.score ?? 0}-${m.away.score ?? 0} ${esc(m.away.name)} <b>${esc(m.live || "")}</b></div>`).join("")}</div>` : "";
+  return hero + stats + tick;
 }
 
 const isNarrow = () => window.matchMedia("(max-width: 700px)").matches;

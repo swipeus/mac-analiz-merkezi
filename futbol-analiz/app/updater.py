@@ -62,6 +62,7 @@ def enrich_day(store, matches):
                 m["pred"]["safe"]["hit"] = rec.get("pick_hit")
             m["pred"]["value"] = bool(pr.get("value_pick"))
             m["lineup_type"] = lu.get("type")
+            m["colors"] = b["body"].get("colors")  # kartın kenarındaki takım renkleri
             m["absent"] = [len((lu.get(s) or {}).get("unavailable", [])) for s in ("home", "away")]
             m["updated"] = b["ts"]
     return matches

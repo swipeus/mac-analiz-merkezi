@@ -43,16 +43,15 @@ async function liveDay() {
     const card = document.querySelector(`.mcard[data-id="${m.id}"]`);
     if (!card) continue;
     const live = m.started && !m.finished;
-    const names = card.querySelectorAll(".tm .nm");
+    const names = card.querySelectorAll(".gnm .nm");
     if (m.started) noteScore(m.id, m.hs, m.as, names[0] && names[0].textContent, names[1] && names[1].textContent, m.live);
     card.classList.toggle("is-live", live);
-    const mid = card.querySelector(".mid");
-    if (mid && (m.started || m.finished)) mid.innerHTML = `<div class="sc">${m.hs ?? 0} - ${m.as ?? 0}</div><div class="sub">${live ? "devam ediyor" : "skor"}</div>`;
-    const top = card.querySelector(".mtl > :first-child");
-    if (top) {
-      if (m.cancelled) top.outerHTML = `<span class="when">İptal</span>`;
-      else if (live) top.outerHTML = `<span class="badge-live">CANLI ${esc(m.live || "")}</span>`;
-      else if (m.finished) top.outerHTML = `<span class="when">Maç sonu</span>`;
+    const ps = card.querySelectorAll(".gln .gp");
+    if (ps.length === 2 && (m.started || m.finished)) { ps[0].textContent = m.hs ?? 0; ps[1].textContent = m.as ?? 0; }
+    const ko = card.querySelector(".gko");
+    if (ko) {
+      ko.innerHTML = koHtml({ cancelled: m.cancelled, started: m.started, finished: m.finished, live: m.live, utc: card.dataset.utc });
+      ko.className = `gko ${live ? "l" : m.finished ? "f" : ""}`;
     }
   }
 }

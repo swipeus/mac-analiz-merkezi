@@ -1290,3 +1290,171 @@ body.sport-bk #toolbar, body.sport-bk .top .right, body.sport-bk #fbNav, body.in
 .donebox > summary::after { content: "▾"; color: var(--muted); transition: transform .15s; }
 .donebox[open] > summary::after { transform: rotate(180deg); }
 .donebox > .mgrid { margin-top: 10px; }
+
+/* ================= Tasarım 2: koyu lacivert zemin, yeşil-turkuaz vurgu, cam kartlar ================= */
+:root {
+  --bg: #070b14; --panel: #0f1626; --panel2: #172036; --line: rgba(148,163,184,.13);
+  --text: #eef2f8; --muted: #8b98b0; --accent: #22c55e; --accent2: #38bdf8;
+  --home: #60a5fa; --away: #fb7c5c; --draw: #7c8aa3;
+  --grad: linear-gradient(135deg, #22c55e 0%, #14b8a6 55%, #38bdf8 100%);
+  --glass: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.01));
+  --edge: rgba(148,163,184,.16);
+  --shadow: 0 10px 30px -12px rgba(0,0,0,.65);
+  --r: 18px;
+}
+body {
+  font-family: "Plus Jakarta Sans", system-ui, "Segoe UI", Roboto, sans-serif;
+  background:
+    radial-gradient(900px 520px at -10% -10%, rgba(34,197,94,.14), transparent 60%),
+    radial-gradient(800px 500px at 110% -5%, rgba(56,189,248,.12), transparent 60%),
+    radial-gradient(700px 600px at 50% 120%, rgba(129,140,248,.08), transparent 60%),
+    var(--bg);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+}
+button { border-color: var(--edge); background: var(--panel2); border-radius: 12px; }
+button:hover { border-color: rgba(56,189,248,.5); }
+.muted { color: var(--muted); }
+
+/* üst çubuk */
+.top { background: rgba(7,11,20,.72); backdrop-filter: blur(14px) saturate(140%); -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border-bottom: 1px solid var(--edge); padding: 12px 16px; }
+.brand { font-size: 18px; font-weight: 800; letter-spacing: -.01em;
+  background: linear-gradient(90deg, #fff 0%, #c7f9e4 60%, #9be7ff 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.brand::before { width: 30px; height: 30px; border-radius: 10px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2304140b' stroke-width='1.8'%3E%3Ccircle cx='12' cy='12' r='8'/%3E%3Cpath d='M12 8l3 2.2-1.1 3.6h-3.8L9 10.2z' fill='%2304140b'/%3E%3C/svg%3E"), var(--grad);
+  background-size: 20px 20px, cover;
+  box-shadow: 0 6px 18px -4px rgba(34,197,94,.55), inset 0 1px 0 rgba(255,255,255,.35); }
+.karne-btn { border-radius: 12px; background: var(--glass), var(--panel2); border: 1px solid var(--edge); }
+.back-btn { background: var(--glass), var(--panel2); border: 1px solid var(--edge); }
+
+/* spor seçimi: büyük bölmeli düğme */
+.sports { gap: 8px; }
+.sports a { position: relative; padding: 13px 12px; border-radius: 16px; font-weight: 800; font-size: 15px; letter-spacing: -.01em;
+  background: var(--glass), var(--panel); border: 1px solid var(--edge); box-shadow: var(--shadow); transition: transform .15s, box-shadow .2s; }
+.sports a:hover { border-color: var(--edge); transform: translateY(-1px); }
+.sports a.on { color: #04140b; background: var(--grad); border-color: transparent; box-shadow: 0 10px 28px -10px rgba(34,197,94,.7), inset 0 1px 0 rgba(255,255,255,.35); }
+.sports a[data-sport="bk"].on { color: #1a0a00; background: linear-gradient(135deg, #fb923c, #f59e0b 60%, #facc15); border-color: transparent; box-shadow: 0 10px 28px -10px rgba(251,146,60,.7), inset 0 1px 0 rgba(255,255,255,.35); }
+
+/* bölüm menüsü: tek parça sekme çubuğu */
+.bknav { gap: 4px; padding: 5px; margin-top: 12px; border-radius: 16px; background: rgba(15,22,38,.75); border: 1px solid var(--edge); }
+.fbnav { width: calc(100% - 32px); max-width: 1248px; margin: 12px auto 0; padding: 5px; }
+@media (max-width: 600px) { .fbnav { width: calc(100% - 24px); padding: 4px; gap: 2px; } .fbnav a { font-size: 12.5px; padding: 9px 2px; } }
+.bknav a { border: 0; background: transparent; border-radius: 12px; padding: 9px 4px; font-weight: 700; font-size: 13px; color: var(--muted); transition: background .2s, color .2s; }
+.bknav a:hover { color: var(--text); background: rgba(255,255,255,.04); }
+.bknav a.on { color: var(--text); border: 0; background: linear-gradient(180deg, rgba(34,197,94,.22), rgba(34,197,94,.08)); box-shadow: inset 0 0 0 1px rgba(34,197,94,.45), 0 6px 16px -10px rgba(34,197,94,.8); }
+body:has(.sports a[data-sport="bk"].on) .bknav a.on { background: linear-gradient(180deg, rgba(251,146,60,.24), rgba(251,146,60,.08)); box-shadow: inset 0 0 0 1px rgba(251,146,60,.5), 0 6px 16px -10px rgba(251,146,60,.8); }
+
+/* gün sekmeleri, filtre çipleri */
+.ptab { background: var(--glass), var(--panel); border: 1px solid var(--edge); font-weight: 700; padding: 8px 16px; transition: background .2s, transform .15s; }
+.ptab:hover { border-color: rgba(56,189,248,.45); }
+.ptab.on { background: var(--grad); color: #04140b; border-color: transparent; box-shadow: 0 8px 20px -10px rgba(34,197,94,.9); }
+.ptab.on small { color: rgba(4,20,11,.7); }
+.filter-btn, .toolbar .iconbtn, .toolbar button { background: var(--glass), var(--panel); border: 1px solid var(--edge); border-radius: 14px; }
+.chipbtn { background: var(--glass), var(--panel); border: 1px solid var(--edge); font-weight: 600; padding: 6px 13px; transition: border-color .2s, background .2s; }
+.chipbtn.on { background: linear-gradient(180deg, rgba(56,189,248,.22), rgba(56,189,248,.08)); border-color: rgba(56,189,248,.65); color: #bae6fd; }
+.chipbtn small { opacity: .75; }
+
+/* lig başlığı */
+.lg-title { padding: 2px 2px; }
+.lg-title img { width: 28px; height: 28px; padding: 3px; border-radius: 9px; background: rgba(255,255,255,.06); border: 1px solid var(--edge); }
+.lg-title b { font-size: 16px; font-weight: 800; letter-spacing: -.01em; }
+.lg-title span { background: rgba(255,255,255,.05); border-color: var(--edge); font-weight: 600; }
+.lg-title::after { background: linear-gradient(90deg, rgba(148,163,184,.25), transparent); }
+.lgt-link { color: #4ade80 !important; font-weight: 700; }
+
+/* maç kartı */
+.mgrid { gap: 14px; }
+.mcard { border-radius: var(--r); padding: 16px 16px 14px; border: 1px solid var(--edge);
+  background:
+    radial-gradient(420px 140px at 20% -20%, rgba(96,165,250,.10), transparent 70%),
+    radial-gradient(420px 140px at 80% -20%, rgba(251,124,92,.08), transparent 70%),
+    var(--glass), var(--panel);
+  box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,.05); }
+.mcard::before { border-radius: var(--r) 0 0 var(--r); }
+.mcard:hover { transform: translateY(-3px); border-color: rgba(56,189,248,.35); box-shadow: 0 18px 40px -16px rgba(0,0,0,.8), 0 0 0 1px rgba(56,189,248,.15); }
+.mcard.is-live { border-color: rgba(248,81,73,.5); background: radial-gradient(500px 160px at 50% -30%, rgba(248,81,73,.16), transparent 70%), var(--glass), var(--panel); }
+.crest { width: 64px; height: 64px; background: radial-gradient(circle at 30% 25%, rgba(255,255,255,.12), rgba(255,255,255,.02) 60%), var(--panel2);
+  border: 1px solid var(--edge); box-shadow: 0 8px 20px -10px rgba(0,0,0,.8), inset 0 1px 0 rgba(255,255,255,.08); }
+.crest img { width: 44px; height: 44px; filter: drop-shadow(0 3px 6px rgba(0,0,0,.45)); }
+.crest.fav { border-color: rgba(250,204,21,.7); box-shadow: 0 0 0 3px rgba(250,204,21,.14), 0 0 22px rgba(250,204,21,.25); }
+.tm .nm { font-size: 15px; font-weight: 800; letter-spacing: -.01em; }
+.mid .ko { font-size: 26px; font-weight: 800; letter-spacing: -.02em; background: linear-gradient(180deg, #fff, #b9c6da); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.mid .sc { font-size: 30px; letter-spacing: -.01em; }
+.mid .sub { font-size: 10.5px; font-weight: 700; letter-spacing: .12em; }
+.mcard .mid { padding: 6px 10px; border-radius: 14px; background: rgba(255,255,255,.035); border: 1px solid rgba(148,163,184,.08); }
+.badge-live { background: linear-gradient(135deg, #ef4444, #f97316); box-shadow: 0 6px 16px -6px rgba(239,68,68,.8); }
+.probs { font-size: 12.5px; }
+.probbar { height: 10px; border-radius: 99px; gap: 3px; background: transparent; }
+.probbar span { border-radius: 99px; }
+.probbar span:nth-child(1) { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+.probbar span:nth-child(2) { background: #475569; }
+.probbar span:nth-child(3) { background: linear-gradient(90deg, #fb7c5c, #f97316); }
+.bksafe { border-radius: 14px; padding: 10px 12px; font-size: 14px; font-weight: 700;
+  background: linear-gradient(90deg, rgba(34,197,94,.18), rgba(20,184,166,.06)); border: 1px solid rgba(34,197,94,.35); }
+.bksafe.won { background: linear-gradient(90deg, rgba(34,197,94,.32), rgba(34,197,94,.10)); }
+.bksafe.lost { background: linear-gradient(90deg, rgba(248,81,73,.22), rgba(248,81,73,.06)); border-color: rgba(248,81,73,.45); }
+.bksafe b { color: #bbf7d0; }
+.bksafe.lost b { color: #fecaca; }
+.pboxes { gap: 8px; }
+.pbox { border-radius: 14px; background: var(--glass), var(--panel2); border-color: var(--edge); padding: 8px 6px 9px; }
+.pbox b { letter-spacing: -.02em; }
+.pbox.best { border-color: rgba(34,197,94,.75); background: linear-gradient(180deg, rgba(34,197,94,.16), rgba(34,197,94,.03)); box-shadow: 0 8px 20px -12px rgba(34,197,94,.9); }
+.pbox .pbb { border-radius: 99px; }
+.pbox .pbb span { background: var(--grad) !important; border-radius: 99px; }
+.cimg { background: rgba(255,255,255,.05); border-color: var(--edge); }
+.donebox > summary { border-radius: 16px; background: var(--glass), var(--panel); border-color: var(--edge); padding: 12px 16px; }
+
+/* genel kart ve başlıklar */
+.card { border-radius: var(--r); border: 1px solid var(--edge); background: var(--glass), var(--panel); box-shadow: var(--shadow); padding: 16px; }
+.card[style*="--c"] { background: radial-gradient(520px 170px at 0% 0%, color-mix(in srgb, var(--c) 13%, transparent), transparent 70%), var(--glass), var(--panel); }
+.card[style*="--c"]::before { height: 2px; background: linear-gradient(90deg, var(--c), transparent 85%) !important; }
+.ch { font-size: 16.5px !important; font-weight: 800; letter-spacing: -.01em; }
+.ch .ci { width: 36px; height: 36px; border-radius: 12px; background: linear-gradient(145deg, color-mix(in srgb, var(--c, var(--accent)) 30%, transparent), color-mix(in srgb, var(--c, var(--accent)) 8%, transparent)) !important;
+  border: 1px solid color-mix(in srgb, var(--c, var(--accent)) 40%, transparent); box-shadow: 0 6px 16px -8px color-mix(in srgb, var(--c, var(--accent)) 80%, transparent); }
+.card h3 { font-size: 11.5px; font-weight: 800; letter-spacing: .1em; color: #93a3bd; }
+.kpi { border-radius: 14px; background: var(--glass), var(--panel2); border: 1px solid var(--edge); padding: 12px 14px; }
+.kpi::after { width: 100%; height: 2px; bottom: auto; background: linear-gradient(90deg, var(--k), transparent); }
+.kpi .v { font-size: 22px; font-weight: 800; letter-spacing: -.02em; }
+.tag { border-radius: 8px; border-color: var(--edge); background: rgba(255,255,255,.05); }
+
+/* maç sayfası üst bölüm */
+.hero { border-radius: 22px; border: 1px solid var(--edge); padding: 18px 16px 16px;
+  background:
+    radial-gradient(360px 220px at 12% 30%, rgba(96,165,250,.18), transparent 70%),
+    radial-gradient(360px 220px at 88% 30%, rgba(251,124,92,.15), transparent 70%),
+    radial-gradient(500px 200px at 50% 120%, rgba(34,197,94,.12), transparent 70%),
+    var(--glass), var(--panel) !important;
+  box-shadow: 0 20px 50px -24px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.06); }
+.hero .team { font-weight: 800; letter-spacing: -.01em; }
+.hero .score { font-size: 40px; letter-spacing: -.03em; text-shadow: 0 6px 24px rgba(0,0,0,.6); }
+.hero .score small { font-size: 12px; letter-spacing: .04em; color: #4ade80; }
+.hero .meta > * { background: rgba(255,255,255,.05); border: 1px solid var(--edge); border-radius: 999px; padding: 4px 10px; }
+.mtabs { background: rgba(7,11,20,.8); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+
+/* kuponlar */
+.kupon { border-top: 0 !important; }
+.kupon::before { height: 3px !important; background: linear-gradient(90deg, var(--c), color-mix(in srgb, var(--c) 30%, transparent)) !important; }
+.kodds { background: linear-gradient(135deg, rgba(250,204,21,.22), rgba(250,204,21,.06)); color: #fde68a; border: 1px solid rgba(250,204,21,.3); }
+.kleg { border-radius: 14px; background: var(--glass), var(--panel2); border-color: var(--edge); }
+.kleg.hit { background: linear-gradient(90deg, rgba(34,197,94,.14), rgba(34,197,94,.03)); }
+.kleg.miss { background: linear-gradient(90deg, rgba(248,81,73,.14), rgba(248,81,73,.03)); }
+.kfoot { padding-top: 10px; border-top: 1px dashed rgba(148,163,184,.22); }
+.kbtn { border-radius: 12px; background: var(--glass), var(--panel2); border-color: var(--edge); }
+.kbtn.wa { background: linear-gradient(135deg, rgba(37,211,102,.25), rgba(37,211,102,.08)); }
+
+/* karne satırları */
+.bkpk { border-radius: 14px; }
+.bkmk.ok { background: linear-gradient(135deg, #22c55e, #16a34a); box-shadow: 0 4px 12px -4px rgba(34,197,94,.9); }
+.bkmk.no { background: linear-gradient(135deg, #f87171, #dc2626); box-shadow: 0 4px 12px -4px rgba(248,81,73,.9); }
+
+/* pencereler ve uyarılar */
+.wn { border: 1px solid var(--edge); background: var(--glass), var(--panel) !important; box-shadow: 0 30px 80px -20px rgba(0,0,0,.9); }
+.stalebar { border-radius: 14px; }
+@media (max-width: 600px) {
+  .mcard { padding: 14px 13px 12px; }
+  .crest { width: 58px; height: 58px; }
+  .crest img { width: 40px; height: 40px; }
+  .hero .score { font-size: 34px; }
+}
+body:has(.sports a[data-sport="bk"].on) .ptab.on { background: linear-gradient(135deg, #fb923c, #f59e0b); color: #1a0a00; box-shadow: 0 8px 20px -10px rgba(251,146,60,.9); }

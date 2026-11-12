@@ -2108,7 +2108,7 @@ function drawMoves(D) {
   ms.sort((a, b) => movesSort === "drop" ? a.chg - b.chg : b.chg - a.chg);
   const chips = (arr, cur, attr) => arr.map(([k, l]) => `<button class="chipbtn ${cur === k ? "on" : ""}" data-${attr}="${k}">${l}</button>`).join("");
   const top = `<div class="card" style="--c:#39c5cf">${head(MOVES_ICON, `Oran hareketleri <span class="muted">· başlamamış maçlar</span>`)}
-    <p class="muted">Bir seçeneğin oranı ilk görüldüğü andan (açılış) bu yana ne kadar değişti. Düşen oran: piyasa o sonuca daha çok inanıyor (para oraya akıyor). Yükselen oran: piyasa güvenini kaybediyor. Oranlar 6 dakikada bir güncellenir.</p>
+    <p class="muted">Bir seçeneğin oranı ilk görüldüğü andan (açılış) bu yana ne kadar değişti. Düşen oran: piyasa o sonuca daha çok inanıyor (para oraya akıyor). Yükselen oran: piyasa güvenini kaybediyor. Oranlar 3 dakikada bir güncellenir.</p>
     <div class="ptabs"><button class="ptab ${movesSort === "drop" ? "on" : ""}" data-ms="drop">📉 En çok düşen</button><button class="ptab ${movesSort === "rise" ? "on" : ""}" data-ms="rise">📈 En çok yükselen</button></div>
     <div class="chiprow">${chips([["all", "Bugün + yarın"], ["today", "Bugün"], ["tomorrow", "Yarın"]], movesDay, "md")}</div>
     <div class="chiprow">${chips(MOVE_GROUPS, movesGroup, "mg")}</div></div>`;

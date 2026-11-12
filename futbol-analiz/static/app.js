@@ -162,7 +162,8 @@ const SORTS = {
   under: ["2.5 Alt %", "2.5 Alt", (m) => m.pred && 1 - m.pred.over25],
   draw: ["Beraberlik %", "Beraberlik", (m) => m.pred && m.pred.p_draw],
 };
-state.sort = SORTS[safeGet("sortBy")] ? safeGet("sortBy") : "league";
+// sıralama kalıcı değil: sayfa açılınca ve başka bölüme geçilince lig sıralamasına döner
+state.sort = "league";
 // sıralı listede kartın üstünde sıralama ölçütünün yüzdesi
 function sortBadge(m) {
   if (!m.pred || state.sort === "league" || state.sort === "time") return "";
@@ -175,7 +176,7 @@ function renderSortMenu() {
   $("#sortPop").innerHTML = Object.entries(SORTS).map(([k, [lab]]) =>
     `<button role="menuitemradio" aria-checked="${k === state.sort}" class="sortopt ${k === state.sort ? "on" : ""}" data-sort="${k}">${esc(lab)}</button>`).join("");
   $("#sortPop").querySelectorAll("[data-sort]").forEach((b) => b.onclick = () => {
-    state.sort = b.dataset.sort; safeSet("sortBy", state.sort);
+    state.sort = b.dataset.sort;
     renderSortMenu(); openSort(false); renderDay(true);
   });
 }
@@ -2638,6 +2639,7 @@ function route() {
   state.hakem = hm ? +hm[1] : null;
   const navKey = om ? "oranlar" : km ? "karne" : cm ? "kombine" : (mm || pm || lm || tm || xm || hm) ? "" : "home";
   document.querySelectorAll("#fbNav [data-nav]").forEach((a) => a.classList.toggle("on", a.dataset.nav === navKey));
+  if ((navKey && navKey !== "home") || bk) { state.sort = "league"; renderSortMenu(); }  // maç sayfasına girip dönünce sıralama kalır
   document.body.classList.toggle("on-home", navKey === "home" && !bk);  // sayfa altı yazısı sadece futbol ana sayfasında
   if (bk) { state.current = null; renderBasket(); }
   else if (shm) { state.current = null; window.scrollTo(0, 0); renderShare(); }

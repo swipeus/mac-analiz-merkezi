@@ -34,14 +34,23 @@ def export(store):
 def lock_pick(store, b):
     """Resmi ilk 11'ler açıklandıktan sonraki ilk analizin garanti tercihi son karardır: maç başlayana kadar
     yeni analizler onu değiştirmez (yalnızca oranı güncellenir). Başlamış maçlar zaten dondurulmuştur."""
-    if b.get("league_id") in NATIONAL:
-        return
     pr = (b.get("analysis") or {}).get("prediction") or {}
     st = b.get("status") or {}
     if st.get("started") or st.get("finished"):
         pr["best_final"] = bool(pr.get("best_pick"))
         return
     if not (b.get("lineup") or {}).get("confirmed") or not pr.get("best_pick"):
+        return
+    if b.get("league_id") in NATIONAL:  # milli maç karneye yazılmaz; kilitli tercih ayrı saklanır
+        key = f"natlock:{b['id']}"
+        hit = store.cache_get(key)
+        if hit:
+            bp = dict(hit[1])
+            bp["odds"] = code_odds(b.get("odds"), bp["code"])[0] or bp.get("odds")
+            pr["best_pick"] = bp
+        else:
+            store.cache_put(key, pr["best_pick"])
+        pr["best_final"] = True
         return
     rec = store.pred_get(b["id"])
     if rec and (rec.get("locked") or rec.get("final") is True) and rec.get("pick"):  # "final" eski kayıtlarda kilit bayrağıydı

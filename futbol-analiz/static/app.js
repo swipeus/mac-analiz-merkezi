@@ -2846,8 +2846,10 @@ function footballCardData(m) {
 
 /* görsel sepeti: birden fazla görsel toplanır, tek seferde paylaşılır (sayfa yenilenince boşalır) */
 const CART = [];
+// aynı maç ya da kupon sepete bir kez girer; yeniden eklenirse en son görsel kalır
 function cartAdd(blob, name) {
-  CART.push({ blob, name: `${name}-${CART.length + 1}`, url: URL.createObjectURL(blob) });
+  const old = CART.findIndex((x) => x.name === name), item = { blob, name, url: URL.createObjectURL(blob) };
+  if (old >= 0) { URL.revokeObjectURL(CART[old].url); CART[old] = item; } else CART.push(item);
   cartBadge();
 }
 function cartBadge() {
@@ -2903,7 +2905,7 @@ async function shareImage(btn, make, name) {
   const box = document.createElement("div");
   box.className = "wn-backdrop";
   box.innerHTML = `<div class="wn cshare"><img src="${url}" alt="">
-    <div class="csbtns"><button class="kbtn big wa" data-go>Paylaş</button><button class="kbtn big" data-cart>Sepete ekle</button><button class="kbtn big" data-x>Kapat</button></div><small class="muted cshint"></small></div>`;
+    <div class="csbtns"><button class="kbtn big wa" data-go>Paylaş</button><button class="kbtn big" data-cart>${CART.some((x) => x.name === name) ? "Sepette ✓ · Güncelle" : "Sepete ekle"}</button><button class="kbtn big" data-x>Kapat</button></div><small class="muted cshint"></small></div>`;
   let kept = false;
   const close = () => { box.remove(); if (!kept) URL.revokeObjectURL(url); };
   box.onclick = async (e) => {

@@ -1629,3 +1629,10 @@ body.in-match .imgcart, body.sport-bk .imgcart { bottom: calc(20px + env(safe-ar
 .cartit img { width: 100%; border-radius: 10px; display: block; }
 .cartit button { position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; padding: 0; border-radius: 50%; font-size: 17px; line-height: 1; background: rgba(0,0,0,.65); border: 1px solid rgba(255,255,255,.25); }
 .csbtns { flex-wrap: wrap; }
+/* maç sayfası üstü: iki takım rengi arasında kesintisiz geçiş, saat kutusuz */
+.hero .teams { background: linear-gradient(90deg, color-mix(in srgb, var(--hc) 55%, transparent) 0%, color-mix(in srgb, var(--hc) 16%, transparent) 38%, color-mix(in srgb, var(--ac) 16%, transparent) 62%, color-mix(in srgb, var(--ac) 55%, transparent) 100%); }
+.hero .team:first-child, .hero .team:last-child { background: none; }
+.hero .score, .hero .score.live { background: none; text-shadow: 0 4px 18px rgba(0,0,0,.65); }
+.hero .score small { color: #cbd5e1; }
+.hero .score.live { color: #fb7185 !important; }
+.hero .score.live small { color: #fecdd3 !important; }

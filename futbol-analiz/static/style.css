@@ -1636,3 +1636,106 @@ body.in-match .imgcart, body.sport-bk .imgcart { bottom: calc(20px + env(safe-ar
 .hero .score small { color: #cbd5e1; }
 .hero .score.live { color: #fb7185 !important; }
 .hero .score.live small { color: #fecdd3 !important; }
+
+/* ================= İnce yazı: dar/büyük harfli başlık yazısı yerine normal yazı tipi, orta kalınlık ================= */
+.cond, .lg-title b, .gp, .gko, .gcard .pbox b, .gpr b, .gside, .gmid, .gbest small, .gbest span, .gbest b, .gstats small, .gstats b, .gtick b,
+#fbDays .ptab, .ch .ct, .mtabs .ptab, #view > .ptabs .ptab, .kpi .v, .bkexp b, .vkarne b, .kpi .l, .bkexp small, .hero .team, .hero .score,
+.ktime, .klp b, .kodds, .kres, .bkpt b, .bkpp b, .kdayh, .kday > summary .ch .ct, .orow .oo, .mvrow b, .bknav a, .carthd b {
+  font-family: "Plus Jakarta Sans", system-ui, sans-serif; text-transform: none; letter-spacing: -.01em; }
+.brand { font-weight: 700; }
+.lg-title b { font-size: 16px; font-weight: 700; }
+.ch .ct { font-size: 16px; font-weight: 600; }
+.ch .ct .muted { font-weight: 500; }
+.gnm .nm { font-weight: 600; }
+.gp { font-size: 15px; font-weight: 600; }
+.mcard.is-live .gp, .mcard.st-done .gp { font-size: 17px; font-weight: 700; }
+.gko { font-size: 19px; font-weight: 700; }
+.gko small { font-weight: 600; letter-spacing: .08em; }
+.gcard .pbox b { font-size: 14px; font-weight: 700; }
+.gcard .pbox .pbl { font-weight: 600; }
+.gpl { font-weight: 600; }
+.gpr b { font-size: 16px; font-weight: 700; }
+.gside { font-size: 15px; font-weight: 700; }
+.gmid { font-size: 18px; font-weight: 700; }
+.gbest small { font-size: 11px; font-weight: 600; letter-spacing: .04em; }
+.gbest span { font-size: 17px; font-weight: 700; }
+.gbest b { font-size: 24px; font-weight: 700; }
+.gstats small { font-size: 11.5px; font-weight: 500; letter-spacing: 0; }
+.gstats b { font-size: 19px; font-weight: 700; }
+.gtick b { font-size: 13px; font-weight: 700; }
+#fbDays .ptab { font-size: 13.5px; font-weight: 600; }
+.mtabs .ptab, #view > .ptabs .ptab { font-size: 13.5px; font-weight: 600; }
+.kpi .v, .bkexp b, .vkarne b { font-size: 21px; font-weight: 700; letter-spacing: -.02em; }
+.kpi .l, .bkexp small { font-size: 12px; font-weight: 500; letter-spacing: 0; }
+.hero .team { font-size: 16px; font-weight: 700; }
+.hero .score { font-size: 34px; font-weight: 700; letter-spacing: -.03em; }
+.ktime { font-size: 14px; font-weight: 600; }
+.klp b, .kodds, .kres { font-size: 15px; font-weight: 700; }
+.bkpt b { font-size: 14px; font-weight: 700; }
+.bkpp b, .orow .oo, .mvrow b { font-size: 14px; font-weight: 700; }
+.bknav a { font-size: 13px; font-weight: 600; }
+.carthd b { font-size: 17px; font-weight: 700; }
+.sports a, .tm .nm, .hero .team { font-weight: 700; }
+@media (max-width: 600px) { .hero .team { font-size: 14px; } .hero .score { font-size: 30px; } }
+
+/* ================= Karne: takvim ısı haritası tasarımı ================= */
+.khd { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+.khd h1 { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -.02em; }
+.khd h1 small { font-size: 13px; font-weight: 500; color: var(--muted); margin-left: 6px; letter-spacing: 0; }
+.kinfo { margin-left: auto; width: 32px; height: 32px; padding: 0; border-radius: 50%; font-weight: 700; color: var(--muted); }
+.kinfo.on { color: #0a1322; background: #fff; }
+.ktabs .ptab { flex: 1; justify-content: center; }
+.ktiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+.ktile { min-width: 0; border-radius: 16px; padding: 10px 12px; background: rgba(255,255,255,.04); border: 1px solid var(--edge); }
+.ktile small { display: block; font-size: 12px; font-weight: 500; color: var(--muted); }
+.ktile b { display: block; font-size: 21px; font-weight: 700; letter-spacing: -.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ktile em { display: block; font-style: normal; font-size: 11.5px; font-weight: 500; color: var(--muted); }
+.kcard { padding: 14px; }
+.khead { font-size: 13px; font-weight: 500; color: var(--muted); margin-bottom: 4px; }
+.kcalnav { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.kcalnav b { font-weight: 600; min-width: 110px; text-align: center; }
+.kcalnav > span { margin-left: auto; font-weight: 700; }
+.kcal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.kcw { text-align: center; font-size: 11px; font-weight: 500; color: var(--muted); padding-bottom: 2px; }
+.kcd { aspect-ratio: 1; border-radius: 9px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; font-size: 11px; font-weight: 500; color: var(--muted); background: rgba(255,255,255,.03); min-width: 0; }
+.kcd.has { color: #fff; }
+.kcd b { font-size: 10.5px; font-weight: 600; color: #fff; }
+.kcd.empty { background: none; }
+.kcd.future { opacity: .45; }
+.kcd.today { box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.7); }
+.klegend { display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 11px; font-weight: 500; color: var(--muted); }
+.klegend i { width: 18px; height: 10px; border-radius: 3px; display: inline-block; }
+.kspark { display: grid; grid-template-columns: minmax(0, 1fr) 96px 78px; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,.05); }
+.kspark:last-child { border-bottom: 0; }
+.kspark > span { min-width: 0; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kspark > span small { margin-left: 6px; font-size: 11.5px; font-weight: 500; color: var(--muted); }
+.kspark svg { width: 100%; height: 30px; display: block; }
+.kspark b { text-align: right; font-size: 14px; font-weight: 700; }
+details.ksec { margin-top: 10px; border-radius: 16px; background: rgba(255,255,255,.035); border: 1px solid var(--edge); }
+details.ksec > summary { list-style: none; display: flex; align-items: center; gap: 10px; padding: 13px 14px; cursor: pointer; }
+details.ksec > summary::-webkit-details-marker { display: none; }
+details.ksec > summary b { font-size: 15px; font-weight: 600; }
+details.ksec > summary span { margin-left: auto; font-size: 13px; font-weight: 600; color: var(--muted); }
+details.ksec > summary::after { content: "▾"; color: var(--muted); transition: transform .15s; }
+details.ksec[open] > summary::after { transform: rotate(180deg); }
+details.ksec > summary span + ::after { margin-left: 0; }
+details.ksec:not([open]) > summary b + ::after { margin-left: auto; }
+details.ksec .in { padding: 0 14px 12px; }
+details.ksec .in h3:first-child { display: none; }
+details.ksec .in .card { margin-top: 8px; }
+.knote, details.ksec .in p.muted { display: none; }
+#view.kinfo-on .knote, #view.kinfo-on details.ksec .in p.muted { display: block; }
+.knote { margin: 10px 2px 0; font-size: 13px; }
+.ktiles { grid-template-columns: 1.35fr 1fr 1fr; }
+.ktile b { font-size: 19px; }
+.ktile b.pos, .kcalnav > span.pos, .kspark b.pos { color: #4ade80; }
+.ktile b.neg, .kcalnav > span.neg, .kspark b.neg { color: #f87171; }
+.ptabs.ktabs { gap: 4px; padding: 4px; margin-top: 12px; border-radius: 14px; background: rgba(255,255,255,.04); border: 1px solid var(--edge); overflow: hidden; }
+.ptabs.ktabs .ptab { padding: 8px 4px; border: 0; background: transparent; box-shadow: none; font-size: 13.5px; font-weight: 600; color: var(--muted); }
+.ptabs.ktabs .ptab small { font-size: 11px; }
+.ptabs.ktabs .ptab.on { background: #fff; color: #0a1322; }
+.kcalnav .calbtn { display: grid; place-items: center; width: 34px; height: 32px; padding: 0; line-height: 1; font-size: 20px; }
+.kspark > span { white-space: normal; line-height: 1.25; }
+.kspark > span small { display: block; margin-left: 0; }
+details.ksec > summary b { flex: 1; min-width: 0; }
+details.ksec > summary span { margin-left: 0; }

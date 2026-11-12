@@ -30,6 +30,18 @@ LEAGUES = {
     73: "Avrupa Ligi",
     10216: "Konferans Ligi",
 }
+# milli takım turnuvaları (erkekler): listede gösterilir, analiz edilir; karneye, kuponlara ve katlamaya girmez
+NATIONAL = {
+    9806: "Uluslar Ligi A",
+    9807: "Uluslar Ligi B",
+    9808: "Uluslar Ligi C",
+    9809: "Uluslar Ligi D",
+    50: "EURO",
+    10607: "EURO Elemeleri",
+    77: "Dünya Kupası",
+    10195: "Dünya Kupası Avrupa Elemeleri",
+}
+LEAGUES.update(NATIONAL)
 
 # Güncelleme aralıkları (saniye)
 CYCLE_SECONDS = 120          # ana döngü

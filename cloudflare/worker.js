@@ -2,7 +2,7 @@
 // Site, canlı bilgileri (skor, dakika, olaylar, resmi 11, canlı istatistik) bu köprü üzerinden FotMob'dan çeker.
 // Erişim: X-Key başlığı, site şifresinden türetilen anahtar olmalı (ACCESS_KEY gizli değişkeni).
 const FM = "https://www.fotmob.com/api/data";
-const LEAGUES = new Set([71, 47, 87, 55, 54, 53, 57, 61, 40, 48, 64, 42, 73, 10216]);
+const LEAGUES = new Set([71, 47, 87, 55, 54, 53, 57, 61, 40, 48, 64, 42, 73, 10216, 9806, 9807, 9808, 9809, 50, 10607, 77, 10195]);
 const ORIGINS = ["https://swipeus.github.io", "http://127.0.0.1:8770", "http://localhost:8770", "http://localhost:8765"];
 const ESPN = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba";
 const EL_GAMES = "https://feeds.incrowdsports.com/provider/euroleague-feeds/v2/competitions/E/seasons/E2026/games?limit=500";

@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from app import analysis, basket, basket_model, karne, katlama, kupon, leagues, players, teams
-from app.config import DB_PATH, LEAGUES, STATIC_DIR, TR_TZ
+from app.config import DB_PATH, LEAGUES, NATIONAL, STATIC_DIR, TR_TZ
 from app.crypto_box import derive_key, seal, unseal
 from app.sources import Sources
 from app.store import Store
@@ -97,9 +97,10 @@ async def main(out):
         if d >= now - timedelta(hours=1):
             move_bodies += bodies
         # günün kombineleri: bugün ve yarın için (dünün kuponları kilitli, sadece gösterilir)
-        doc = kupon.update_day(store, day_key(d), bodies) if d >= now - timedelta(hours=1) else store.coupon_get(day_key(d))
+        club = [b for b in bodies if b.get("league_id") not in NATIONAL]  # milli maçlar kupona girmez
+        doc = kupon.update_day(store, day_key(d), club) if d >= now - timedelta(hours=1) else store.coupon_get(day_key(d))
         if d >= now - timedelta(hours=1):  # katlama serisi: günde tek kupon
-            katlama.update_day(store, day_key(d), bodies, (doc or {}).get("coupons") or [])
+            katlama.update_day(store, day_key(d), club, (doc or {}).get("coupons") or [])
         write(f"day-{day_key(d)}.json", {"date": day_key(d), "matches": matches,
                                          "coupons": (doc or {}).get("coupons") or [], "coupons_locked": bool((doc or {}).get("locked"))})
         days.append(day_key(d))

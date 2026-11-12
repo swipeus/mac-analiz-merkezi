@@ -9,7 +9,7 @@ from . import kupon
 import math
 
 from .analysis import code_odds, early_hit, pick_hit, pick_type
-from .config import TR_TZ
+from .config import TR_TZ, NATIONAL
 
 KARNE_START = "2026-10-22"  # yeni oran sağlayıcısı ve genişletilmiş modelle karne bu günden başladı
 
@@ -34,6 +34,8 @@ def export(store):
 def lock_pick(store, b):
     """Resmi ilk 11'ler açıklandıktan sonraki ilk analizin garanti tercihi son karardır: maç başlayana kadar
     yeni analizler onu değiştirmez (yalnızca oranı güncellenir). Başlamış maçlar zaten dondurulmuştur."""
+    if b.get("league_id") in NATIONAL:
+        return
     pr = (b.get("analysis") or {}).get("prediction") or {}
     st = b.get("status") or {}
     if st.get("started") or st.get("finished"):
@@ -50,7 +52,9 @@ def lock_pick(store, b):
 
 
 def record(store, b):
-    """Maç paketi her yenilendiğinde çağrılır."""
+    """Maç paketi her yenilendiğinde çağrılır. Milli maçlar karneye yazılmaz."""
+    if b.get("league_id") in NATIONAL:
+        return
     mid = b["id"]
     st = b.get("status") or {}
     pr = (b.get("analysis") or {}).get("prediction") or {}

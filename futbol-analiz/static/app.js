@@ -366,7 +366,7 @@ function cardHtml(m, sorted) {
     <span class="gp">${shown ? t.score ?? 0 : p ? pc(pct) : ""}</span></div>`;
   const s = p && p.safe;
   const pick = s ? `<div class="gpk ${s.hit === true ? "won" : s.hit === false ? "lost" : s.final ? "fin" : "tbd"}" title="${s.hit === true ? "Tuttu" : s.hit === false ? "Tutmadı" : s.final ? "Son tercih (resmi 11'ler sonrası)" : "Resmi 11'ler açıklanınca kesinleşir, değişebilir"}">
-    <span class="gpl"><i>${s.hit === true ? "✓" : s.hit === false ? "✗" : s.final ? "✓" : "!"}</i>${esc(s.label.replace(/ \(.*\)$/, ""))}</span>
+    <span class="gpl"><i>${s.hit === true ? "✓" : s.hit === false ? "✗" : s.final ? "✓" : "!"}</i>${esc(s.label.replace(/ \(.*\)$/, ""))}${s.top ? `<em class="gtopb" title="Günün tercihlerinden">★</em>` : ""}</span>
     <span class="gpr">${s.p != null ? `<small>${pc(s.p)}</small>` : ""}${s.odds ? `<b>${nf(s.odds, 2)}</b>` : ""}${SHARE_BTN("data-cimg", m.id)}</span></div>` : "";
   const stc = matchState(m);
   return `<div class="mcard gcard ${live ? "is-live" : ""} st-${stc}" data-id="${m.id}" data-utc="${esc(m.utc || "")}" title="${STATE_LABEL[stc]}">
@@ -1768,10 +1768,24 @@ function valueTestHtml(all) {
   return `<div class="card">${head("🧪", "Değerli oran testi")}<div class="anat">${rows.map(anaRow).join("")}</div>
     <p class="muted">Siteye düşen gerçek değerli oran tercihleri, daha sıkı kurallarla baştan süzülür. Kural değiştirilmedi, yalnızca karşılaştırma.</p></div>${anaCard("🧩", "Değerli oran: türe göre", anaGroup(v, (r) => r.type).sort((a, b) => b[1].pl - a[1].pl))}`;
 }
+// güvene göre tutar: model olasılığı %55'te 500 ₺, %85'te 1.500 ₺ (arası doğrusal); sabit 1.000 ₺ ile karşılaştırılır
+const confStake = (p) => STAKE * Math.max(0.5, Math.min(1.5, 0.5 + (p - 0.55) / 0.3));
+function stakeCompareHtml(rows) {
+  const flat = rows.reduce((a, r) => a + (r.hit ? STAKE * (r.odds - 1) : -STAKE), 0);
+  const conf = rows.reduce((a, r) => { const s = confStake(r.p || 0.6); return a + (r.hit ? s * (r.odds - 1) : -s); }, 0);
+  const staked = rows.reduce((a, r) => a + confStake(r.p || 0.6), 0);
+  return `<div class="card">${head("💰", "Güvene göre tutar")}<div class="anat">
+    <div class="anar"><span>Her tercihe 1.000 ₺<small>${tl(rows.length * STAKE)} yatırıldı</small></span><b class="${flat >= 0 ? "pos" : "neg"}">${tl(flat, true)}</b><small></small></div>
+    <div class="anar"><span>Güvene göre 500–1.500 ₺<small>${tl(staked)} yatırıldı</small></span><b class="${conf >= 0 ? "pos" : "neg"}">${tl(conf, true)}</b><small></small></div></div>
+    <p class="muted">Model ne kadar eminse o kadar tutar: olasılık %55'te 500 ₺, %85 ve üstünde 1.500 ₺.</p></div>`;
+}
 function karneAnalysisHtml() {
   const rows = karneRows.filter((r) => pickDecided(r) && r.pick.odds && (r.pick_hit === true || r.pick_hit === false))
-    .map((r) => ({ type: cap(pickType(r.pick)), lg: r.league, odds: r.pick.odds, p: r.pick.p, hit: r.pick_hit }));
-  return analysisHtml(rows) + valueTestHtml(karneRows);
+    .map((r) => ({ type: cap(pickType(r.pick)), lg: r.league, odds: r.pick.odds, p: r.pick.p, hit: r.pick_hit, mv: r.mv || 1, top: !!r.top }));
+  const byPl = (g) => g.sort((a, b) => b[1].pl - a[1].pl);
+  const mv = anaGroup(rows, (r) => r.mv >= 2 ? "Yeni model (14 Kasım'dan beri)" : "Eski model");
+  const top = anaGroup(rows.filter((r) => r.mv >= 2), (r) => r.top ? "Günün tercihleri" : "Diğer tercihler");
+  return analysisHtml(rows) + anaCard("🧠", "Model sürümüne göre", byPl(mv)) + anaCard("★", "Günün tercihleri", byPl(top)) + stakeCompareHtml(rows) + valueTestHtml(karneRows);
 }
 
 function karneRow(r) {

@@ -1739,3 +1739,4 @@ details.ksec .in .card { margin-top: 8px; }
 .kspark > span small { display: block; margin-left: 0; }
 details.ksec > summary b { flex: 1; min-width: 0; }
 details.ksec > summary span { margin-left: 0; }
+.gtopb { margin-left: 6px; font-style: normal; color: #fbbf24; font-size: 13px; }

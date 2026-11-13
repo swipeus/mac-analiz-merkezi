@@ -60,8 +60,25 @@ def lock_pick(store, b):
     pr["best_final"] = True
 
 
+def keep_stats(store, b):
+    """Biten maçın korner, kart ve şut sayıları birikir (ileride takım bazlı korner/kart modeli için)."""
+    fz = b.get("final") or {}
+    if not fz.get("corners") or fz["corners"][0] is None:
+        return
+    hit = store.cache_get("hist:fstats")
+    rows = hit[1] if hit else {}
+    if str(b["id"]) in rows:
+        return
+    rows[str(b["id"])] = {"t": b.get("utc"), "l": b.get("league_id"), "h": b["home"]["id"], "a": b["away"]["id"],
+                          "g": [b["home"].get("score"), b["away"].get("score")], "c": fz.get("corners"), "y": fz.get("yellow"),
+                          "r": fz.get("red"), "s": fz.get("shots"), "st": fz.get("sot")}
+    store.cache_put("hist:fstats", rows)
+
+
 def record(store, b):
     """Maç paketi her yenilendiğinde çağrılır. Milli maçlar karneye yazılmaz."""
+    if (b.get("status") or {}).get("finished"):
+        keep_stats(store, b)
     if b.get("league_id") in NATIONAL:
         return
     mid = b["id"]
@@ -111,6 +128,7 @@ def record(store, b):
 
     if st.get("finished") and old and old.get("state") == "pending":
         hs, as_ = b["home"].get("score"), b["away"].get("score")
+        keep_stats(store, b)
         if hs is None or as_ is None:
             return
         ps = [int(x) for x in old["score"]["score"].split("-")]

@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from . import analysis
 from . import elo as elo_mod, ratings as ratings_mod
 from . import odds as odds_mod
+from . import sharp as sharp_mod
 from .config import NEWS_TTL, SEASON_TTL
 from .sources import FOTMOB, PLAYER_STATS, TEAM_STATS
 
@@ -529,7 +530,13 @@ async def build_bundle(src, match_id, prev_odds=None):
         if started:
             return prev_odds
         try:
-            return carry_open_odds(await odds_mod.fetch(src, match_id, home.get("name"), away.get("name"), league_id, kickoff), prev_odds)
+            o = carry_open_odds(await odds_mod.fetch(src, match_id, home.get("name"), away.get("name"), league_id, kickoff), prev_odds)
+            if o:
+                try:
+                    o["sharp"] = await sharp_mod.fair_for(src, league_id, kickoff, home.get("name"), away.get("name"))
+                except Exception as e:  # noqa: BLE001
+                    log.warning("keskin piyasa alınamadı %s: %s", match_id, e)
+            return o
         except Exception as e:  # noqa: BLE001
             log.warning("oranlar alınamadı %s: %s", match_id, e)
             return prev_odds

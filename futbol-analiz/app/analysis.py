@@ -664,12 +664,17 @@ def code_odds(odds, code):
     return None, None
 
 
+# yeni modelle (14 Kasım'dan itibaren) seçimde ek geri çekme. Karnede: oranı açılıştan %1+ yükselen tercihler 39/67 (−11,3 birim),
+# çifte şans 19/28 (−2,6), maç sonucu 5/7 (−0,1). Bunlar elenmez, yalnızca sıralamada geri düşer.
+PULL_BACK = {"1X": 0.03, "X2": 0.03, "1": 0.02, "2": 0.02}
+RISING_PEN = 0.04   # oran açılıştan bu yana en az %1 yükseldiyse
 VETO_GAP = 0.03  # kendi modelimiz bir gol tercihini piyasanın marjsız olasılığından bu kadar düşük görüyorsa o tercih seçilmez
 
 
 def _fair(odds):
-    """Her seçeneğin piyasa olasılığı (pazar içinde marjı ayıklanmış)."""
-    out = {}
+    """Her seçeneğin piyasa olasılığı (pazar içinde marjı ayıklanmış). Pinnacle'da olan seçenekler oradan alınır
+    (marjı düşük, en keskin piyasa); olmayanlar Unibet'in kendi oranlarından."""
+    out = dict((odds or {}).get("sharp") or {})
     for m in (odds or {}).get("markets") or []:
         sels = [s for s in m["selections"] if s.get("code") and s.get("odds")]
         tot = sum(1 / s["odds"] for s in sels)
@@ -690,12 +695,17 @@ def make_picks(pr, odds, home, away, league=None, floor=MIN_ODDS, own=None):
     safe = None
     fav = fav_side(pr)
     cands = [c for c in sel if c[2] >= floor and c[1] >= 0.5 and safe_ok(c[0]) and not fav_under(c[0], fav)]
+    extra = {}
     if own and cands:
         fair = _fair(odds)
         kept = [c for c in cands if c[0] not in own or c[0] not in fair or own[c[0]] >= fair[c[0]] - VETO_GAP]
         cands = kept or cands  # hepsi elenirse eski kural geçerli
+        o0 = {s["code"]: s.get("o0") for m in (odds or {}).get("markets") or [] for s in m["selections"] if s.get("code")}
+        for c in cands:
+            rising = o0.get(c[0]) and c[2] / o0[c[0]] - 1 >= 0.01
+            extra[c[0]] = PULL_BACK.get(c[0], 0.0) + (RISING_PEN if rising else 0.0)
     if cands:
-        code, p, o = max(cands, key=lambda c: (safe_score(c[1], c[2], c[0], league), c[2]))
+        code, p, o = max(cands, key=lambda c: (safe_score(c[1], c[2], c[0], league) - extra.get(c[0], 0.0), c[2]))
         safe = {"code": code, "p": round(p, 3), "odds": o}
     else:  # oran yoksa: adil oranı (1/olasılık) alt sınırın altında kalan seçenekler elenir
         model = [(c, pr[c]) for c in SAFE_CODES if c in pr and 1 / max(pr[c], 1e-9) >= floor]

@@ -65,7 +65,32 @@ def enrich_day(store, matches):
             m["colors"] = b["body"].get("colors")  # kartın kenarındaki takım renkleri
             m["absent"] = [len((lu.get(s) or {}).get("unavailable", [])) for s in ("home", "away")]
             m["updated"] = b["ts"]
+    mark_top(store, matches)
     return matches
+
+
+TOP_N = 4  # günün tercihleri: olasılık ve piyasaya göre durumu en iyi bu kadar tercih
+
+
+def mark_top(store, matches):
+    """Günün en iyi tercihlerini işaretler; başlamamış maçlarda karne kaydına da yazılır (maç başlayınca donar)."""
+    def score(m):
+        s = (m.get("pred") or {}).get("safe") or {}
+        if not s.get("odds") or s.get("p") is None:
+            return None
+        return s["p"] + 0.5 * max(-0.10, min(s["p"] * s["odds"] - 1, 0.10))
+    ranked = sorted((x for x in ((score(m), m) for m in matches) if x[0] is not None), key=lambda x: -x[0])
+    top = {m["id"] for _, m in ranked[:TOP_N]}
+    for m in matches:
+        s = (m.get("pred") or {}).get("safe")
+        if not s:
+            continue
+        s["top"] = m["id"] in top
+        if not m.get("started"):
+            rec = store.pred_get(m["id"])
+            if rec and rec.get("state") == "pending" and rec.get("top") != s["top"]:
+                rec["top"] = s["top"]
+                store.pred_put(m["id"], rec)
 
 
 class Updater:

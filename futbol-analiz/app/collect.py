@@ -9,7 +9,7 @@ import urllib.parse
 from datetime import datetime, timezone
 
 from . import analysis
-from . import elo as elo_mod
+from . import elo as elo_mod, ratings as ratings_mod
 from . import odds as odds_mod
 from .config import NEWS_TTL, SEASON_TTL
 from .sources import FOTMOB, PLAYER_STATS, TEAM_STATS
@@ -486,9 +486,15 @@ async def elo_ratings(src):
     if _elo_memo and time.time() - _elo_memo[0] < SEASON_TTL:
         return _elo_memo[1]
     hist = {}
-    rating, _ = elo_mod.run(await elo_mod.load_matches(src, SEASON_TTL), hist)
-    _elo_memo = (time.time(), rating, hist)
+    matches = await elo_mod.load_matches(src, SEASON_TTL)
+    rating, _ = elo_mod.run(matches, hist)
+    _elo_memo = (time.time(), rating, hist, ratings_mod.fit(matches))
     return rating
+
+
+def goal_lambdas(hid, aid):
+    """Son iki sezonun bütün maçlarından hücum/savunma gücüyle beklenen goller (Elo hesabıyla birlikte yenilenir)."""
+    return ratings_mod.lambdas(_elo_memo[3], int(hid), int(aid)) if _elo_memo and len(_elo_memo) > 3 else None
 
 
 async def elo_history(src):
@@ -597,6 +603,7 @@ async def build_bundle(src, match_id, prev_odds=None):
         "weather": content.get("weather"),
         # takım gücü puanları (Elo); takip edilmeyen liglerin takımlarında yok
         "elo": [round(ratings[hid], 1) if hid in ratings else None, round(ratings[aid], 1) if aid in ratings else None],
+        "glam": goal_lambdas(hid, aid),
         "lineup": parse_lineup(content.get("lineup")),
         "recent": {"home": rec_h, "away": rec_a},
         "season": {

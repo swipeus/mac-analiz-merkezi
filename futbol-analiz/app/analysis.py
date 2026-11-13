@@ -4,6 +4,7 @@ import math
 import re
 
 from .config import TR_TZ
+from . import ratings
 
 HOME_ADV = 1.08
 AWAY_ADJ = 0.93
@@ -333,6 +334,20 @@ MIN_ODDS = 1.30      # en garanti tercih bu orandan düşük olamaz
 MIN_ODDS_NEW, MIN_ODDS_FROM = 1.35, "2026-11-02"  # karne: 1.30-1.35 arası zarar yazdırıyor; bu günün maçlarından itibaren
 
 
+MODEL2_FROM = "2026-11-14"  # bu günün maçlarından itibaren gol beklentisinin yarısı son iki sezonun maçlarından gelir
+
+
+def _tr_day(utc):
+    try:
+        return datetime.fromisoformat(utc.replace("Z", "+00:00")).astimezone(TR_TZ).strftime("%Y-%m-%d")
+    except (AttributeError, ValueError):
+        return ""
+
+
+def model_v2(utc):
+    return _tr_day(utc) >= MODEL2_FROM
+
+
 def min_odds(utc):
     """Maçın Türkiye gününe göre en garanti tercihin alt oran sınırı."""
     try:
@@ -649,8 +664,24 @@ def code_odds(odds, code):
     return None, None
 
 
-def make_picks(pr, odds, home, away, league=None, floor=MIN_ODDS):
-    """En garanti tercih (oran >= floor) ve olası sürpriz."""
+VETO_GAP = 0.03  # kendi modelimiz bir gol tercihini piyasanın marjsız olasılığından bu kadar düşük görüyorsa o tercih seçilmez
+
+
+def _fair(odds):
+    """Her seçeneğin piyasa olasılığı (pazar içinde marjı ayıklanmış)."""
+    out = {}
+    for m in (odds or {}).get("markets") or []:
+        sels = [s for s in m["selections"] if s.get("code") and s.get("odds")]
+        tot = sum(1 / s["odds"] for s in sels)
+        if len(sels) >= 2 and tot:
+            for s in sels:
+                out.setdefault(s["code"], (1 / s["odds"]) / tot)
+    return out
+
+
+def make_picks(pr, odds, home, away, league=None, floor=MIN_ODDS, own=None):
+    """En garanti tercih (oran >= floor) ve olası sürpriz. own: son iki sezonluk modelin olasılıkları; verilirse
+    kendi modelimizin piyasadan belirgin şekilde daha kötümser olduğu gol tercihleri seçilmez."""
     sel = []  # (kod, model olasılığı, oran)
     for m in (odds or {}).get("markets") or []:
         for s in m["selections"]:
@@ -659,6 +690,10 @@ def make_picks(pr, odds, home, away, league=None, floor=MIN_ODDS):
     safe = None
     fav = fav_side(pr)
     cands = [c for c in sel if c[2] >= floor and c[1] >= 0.5 and safe_ok(c[0]) and not fav_under(c[0], fav)]
+    if own and cands:
+        fair = _fair(odds)
+        kept = [c for c in cands if c[0] not in own or c[0] not in fair or own[c[0]] >= fair[c[0]] - VETO_GAP]
+        cands = kept or cands  # hepsi elenirse eski kural geçerli
     if cands:
         code, p, o = max(cands, key=lambda c: (safe_score(c[1], c[2], c[0], league), c[2]))
         safe = {"code": code, "p": round(p, 3), "odds": o}
@@ -891,6 +926,17 @@ def predict(b, prof_h, prof_a):
         lam_xa = MARKET_WEIGHT_1X2 * mk[1] + (1 - MARKET_WEIGHT_1X2) * lam_a
         lam_h = MARKET_WEIGHT * mk[0] + (1 - MARKET_WEIGHT) * lam_h
         lam_a = MARKET_WEIGHT * mk[1] + (1 - MARKET_WEIGHT) * lam_a
+    # yeni bakış: son iki sezonun bütün maçlarından takım hücum/savunma gücü + Elo; yukarıdaki (piyasalı) tahminle yarı yarıya.
+    # 743 eski maçlık testte maç sonucu tahmini iyileşti, tam skor %10,5'ten %11'e, 4+ gollü maçı yakalama 9'dan 39'a çıktı.
+    own = None
+    if model_v2(b.get("utc")) and b.get("glam"):
+        oh, oa = b["glam"]
+        if elo_r and None not in elo_r:
+            ot = oh + oa
+            osup = (1 - ELO_W) * (oh - oa) + ELO_W * (elo_r[0] + 60 - elo_r[1]) / 100 * ELO_SLOPE
+            oh, oa = (ot + osup) / 2, (ot - osup) / 2
+        own = (max(0.2, oh), max(0.2, oa))
+        lam_h, lam_a = 0.5 * lam_h + 0.5 * own[0], 0.5 * lam_a + 0.5 * own[1]
 
     def exp_pair(k):
         h = _wavg([(stat_avg(rh, "for", k), 1), (stat_avg(ra, "against", k), 1)])
@@ -987,8 +1033,13 @@ def predict(b, prof_h, prof_a):
             f_ = CALIB.get(pick_type(c))
             if f_ and pr[c] is not None:
                 pr[c] = min(0.97, pr[c] * f_)
-    safe, surprise, value = make_picks(pr, odds, H, A, b.get("league_id"), min_odds(b.get("utc")))
-    score_pick = coherent_score(smat, pr, lam_h, lam_a)
+    own_pr = market_probs(score_matrix(*own), own[0], own[1]) if own else None
+    safe, surprise, value = make_picks(pr, odds, H, A, b.get("league_id"), min_odds(b.get("utc")), own_pr)
+    if own:  # kendi skor tahmini: en olası skor değil, beklenen gollere en yakın skor
+        sc = ratings.own_score(lam_h, lam_a)
+        score_pick = {"score": sc, "p": round(smat[int(sc.split("-")[0])][int(sc.split("-")[1])], 3) if max(map(int, sc.split("-"))) < len(smat) else None}
+    else:
+        score_pick = coherent_score(smat, pr, lam_h, lam_a)
     cs_m = _odds_market(odds, "odds_correct_score")
     if cs_m:  # skor tahmininin oranı (karnede 10 ₺'lik skor bahsi için)
         score_pick["odds"] = next((s_["odds"] for s_ in cs_m["selections"] if s_.get("code") == "cs:" + score_pick["score"]), None)
@@ -997,7 +1048,7 @@ def predict(b, prof_h, prof_a):
     oddsmap = {s["code"]: s["odds"] for m in (odds or {}).get("markets") or [] for s in m["selections"] if s.get("code")}
     return {
         "lam_home": round(lam_h, 2), "lam_away": round(lam_a, 2),
-        "lam_model": model_lam, "lam_market": mk, "uses_odds": bool(mk),
+        "lam_model": model_lam, "lam_market": mk, "uses_odds": bool(mk), "lam_own": own and [round(own[0], 2), round(own[1], 2)], "mv": 2 if own else 1,
         "factors": factors, "rest": rest,
         # beklenen gollerin kaynağı (skor tahmininin açıklaması için)
         "lam_parts": {"att": [ah and round(ah, 2), aa_ and round(aa_, 2)], "conc": [da and round(da, 2), dh and round(dh, 2)],

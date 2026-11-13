@@ -91,7 +91,7 @@ def record(store, b):
             # o0: tercihin ilk görülen oranı; maç başlayınca kalan "odds" kapanış oranıdır (kapanış farkı için)
             "pick": {**pr["best_pick"], "o0": code_odds(b.get("odds"), pr["best_pick"]["code"])[1]}, "score": pr["score_pick"],
             "p": {"1": pr.get("p_home"), "X": pr.get("p_draw"), "2": pr.get("p_away")}, "ms": pr.get("pick"),
-            "state": "pending", "locked": bool(pr.get("best_final")), "referee": b.get("referee"),
+            "state": "pending", "locked": bool(pr.get("best_final")), "referee": b.get("referee"), "mv": pr.get("mv", 1),
             # değerli oran tercihi: ayrı izlenir (garanti tercih karnesine karışmaz)
             "value": ({**pr["value_pick"], "o0": code_odds(b.get("odds"), pr["value_pick"]["code"])[1]}
                       if pr.get("value_pick") else None),

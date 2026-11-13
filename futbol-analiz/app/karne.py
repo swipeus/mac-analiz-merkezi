@@ -163,6 +163,26 @@ def odds_report(store):
             "toplam": line(rows)}
 
 
+def signal_report(store):
+    """Oran hareketi (açılış → kapanış) ve kesinleşme durumuna göre tek tercih sonuçları; günlüğe yazılır."""
+    rows = [r for r in store.pred_all() if r.get("state") == "done" and (r.get("pick") or {}).get("odds")
+            and r.get("pick_hit") in (True, False) and tr_day(r.get("utc")) >= KARNE_START]
+
+    def line(sel):
+        pl = sum(r["pick"]["odds"] - 1 if r["pick_hit"] else -1 for r in sel)
+        return f"{sum(1 for r in sel if r['pick_hit'])}/{len(sel)} {pl:+.1f}"
+
+    def chg(r):
+        o0 = r["pick"].get("o0")
+        return r["pick"]["odds"] / o0 - 1 if o0 else None
+    mv = [r for r in rows if chg(r) is not None]
+    cuts = [(-9, -0.05, "düştü>%5"), (-0.05, -0.01, "düştü %1-5"), (-0.01, 0.01, "sabit"), (0.01, 0.05, "yükseldi %1-5"), (0.05, 9, "yükseldi>%5")]
+    return {"oran hareketi": {lab: line([r for r in mv if a <= chg(r) < b]) for a, b, lab in cuts},
+            "kesinleşmiş": line([r for r in rows if r.get("locked")]), "kesinleşmemiş": line([r for r in rows if not r.get("locked")]),
+            "çifte şans": line([r for r in rows if r["pick"]["code"] in ("1X", "X2", "12")]),
+            "maç sonucu": line([r for r in rows if r["pick"]["code"] in ("1", "X", "2")])}
+
+
 def league_report(store):
     """Garanti tercihlerin lig bazında özeti (1 birim bahisle); en zayıftan güçlüye, günlüğe yazılır."""
     rows = {}

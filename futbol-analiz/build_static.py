@@ -69,6 +69,7 @@ async def main(out):
     log.info("değerli oran özeti: %s", karne.value_report(store))
     log.info("lig karnesi: %s", karne.league_report(store))
     log.info("oran karnesi: %s", karne.odds_report(store))
+    log.info("sinyal karnesi: %s", karne.signal_report(store))
     await up.cycle()
     store.prune()
 
